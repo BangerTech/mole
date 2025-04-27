@@ -15,6 +15,10 @@ const RootStyle = styled('div')(({ theme }) => ({
     flexShrink: 0,
     width: DRAWER_WIDTH,
   },
+  position: 'fixed',
+  zIndex: 1000,
+  height: '100%',
+  transition: 'all 0.3s ease',
 }));
 
 const LogoStyle = styled('img')({
@@ -110,48 +114,21 @@ export default function Sidebar({ open }) {
   );
 
   return (
-    <RootStyle>
-      <Drawer
-        open={!open}
-        variant="persistent"
-        PaperProps={{
-          sx: {
-            width: DRAWER_WIDTH,
-            bgcolor: 'background.default',
-            borderRightStyle: 'dashed',
-            borderRightColor: (theme) => 
-              theme.palette.mode === 'dark' 
-                ? 'rgba(255, 255, 255, 0.1)' 
-                : 'rgba(0, 0, 0, 0.1)',
-          },
-        }}
+    <div className={`sidebar ${!open ? 'sidebar-closed' : ''}`}>
+      <Box
         sx={{
-          display: { xs: 'block', lg: 'none' },
+          width: DRAWER_WIDTH,
+          bgcolor: 'background.default',
+          height: '100%',
+          borderRightStyle: 'dashed',
+          borderRightColor: (theme) => 
+            theme.palette.mode === 'dark' 
+              ? 'rgba(255, 255, 255, 0.1)' 
+              : 'rgba(0, 0, 0, 0.1)',
         }}
       >
         {renderContent}
-      </Drawer>
-
-      <Drawer
-        open={open}
-        variant="persistent"
-        PaperProps={{
-          sx: {
-            width: DRAWER_WIDTH,
-            bgcolor: 'background.default',
-            borderRightStyle: 'dashed',
-            borderRightColor: (theme) => 
-              theme.palette.mode === 'dark' 
-                ? 'rgba(255, 255, 255, 0.1)' 
-                : 'rgba(0, 0, 0, 0.1)',
-          },
-        }}
-        sx={{
-          display: { xs: 'none', lg: 'block' },
-        }}
-      >
-        {renderContent}
-      </Drawer>
-    </RootStyle>
+      </Box>
+    </div>
   );
 } 

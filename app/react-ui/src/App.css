@@ -108,6 +108,7 @@
   overflow: hidden;
   color: #fff;
   box-sizing: border-box;
+  position: relative;
 }
 
 .app-container.dark {
@@ -119,15 +120,35 @@
   color: #212B36;
 }
 
+/* Sidebar styling */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
+  z-index: 1000;
+  transition: transform 0.3s ease;
+}
+
+.sidebar-closed {
+  transform: translateX(-280px);
+}
+
+/* Content styling */
 .content {
   flex-grow: 1;
   transition: all 0.3s ease;
   overflow-y: auto;
+  min-height: 100vh;
+  width: 100%;
   padding: 20px;
-  width: calc(100% - 280px);
+  margin-left: 280px;
   box-sizing: border-box;
-  position: relative;
-  left: 0;
+}
+
+.content-full {
+  margin-left: 0;
 }
 
 .app-container.dark .content {
@@ -136,12 +157,6 @@
 
 .app-container.light .content {
   background-color: #f5f7fa;
-}
-
-.content-full {
-  margin-left: 0 !important;
-  width: 100% !important;
-  padding: 20px !important;
 }
 
 /* Dark and Light mode specific adjustments */
