@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// API-Basis-URL
-const API_URL = 'http://localhost:3001/api/email';
+// API Base URL
+const API_URL = 'http://backend:3001/api/email';
 
 /**
  * Service für die Verwaltung von E-Mail-Funktionalitäten

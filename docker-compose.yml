@@ -31,8 +31,14 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - JWT_SECRET=mole-secret-key-change-in-production
     volumes:
-      - ./app/backend:/app
+      # Don't mount the entire /app directory, just the specific files/directories we need
+      - ./app/backend/controllers:/app/controllers
+      - ./app/backend/routes:/app/routes
+      - ./app/backend/middleware:/app/middleware
+      - ./app/backend/server.js:/app/server.js
+      # Mount the data directory for persistent storage
       - backend_data:/app/data
     networks:
       - mole-network

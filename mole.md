@@ -550,4 +550,41 @@ Das Backend war nicht korrekt in der Docker-Compose-Konfiguration eingebunden. E
 3. Der Frontend-Service `mole-ui` wurde aktualisiert, um vom Backend-Service abhängig zu sein
 4. Ein Docker-Volume `backend_data` wurde hinzugefügt, um persistente Datenspeicherung für die Backend-Datenbankverbindungen zu ermöglichen
 
-Diese Änderungen ermöglichen die vollständige Containerisierung der Anwendung, wobei die Abhängigkeiten automatisch mit `docker compose up --build` installiert werden. 
+**Update:** Es gab ein Problem mit den Volume-Mounts, wodurch die Node.js-Module nicht korrekt verfügbar waren. Dies wurde behoben durch:
+1. Änderung der Volume-Konfiguration, um nur spezifische Verzeichnisse zu mounten, anstatt das gesamte /app-Verzeichnis
+2. Das verhindert, dass der Container-eigene `node_modules`-Ordner durch den Host-Ordner überschrieben wird
+3. Zusätzliche Diagnose-Befehle wurden im Dockerfile hinzugefügt, um sicherzustellen, dass alle Module korrekt installiert werden
+
+Diese Änderungen ermöglichen die vollständige Containerisierung der Anwendung, wobei die Abhängigkeiten automatisch mit `docker compose up --build` installiert werden.
+
+### Authentifizierung (✓ Behoben)
+Die Login-Funktionalität war nicht funktionsfähig, weil die Authentifizierungsdaten nicht korrekt persistiert wurden. Folgende Änderungen wurden vorgenommen:
+
+1. Eine vorinitialisierte `users.json`-Datei wurde erstellt, die einen Admin-Benutzer mit den Standard-Anmeldedaten (admin@example.com / admin) enthält
+2. Das JWT-Secret wurde als Umgebungsvariable im Docker-Compose-Setup konfiguriert
+3. Der `data`-Ordner mit Benutzerinformationen wurde als persistentes Volume konfiguriert, um Daten zwischen Container-Neustarts zu bewahren
+
+Diese Änderungen ermöglichen die Anmeldung mit dem Demo-Konto unmittelbar nach dem Start der Anwendung, ohne dass weitere Konfigurationen notwendig sind.
+
+### Fehlende Datenbankabhängigkeiten (✓ Behoben)
+Das Backend konnte nicht korrekt starten, weil die notwendigen Datenbankabhängigkeiten fehlten. Folgende Änderungen wurden vorgenommen:
+
+1. Die package.json-Datei wurde um die fehlenden Abhängigkeiten ergänzt:
+   - `mysql2` für MySQL-Datenbankzugriff
+   - `pg` für PostgreSQL-Datenbankzugriff
+
+2. Diese Abhängigkeiten werden bei Container-Start automatisch installiert, sodass die Datenbankfunktionalität vollständig zur Verfügung steht
+
+Die fehlenden Abhängigkeiten waren die Ursache für den Fehler `Cannot find module 'mysql2/promise'`, der zuvor beim Start des Backends auftrat.
+
+### Docker-Netzwerkkonfiguration (✓ Behoben)
+Die Frontend-Services konnten nicht mit dem Backend kommunizieren, da sie "localhost" als Hostname verwendeten, was im Docker-Kontext nicht korrekt ist. Folgende Änderungen wurden vorgenommen:
+
+1. Die API-URLs in den Service-Dateien wurden angepasst, um den Docker-Service-Namen anstelle von "localhost" zu verwenden:
+   - In `AuthService.js`: `http://backend:3001/api/auth` statt `http://localhost:3001/api/auth`
+   - In `DatabaseService.js`: `http://backend:3001/api/databases` statt `http://localhost:3001/api/databases`
+   - In `EmailService.js`: `http://backend:3001/api/email` statt `http://localhost:3001/api/email`
+
+2. In Docker-Compose-Umgebungen können Container über ihre Service-Namen miteinander kommunizieren, was durch das gemeinsame Netzwerk `mole-network` ermöglicht wird.
+
+Diese Änderungen beheben die "Connection Refused"-Fehler, die auftraten, wenn die Frontend-Container versuchten, über "localhost" mit dem Backend zu kommunizieren. 

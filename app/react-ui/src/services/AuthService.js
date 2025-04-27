@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API Basis URL
-const API_URL = 'http://localhost:3001/api/auth';
+const API_URL = 'http://backend:3001/api/auth';
 
 // Token-Speicherung in localStorage
 const TOKEN_KEY = 'mole_auth_token';

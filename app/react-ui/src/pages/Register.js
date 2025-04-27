@@ -40,7 +40,7 @@ const LogoSection = styled(Box)(({ theme }) => ({
 }));
 
 const Logo = styled('img')({
-  height: 60,
+  height: 120,
   marginBottom: 16
 });
 
@@ -104,9 +104,6 @@ export default function Register() {
       <Container maxWidth="sm">
         <LogoSection>
           <Logo src="/images/logo.png" alt="Mole Database Manager" />
-          <Typography variant="h4" gutterBottom>
-            Mole Database Manager
-          </Typography>
           <Typography variant="body2" color="text.secondary">
             Create a new account to start managing your database connections
           </Typography>
@@ -225,7 +222,7 @@ export default function Register() {
         
         <Box sx={{ textAlign: 'center', mt: 5 }}>
           <Typography variant="caption" color="text.secondary">
-            © 2023 Mole Database Manager. All rights reserved.
+            © 2025 Mole Database Agent. All rights reserved.
           </Typography>
         </Box>
       </Container>

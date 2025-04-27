@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API Base URL
-const API_URL = 'http://localhost:3001/api/databases';
+const API_URL = 'http://backend:3001/api/databases';
 
 /**
  * Service for database connection management
