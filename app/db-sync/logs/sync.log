@@ -387,3 +387,107 @@
 2025-04-27 15:01:57,815 [INFO] 192.168.2.11 - - [27/Apr/2025 15:01:57] "GET /api/system/info HTTP/1.1" 200 -
 2025-04-27 15:02:27,814 [INFO] 192.168.2.11 - - [27/Apr/2025 15:02:27] "GET /api/system/info HTTP/1.1" 200 -
 2025-04-27 15:02:37,553 [INFO] 192.168.2.11 - - [27/Apr/2025 15:02:37] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:08:21,010 [INFO] 192.168.2.11 - - [27/Apr/2025 15:08:21] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:08:56,481 [INFO] 192.168.2.11 - - [27/Apr/2025 15:08:56] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:09:01,517 [INFO] 192.168.2.11 - - [27/Apr/2025 15:09:01] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:09:31,518 [INFO] 192.168.2.11 - - [27/Apr/2025 15:09:31] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:10:01,520 [INFO] 192.168.2.11 - - [27/Apr/2025 15:10:01] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:10:31,519 [INFO] 192.168.2.11 - - [27/Apr/2025 15:10:31] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:11:01,518 [INFO] 192.168.2.11 - - [27/Apr/2025 15:11:01] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:11:31,520 [INFO] 192.168.2.11 - - [27/Apr/2025 15:11:31] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:11:35,384 [INFO] 192.168.2.11 - - [27/Apr/2025 15:11:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:11:44,743 [INFO] 192.168.2.11 - - [27/Apr/2025 15:11:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:12:14,748 [INFO] 192.168.2.11 - - [27/Apr/2025 15:12:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:12:44,750 [INFO] 192.168.2.11 - - [27/Apr/2025 15:12:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:13:14,745 [INFO] 192.168.2.11 - - [27/Apr/2025 15:13:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:13:44,775 [INFO] 192.168.2.11 - - [27/Apr/2025 15:13:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:14:14,745 [INFO] 192.168.2.11 - - [27/Apr/2025 15:14:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:36:45 [INFO] Starting database sync service
+2025-04-27 15:36:46,113 [INFO] Database Sync Manager initialized
+2025-04-27 15:36:46,114 [INFO] Starting sync manager
+2025-04-27 15:36:46,114 [INFO] Sync service is disabled in configuration
+2025-04-27 15:36:46,115 [INFO] Starting API server on port 5000
+2025-04-27 15:36:46,338 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.18.0.5:5000
+2025-04-27 15:36:46,338 [INFO] [33mPress CTRL+C to quit[0m
+2025-04-27 15:36:49,798 [INFO] 192.168.2.11 - - [27/Apr/2025 15:36:49] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:38:54,517 [INFO] 192.168.2.11 - - [27/Apr/2025 15:38:54] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:45:09,019 [INFO] 192.168.2.11 - - [27/Apr/2025 15:45:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:45:39,018 [INFO] 192.168.2.11 - - [27/Apr/2025 15:45:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:46:09,019 [INFO] 192.168.2.11 - - [27/Apr/2025 15:46:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:46:39,018 [INFO] 192.168.2.11 - - [27/Apr/2025 15:46:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:47:09,018 [INFO] 192.168.2.11 - - [27/Apr/2025 15:47:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:47:39,019 [INFO] 192.168.2.11 - - [27/Apr/2025 15:47:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:48:09,019 [INFO] 192.168.2.11 - - [27/Apr/2025 15:48:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:48:39,020 [INFO] 192.168.2.11 - - [27/Apr/2025 15:48:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:49:09,024 [INFO] 192.168.2.11 - - [27/Apr/2025 15:49:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:49:39,024 [INFO] 192.168.2.11 - - [27/Apr/2025 15:49:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 15:50:09,031 [INFO] 192.168.2.11 - - [27/Apr/2025 15:50:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:13:49 [INFO] Starting database sync service
+2025-04-27 16:13:50,700 [INFO] Database Sync Manager initialized
+2025-04-27 16:13:50,701 [INFO] Starting sync manager
+2025-04-27 16:13:50,702 [INFO] Starting API server on port 5000
+2025-04-27 16:13:50,702 [INFO] Sync service is disabled in configuration
+2025-04-27 16:13:50,899 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.18.0.4:5000
+2025-04-27 16:13:50,900 [INFO] [33mPress CTRL+C to quit[0m
+2025-04-27 16:14:09,014 [INFO] 192.168.2.11 - - [27/Apr/2025 16:14:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:14:39,011 [INFO] 192.168.2.11 - - [27/Apr/2025 16:14:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:15:09,010 [INFO] 192.168.2.11 - - [27/Apr/2025 16:15:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:15:39,010 [INFO] 192.168.2.11 - - [27/Apr/2025 16:15:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:16:09,010 [INFO] 192.168.2.11 - - [27/Apr/2025 16:16:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:16:39,009 [INFO] 192.168.2.11 - - [27/Apr/2025 16:16:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:17:09,008 [INFO] 192.168.2.11 - - [27/Apr/2025 16:17:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:17:18,365 [INFO] 192.168.2.151 - - [27/Apr/2025 16:17:18] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:17:39,009 [INFO] 192.168.2.11 - - [27/Apr/2025 16:17:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:18:09,009 [INFO] 192.168.2.11 - - [27/Apr/2025 16:18:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:18:39,009 [INFO] 192.168.2.11 - - [27/Apr/2025 16:18:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:19:09,009 [INFO] 192.168.2.11 - - [27/Apr/2025 16:19:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:19:39,009 [INFO] 192.168.2.11 - - [27/Apr/2025 16:19:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:20:09,007 [INFO] 192.168.2.11 - - [27/Apr/2025 16:20:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:20:39,009 [INFO] 192.168.2.11 - - [27/Apr/2025 16:20:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:21:09,008 [INFO] 192.168.2.11 - - [27/Apr/2025 16:21:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:21:39,007 [INFO] 192.168.2.11 - - [27/Apr/2025 16:21:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:22:09,008 [INFO] 192.168.2.11 - - [27/Apr/2025 16:22:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:22:39,008 [INFO] 192.168.2.11 - - [27/Apr/2025 16:22:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:23:09,006 [INFO] 192.168.2.11 - - [27/Apr/2025 16:23:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:23:39,006 [INFO] 192.168.2.11 - - [27/Apr/2025 16:23:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:24:09,009 [INFO] 192.168.2.11 - - [27/Apr/2025 16:24:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:24:39,006 [INFO] 192.168.2.11 - - [27/Apr/2025 16:24:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:25:09,007 [INFO] 192.168.2.11 - - [27/Apr/2025 16:25:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:25:39,005 [INFO] 192.168.2.11 - - [27/Apr/2025 16:25:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:26:09,005 [INFO] 192.168.2.11 - - [27/Apr/2025 16:26:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:26:39,006 [INFO] 192.168.2.11 - - [27/Apr/2025 16:26:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:27:09,005 [INFO] 192.168.2.11 - - [27/Apr/2025 16:27:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:27:39,006 [INFO] 192.168.2.11 - - [27/Apr/2025 16:27:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:28:09,006 [INFO] 192.168.2.11 - - [27/Apr/2025 16:28:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:28:39,005 [INFO] 192.168.2.11 - - [27/Apr/2025 16:28:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:29:09,004 [INFO] 192.168.2.11 - - [27/Apr/2025 16:29:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:29:39,003 [INFO] 192.168.2.11 - - [27/Apr/2025 16:29:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:30:09,005 [INFO] 192.168.2.11 - - [27/Apr/2025 16:30:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:30:39,004 [INFO] 192.168.2.11 - - [27/Apr/2025 16:30:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:31:09,005 [INFO] 192.168.2.11 - - [27/Apr/2025 16:31:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:31:39,003 [INFO] 192.168.2.11 - - [27/Apr/2025 16:31:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:32:09,002 [INFO] 192.168.2.11 - - [27/Apr/2025 16:32:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:32:39,002 [INFO] 192.168.2.11 - - [27/Apr/2025 16:32:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:33:09,004 [INFO] 192.168.2.11 - - [27/Apr/2025 16:33:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:33:39,002 [INFO] 192.168.2.11 - - [27/Apr/2025 16:33:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:34:09,004 [INFO] 192.168.2.11 - - [27/Apr/2025 16:34:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:34:39,002 [INFO] 192.168.2.11 - - [27/Apr/2025 16:34:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:35:09,003 [INFO] 192.168.2.11 - - [27/Apr/2025 16:35:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:35:39,003 [INFO] 192.168.2.11 - - [27/Apr/2025 16:35:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:36:09,004 [INFO] 192.168.2.11 - - [27/Apr/2025 16:36:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:36:39,001 [INFO] 192.168.2.11 - - [27/Apr/2025 16:36:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:37:09,002 [INFO] 192.168.2.11 - - [27/Apr/2025 16:37:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:37:39,001 [INFO] 192.168.2.11 - - [27/Apr/2025 16:37:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:38:09,000 [INFO] 192.168.2.11 - - [27/Apr/2025 16:38:09] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:38:39,001 [INFO] 192.168.2.11 - - [27/Apr/2025 16:38:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:39:01,245 [INFO] 192.168.2.11 - - [27/Apr/2025 16:39:01] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:39:31,246 [INFO] 192.168.2.11 - - [27/Apr/2025 16:39:31] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:40:01,247 [INFO] 192.168.2.11 - - [27/Apr/2025 16:40:01] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:40:21,050 [INFO] 192.168.2.11 - - [27/Apr/2025 16:40:21] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-27 16:41:31,860 [INFO] 192.168.2.11 - - [27/Apr/2025 16:41:31] "GET /api/system/info HTTP/1.1" 200 -

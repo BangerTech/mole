@@ -1,7 +1,7 @@
 # MOLE - Database Agent
 
 <p align="center">
-  <img src="app/react-ui/public/images/logo.png" alt="MOLE Logo" width="150">
+  <img src="app/react-ui/public/images/logo.png" alt="MOLE Logo" width="350">
 </p>
 
 A modern, web-based database management tool with a beautiful interface inspired by Apple and Nextcloud design. MOLE allows you to connect to multiple database types, create databases, perform table operations, and synchronize data between different database servers.
@@ -16,6 +16,8 @@ A modern, web-based database management tool with a beautiful interface inspired
 - **Customizable**: Easy to customize themes and configuration
 - **Advanced Monitoring**: Comprehensive performance metrics, health scores, and visual indicators
 - **AI-Powered Analysis**: Ask questions about your database in natural language and get intelligent insights
+- **User Authentication**: Secure user login and registration system with JWT authentication
+- **Email Notifications**: Configurable SMTP settings for system notification emails
 
 ## Quick Start
 
@@ -39,6 +41,10 @@ A modern, web-based database management tool with a beautiful interface inspired
 
 3. Access the web interface at `http://localhost:8080`
 
+4. Login with the default admin account:
+   - Email: admin@example.com
+   - Password: admin
+
 ## Docker Compose Configuration
 
 The Docker Compose file includes the following services:
@@ -54,13 +60,14 @@ The Docker Compose file includes the following services:
 ### Connecting to a Database
 
 1. Open your browser and navigate to `http://localhost:8080`
-2. Select the database type (MySQL, PostgreSQL, or InfluxDB)
-3. Enter the connection details:
+2. Login with your credentials or the default admin account
+3. Select the database type (MySQL, PostgreSQL, or InfluxDB)
+4. Enter the connection details:
    - Server: hostname or IP address
    - Username: database username
    - Password: database password
    - Database: database name (optional)
-4. Click "Login"
+5. Click "Login"
 
 ### Creating a New Database
 
@@ -77,6 +84,18 @@ The Docker Compose file includes the following services:
 3. Specify source and target database connections
 4. Configure the synchronization schedule
 5. The database sync service will run according to the schedule
+
+### Configuring Email Notifications
+
+1. Navigate to the Settings page
+2. Go to the Email section
+3. Configure SMTP server details:
+   - SMTP Host
+   - Port
+   - Username/Password
+   - Encryption type (TLS/SSL)
+4. Set sender name and email address
+5. Test the configuration with the "Send Test Email" button
 
 ## Customization
 
@@ -98,6 +117,7 @@ The system consists of several components:
 - **db-sync**: A Python service that synchronizes data between databases
 - **mysql**: A MySQL database server
 - **postgres**: A PostgreSQL database server
+- **backend**: Node.js Express server providing authentication and email services
 
 ### Web UI
 
@@ -107,6 +127,8 @@ The web interface provides an intuitive UI for managing database connections:
 - Browse database tables and their contents
 - Execute SQL queries directly in the browser
 - View query results and export data
+- User authentication and profile management
+- Email notification configuration
 
 The UI is built with React and Material UI for a modern, responsive experience.
 
@@ -119,3 +141,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Inspired by various database management tools
 - Uses React and Material UI for the frontend
 - Powered by Python for database synchronization 
+- Node.js Express for authentication and email services 

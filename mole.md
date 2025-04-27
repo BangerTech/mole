@@ -16,7 +16,13 @@ Mole Database Manager ist eine moderne Web-Anwendung zur Verwaltung und Synchron
    - Plant und führt Synchronisierungsaufgaben aus
    - Unterstützt verschiedene Datenbanktypen (MySQL, PostgreSQL, SQLite)
 
-3. **Datenbank-Container**
+3. **Node.js Backend Server**
+   - Express-basierter API-Server für Datenbankverbindungsverwaltung
+   - Stellt RESTful API-Endpunkte für Frontend-Operationen bereit
+   - Verwaltet Datenbankverbindungen, Authentifizierung und E-Mail-Funktionalität
+   - Speichert Datenbankverbindungen in JSON-Dateien (mit Fallback im Frontend über localStorage)
+
+4. **Datenbank-Container**
    - MySQL: Container mit MySQL-Datenbankserver
    - PostgreSQL: Container mit PostgreSQL-Datenbankserver
    - InfluxDB: Container mit InfluxDB (optional)
@@ -291,8 +297,22 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
 - Funktionale Implementierung der oberen Navigationsleisten-Buttons:
   - Theme-Wechsler-Button für das Umschalten zwischen Hell- und Dunkel-Modus
   - Benachrichtigungsmenü mit Anzeige aktueller Systemnachrichten
-  - Einstellungsmenü mit schnellem Zugriff auf häufig verwendete Optionen
-  - Vollständig funktionierendes Profilmenü
+  - Vereinfachte Navigation mit integriertem Settings-Zugriff im Profilmenü
+  - Vereinfachtes Profilmenü mit den Optionen "Profile", "Settings" und "Sign Out"
+- Neue E-Mail-Funktionalität:
+  - Konfigurierbare SMTP-Einstellungen für Benachrichtigungen
+  - E-Mail-Service zum Senden von Benachrichtigungen
+  - Testfunktionen für SMTP-Verbindungen
+  - Speicherung von SMTP-Konfigurationen
+  - Anpassbare E-Mail-Adresse für Benachrichtigungen im Profil
+- Verbesserte Profilseite mit integrierten Konto- und Sicherheitseinstellungen:
+  - Zusammenführung der Profil- und Kontofunktionen in einer übersichtlichen Oberfläche
+  - Umfassende Verwaltung persönlicher Informationen und Sicherheitseinstellungen
+- Erweiterte Benachrichtigungsfunktionen:
+  - Integration von E-Mail-Benachrichtigungen für wichtige Systemereignisse
+  - Konfigurierbare Benachrichtigungspräferenzen für verschiedene Ereignistypen
+  - Anpassbare E-Mail-Adresse für Benachrichtigungen
+  - Detaillierte Einstellungen für In-App und E-Mail-Benachrichtigungen
 - Verbesserte UI-Elemente mit konsistenten Schatten, Rändern und Hintergrundfarben
 - Bessere visuelle Hierarchie durch angepasste Kontraste und Farbakzente
 - Optimierung der Benutzeroberfläche für bessere Lesbarkeit und ergonomische Bedienung
@@ -301,6 +321,7 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
   - Automatische Entfernung der Demo-Datenbank, sobald eine echte Datenbank hinzugefügt wird
   - Verbesserte Kennzeichnung von Demo-Inhalten
   - Verwendung von LocalStorage zur Persistierung von Datenbankverbindungen im Browser
+- Verbesserte Favicon-Integration für korrekte Darstellung im Browser
 
 ### Version 0.3.0 (in Entwicklung)
 - Implementierung der neuen DatabaseDetails-Komponente für detaillierte Datenbankansicht
@@ -361,11 +382,16 @@ mole/
 │   │   │   │   ├── TableView.js       # Tabellenansicht
 │   │   │   │   ├── TableList.js       # Liste von Tabellen
 │   │   │   │   ├── QueryEditor.js     # SQL-Abfrageeditor
-│   │   │   │   └── Settings.js        # Einstellungsseite
+│   │   │   │   ├── Settings.js        # Einstellungsseite
+│   │   │   │   └── Profile.js         # Profilseite mit persönlichen Informationen und Kontoeinstellungen
 │   │   │   ├── components/    # Wiederverwendbare Komponenten
 │   │   │   │   ├── TopBar.js         # Obere Navigationsleiste
 │   │   │   │   ├── Sidebar.js        # Seitenleiste
 │   │   │   │   └── Navbar.js         # Navigationselement
+│   │   │   ├── services/      # Service-Komponenten
+│   │   │   │   ├── DatabaseService.js # Service für Datenbankverbindungsverwaltung
+│   │   │   │   ├── AuthService.js    # Authentifizierungsservice
+│   │   │   │   └── EmailService.js   # E-Mail-Service für Benachrichtigungen
 │   │   │   └── layouts/       # Layout-Komponenten
 │   │   │       └── DashboardLayout.js # Hauptlayout für Dashboard
 │   │   ├── public/            # Öffentliche Dateien
@@ -377,6 +403,18 @@ mole/
 │   │   │   ├── favicon.ico    # Browser-Favicon
 │   │   │   └── robots.txt     # Robots.txt-Datei
 │   │   └── package.json       # NPM-Paket-Konfiguration
+│   ├── backend/               # Node.js-Backend mit Express
+│   │   ├── server.js          # Haupteinstiegspunkt für den Backend-Server
+│   │   ├── controllers/       # Controller für verschiedene Ressourcen
+│   │   │   ├── databaseController.js  # Controller für Datenbankverbindungsverwaltung
+│   │   │   ├── emailController.js     # Controller für E-Mail-Funktionalität
+│   │   │   └── authController.js      # Controller für Authentifizierung
+│   │   ├── routes/            # API-Routen
+│   │   │   ├── databaseRoutes.js      # Routen für Datenbankoperationen 
+│   │   │   ├── emailRoutes.js         # Routen für E-Mail-Funktionalität
+│   │   │   └── authRoutes.js          # Routen für Authentifizierung
+│   │   └── data/              # Datendateien für die Persistenzschicht
+│   │       └── database_connections.json # Gespeicherte Datenbankverbindungen
 │   ├── themes/                # Theme-Definitionen (Verzeichnis für zukünftige Nutzung)
 │   ├── db-sync/               # Datenbank-Synchronisierungsdienst
 │   │   ├── Dockerfile         # Docker-Konfiguration für Sync-Service
@@ -402,3 +440,114 @@ Diese Struktur zeigt die Organisation des Projekts mit Fokus auf eine klare Tren
 4. **Konfiguration und Dokumentation**: Enthält Docker-Compose, Dokumentationsdateien und Konfigurationen.
 
 Die Struktur ermöglicht eine klare Trennung der Verantwortlichkeiten und erleichtert die Wartung und Erweiterung der Anwendung. 
+
+## Frontend-Services
+
+Die Anwendung verwendet mehrere Service-Klassen für die Kommunikation mit dem Backend:
+
+1. **AuthService**
+   - Verwaltet die Authentifizierung und Benutzersitzungen
+   - Führt Login, Logout und Registrierung durch
+   - Speichert Tokens im LocalStorage und fügt sie automatisch zu API-Anfragen hinzu
+
+2. **EmailService**
+   - Verwaltet E-Mail-bezogene Funktionen
+   - Konfiguriert SMTP-Einstellungen für E-Mail-Benachrichtigungen
+   - Testet SMTP-Verbindungen und sendet Test-E-Mails
+
+3. **DatabaseService**
+   - Kommuniziert mit der Backend-API für Datenbankverbindungen
+   - Führt CRUD-Operationen für Datenbankverbindungen durch
+   - Bietet Fallback-Funktionalität mit LocalStorage, wenn die API nicht erreichbar ist
+   - Test-Verbindungsfunktionalität für Datenbankverbindungen
+
+### Wichtiger Hinweis: API Route Mismatch
+
+Der DatabaseService verwendet in der Frontend-Implementierung folgende API-Endpunkte:
+- `GET /api/databases/connections` - Alle Datenbankverbindungen abrufen
+- `POST /api/databases/connections` - Neue Datenbankverbindung speichern
+- `PUT /api/databases/connections/:id` - Datenbankverbindung aktualisieren
+- `DELETE /api/databases/connections/:id` - Datenbankverbindung löschen
+- `POST /api/databases/test-connection` - Datenbankverbindung testen
+
+Allerdings sind die tatsächlichen Backend-Endpunkte (in server.js und databaseRoutes.js) wie folgt konfiguriert:
+- `GET /api/databases` - Alle Datenbankverbindungen abrufen
+- `POST /api/databases` - Neue Datenbankverbindung speichern
+- `PUT /api/databases/:id` - Datenbankverbindung aktualisieren
+- `DELETE /api/databases/:id` - Datenbankverbindung löschen
+- `POST /api/databases/test` - Datenbankverbindung testen
+
+Diese Diskrepanz führt dazu, dass die Frontend-Anfragen fehlschlagen und auf den localStorage-Fallback zurückgreifen. Ein Update des Frontend-Services oder der Backend-Routen ist erforderlich, um diese Diskrepanz zu beheben.
+
+## Benutzerprofilsystem
+
+Die Anwendung umfasst folgende Benutzerprofil-Funktionen:
+
+1. **Grundlegende Profilinformationen**
+   - Anzeige und Bearbeitung von Name, E-Mail, etc.
+   - Rollen-basierte Berechtigungen (Administrator, Benutzer)
+
+2. **Profilbildverwaltung**
+   - Hochladen und Ändern des Profilbildes
+   - Automatische Anzeige von Initialen, wenn kein Bild vorhanden ist
+   - Benutzerfreundliche Benutzeroberfläche mit Badge-Icon für die Bildauswahl
+
+3. **Verbindungsübersicht**
+   - Anzeige aller Datenbankverbindungen des Benutzers
+   - Direkter Link zur Erstellung neuer Verbindungen
+   - Farbcodierung nach Datenbanktyp (MySQL, PostgreSQL, InfluxDB)
+
+4. **Benachrichtigungseinstellungen**
+   - Einstellungen für App-Benachrichtigungen
+   - Konfiguration von E-Mail-Benachrichtigungen
+   - Detaillierte Kontrolle über Benachrichtigungstypen
+
+5. **Sicherheitseinstellungen**
+   - Passwortänderung
+   - Zwei-Faktor-Authentifizierung (vorgesehen für zukünftige Implementierung)
+
+## Browser-Integration
+
+Die Anwendung unterstützt moderne Browser-Funktionen:
+
+1. **Favicon und Browser-Icon-Unterstützung**
+   - Optimierte Favicons für verschiedene Geräte und Auflösungen
+   - Spezifische Icons für verschiedene Plattformen (Desktop, Mobile, Tablet)
+   - Apple Touch Icon für iOS-Geräte
+
+2. **Progressive Web App (PWA) Features**
+   - Manifest-Datei für Installation als App
+   - Angepasste Themes für Browser-UI
+   - Anpassungsfähiges Design für verschiedene Bildschirmgrößen
+
+Diese Systeme verbessern die Sicherheit und Benutzerfreundlichkeit der Anwendung, indem sie sichere Authentifizierung und zeitnahe Benachrichtigungen bieten. 
+
+## Bekannte Probleme und To-Dos
+
+### API Route Mismatch (✓ Behoben)
+Es bestand eine Diskrepanz zwischen den in `DatabaseService.js` verwendeten API-Endpunkten und den tatsächlich im Backend implementierten Routen, die wie folgt gelöst wurde:
+
+Das Backend wurde so konfiguriert, dass es beide Pfadformate unterstützt, wodurch sowohl die alte als auch die neue API-Struktur funktionieren:
+
+| Frontend (DatabaseService.js)             | Backend (databaseRoutes.js)           | Status |
+|------------------------------------------|--------------------------------------|--------|
+| GET /api/databases/connections           | GET /api/databases/connections        | ✓ Behoben |
+| POST /api/databases/connections          | POST /api/databases/connections       | ✓ Behoben |
+| PUT /api/databases/connections/:id       | PUT /api/databases/connections/:id    | ✓ Behoben |
+| DELETE /api/databases/connections/:id    | DELETE /api/databases/connections/:id | ✓ Behoben |
+| POST /api/databases/test-connection      | POST /api/databases/test-connection   | ✓ Behoben |
+
+Die Routenpriorität wurde angepasst, um sicherzustellen, dass spezifische Routen Vorrang vor parametrisierten Routen haben und somit keine Konflikte entstehen.
+
+### Datenbankspeicherung
+Derzeit werden die Datenbankverbindungen im Backend als JSON-Datei und im Frontend als localStorage-Einträge gespeichert. Für eine robustere Lösung sollte eine relationale Datenbank verwendet werden, wie sie bereits im Datenbankschema definiert ist.
+
+### Docker-Konfiguration (✓ Behoben)
+Das Backend war nicht korrekt in der Docker-Compose-Konfiguration eingebunden. Es wurden folgende Änderungen vorgenommen:
+
+1. Ein neuer Service `backend` wurde in der `docker-compose.yml` Datei hinzugefügt, der den Node.js Express-Server hostet
+2. Ein `Dockerfile` für das Backend wurde erstellt, um die Abhängigkeiten zu installieren und den Server zu starten
+3. Der Frontend-Service `mole-ui` wurde aktualisiert, um vom Backend-Service abhängig zu sein
+4. Ein Docker-Volume `backend_data` wurde hinzugefügt, um persistente Datenspeicherung für die Backend-Datenbankverbindungen zu ermöglichen
+
+Diese Änderungen ermöglichen die vollständige Containerisierung der Anwendung, wobei die Abhängigkeiten automatisch mit `docker compose up --build` installiert werden. 

@@ -1,4 +1,3 @@
-
 services:
   # Frontend web UI based on React with modern Material UI styling
   mole-ui:
@@ -18,6 +17,28 @@ services:
     depends_on:
       - mysql
       - postgres
+      - backend
+
+  # Backend API service for database connection management
+  backend:
+    build:
+      context: ./app/backend
+      dockerfile: Dockerfile
+    container_name: mole-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    volumes:
+      - ./app/backend:/app
+      - backend_data:/app/data
+    networks:
+      - mole-network
+    depends_on:
+      - mysql
+      - postgres
 
   # Database sync service
   db-sync:
@@ -27,9 +48,9 @@ services:
     container_name: mole-sync
     restart: unless-stopped
     ports:
-      - "5000:5000"  # Expose API port
+      - "5000:5000"
     environment:
-      - SYNC_INTERVAL=86400  # Default sync interval in seconds (1 day)
+      - SYNC_INTERVAL=86400
     volumes:
       - ./app/db-sync/config:/app/config
       - ./app/db-sync/logs:/app/logs
@@ -85,6 +106,7 @@ volumes:
   mysql_data:
   postgres_data:
   influxdb_data:
+  backend_data:
 
 networks:
   mole-network:

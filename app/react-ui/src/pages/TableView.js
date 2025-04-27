@@ -158,14 +158,14 @@ const TableView = () => {
           onClick={() => navigate('/databases')}
         >
           <DatabaseIcon sx={{ mr: 0.5 }} fontSize="inherit" />
-          Datenbanken
+          Databases
         </MuiLink>
         <MuiLink
           component="button"
           underline="hover"
           sx={{ display: 'flex', alignItems: 'center' }}
           color="inherit"
-          onClick={() => navigate(`/database/${dbType}/${dbName}/tables`)}
+          onClick={() => navigate(`/databases/${dbName}`)}
         >
           {dbName}
         </MuiLink>
@@ -181,7 +181,7 @@ const TableView = () => {
             {tableName || 'users'}
           </Typography>
           <Typography variant="body1" color="textSecondary">
-            {filteredRows.length} Einträge gefunden • {tableData.columns.length} Spalten
+            {filteredRows.length} entries found • {tableData.columns.length} columns
           </Typography>
         </Box>
         
@@ -189,7 +189,7 @@ const TableView = () => {
           <Button
             variant="outlined"
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate(`/database/${dbType}/${dbName}/tables`)}
+            onClick={() => navigate(`/databases/${dbName}`)}
             sx={{ 
               borderRadius: 20,
               py: 1,
@@ -197,7 +197,7 @@ const TableView = () => {
               fontWeight: 500
             }}
           >
-            Zurück zur Tabellenliste
+            Back to Table List
           </Button>
           
           <Button
@@ -212,7 +212,7 @@ const TableView = () => {
               fontWeight: 500
             }}
           >
-            Neuer Eintrag
+            New Entry
           </Button>
         </Box>
       </Box>
@@ -228,7 +228,7 @@ const TableView = () => {
       >
         <Toolbar sx={{ px: { sm: 2 }, py: 1 }}>
           <TextField
-            placeholder="Datensätze durchsuchen..."
+            placeholder="Search records..."
             variant="outlined"
             value={searchTerm}
             onChange={handleSearchChange}
@@ -250,25 +250,25 @@ const TableView = () => {
             size="small"
           />
           
-          <Tooltip title="Aktualisieren">
+          <Tooltip title="Refresh">
             <IconButton onClick={() => console.log('Refresh')}>
               <RefreshIcon />
             </IconButton>
           </Tooltip>
           
-          <Tooltip title="Filtern">
+          <Tooltip title="Filter">
             <IconButton onClick={() => console.log('Filter')}>
               <FilterIcon />
             </IconButton>
           </Tooltip>
           
-          <Tooltip title="Exportieren">
+          <Tooltip title="Export">
             <IconButton onClick={() => console.log('Export')}>
               <DownloadIcon />
             </IconButton>
           </Tooltip>
           
-          <Tooltip title="Mehr Optionen">
+          <Tooltip title="More Options">
             <IconButton onClick={handleMenuOpen}>
               <MoreIcon />
             </IconButton>
@@ -351,7 +351,7 @@ const TableView = () => {
                     width: 120
                   }}
                 >
-                  Aktionen
+                  Actions
                 </TableCell>
               </TableRow>
             </TableHead>
@@ -371,7 +371,7 @@ const TableView = () => {
                     <TableCell key={column.id}>
                       {column.id === 'status' ? (
                         <Chip
-                          label={row[column.id] === 1 ? 'Aktiv' : 'Inaktiv'}
+                          label={row[column.id] === 1 ? 'Active' : 'Inactive'}
                           size="small"
                           sx={{ 
                             borderRadius: 1,
@@ -393,7 +393,7 @@ const TableView = () => {
                         transition: 'opacity 0.2s'
                       }}
                     >
-                      <Tooltip title="Bearbeiten">
+                      <Tooltip title="Edit">
                         <IconButton 
                           size="small"
                           onClick={() => console.log('Edit row', row.id)}
@@ -403,7 +403,7 @@ const TableView = () => {
                         </IconButton>
                       </Tooltip>
                       
-                      <Tooltip title="Löschen">
+                      <Tooltip title="Delete">
                         <IconButton 
                           size="small"
                           onClick={() => console.log('Delete row', row.id)}
@@ -427,12 +427,12 @@ const TableView = () => {
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Zeilen pro Seite:"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} von ${count}`}
+          labelRowsPerPage="Rows per page:"
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} of ${count}`}
         />
       </Paper>
       
-      {/* Tabellen-Menü */}
+      {/* Table Menu */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
@@ -446,21 +446,21 @@ const TableView = () => {
         }}
       >
         <MenuItem onClick={handleMenuClose}>
-          <Typography variant="body2">Leeren</Typography>
+          <Typography variant="body2">Empty</Typography>
         </MenuItem>
         <MenuItem onClick={handleMenuClose}>
-          <Typography variant="body2">Struktur anzeigen</Typography>
+          <Typography variant="body2">Show Structure</Typography>
         </MenuItem>
         <MenuItem onClick={handleMenuClose}>
-          <Typography variant="body2">Umbenennen</Typography>
+          <Typography variant="body2">Rename</Typography>
         </MenuItem>
         <Divider sx={{ my: 1 }} />
         <MenuItem onClick={handleMenuClose} sx={{ color: theme.palette.error.main }}>
-          <Typography variant="body2">Tabelle löschen</Typography>
+          <Typography variant="body2">Delete Table</Typography>
         </MenuItem>
       </Menu>
       
-      {/* Spalten-Menü */}
+      {/* Column Menu */}
       <Menu
         anchorEl={columnAnchorEl}
         open={Boolean(columnAnchorEl)}
@@ -474,17 +474,17 @@ const TableView = () => {
         }}
       >
         <MenuItem onClick={handleColumnMenuClose}>
-          <Typography variant="body2">Sortieren: Aufsteigend</Typography>
+          <Typography variant="body2">Sort: Ascending</Typography>
         </MenuItem>
         <MenuItem onClick={handleColumnMenuClose}>
-          <Typography variant="body2">Sortieren: Absteigend</Typography>
+          <Typography variant="body2">Sort: Descending</Typography>
         </MenuItem>
         <Divider sx={{ my: 1 }} />
         <MenuItem onClick={handleColumnMenuClose}>
-          <Typography variant="body2">Spalte bearbeiten</Typography>
+          <Typography variant="body2">Edit Column</Typography>
         </MenuItem>
         <MenuItem onClick={handleColumnMenuClose} sx={{ color: theme.palette.error.main }}>
-          <Typography variant="body2">Spalte löschen</Typography>
+          <Typography variant="body2">Delete Column</Typography>
         </MenuItem>
       </Menu>
     </Box>

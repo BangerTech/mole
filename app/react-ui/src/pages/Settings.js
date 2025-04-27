@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -23,7 +24,13 @@ import {
   Paper,
   RadioGroup,
   Radio,
-  Tooltip
+  Tooltip,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  CircularProgress,
+  Snackbar
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -38,9 +45,12 @@ import {
   Notifications as NotificationsIcon,
   SmartToy as SmartToyIcon,
   Key as KeyIcon,
-  Help as HelpIcon
+  Help as HelpIcon,
+  Email as EmailIcon,
+  Check as CheckIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import EmailService from '../services/EmailService';
 
 // Styled Components
 const StyledTab = styled(Tab)(({ theme }) => ({
@@ -78,6 +88,7 @@ function TabPanel(props) {
 }
 
 export default function Settings() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState(0);
   const [darkMode, setDarkMode] = useState(true);
   const [language, setLanguage] = useState('en');
@@ -93,6 +104,37 @@ export default function Settings() {
   const [localModelPath, setLocalModelPath] = useState('/models/llama-2-7b');
   const [aiPrecision, setAiPrecision] = useState(7);
   const [customPromptTemplate, setCustomPromptTemplate] = useState('Analyze the database and tell me about {query}');
+  const [smtpSettings, setSmtpSettings] = useState({
+    host: '',
+    port: '587',
+    username: '',
+    password: '',
+    encryption: 'tls', // 'tls', 'ssl', oder 'none'
+    fromEmail: '',
+    fromName: 'Mole Database Manager'
+  });
+  const [smtpTestStatus, setSmtpTestStatus] = useState({
+    testing: false,
+    success: null,
+    message: ''
+  });
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'info'
+  });
+
+  // Handle tab selection from URL query parameters
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    const tab = query.get('tab');
+    
+    if (tab === 'notifications') {
+      setActiveTab(1); // Notifications tab index is 1
+    } else if (tab === 'email') {
+      setActiveTab(7); // Email Settings tab index is 7
+    }
+  }, [location]);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
@@ -177,6 +219,95 @@ export default function Settings() {
     }
   };
 
+  const handleTestSmtpConnection = async () => {
+    setSmtpTestStatus({
+      testing: true,
+      success: null,
+      message: 'Testing connection...'
+    });
+    
+    try {
+      const result = await EmailService.testSmtpConnection(smtpSettings);
+      setSmtpTestStatus({
+        testing: false,
+        success: result.success,
+        message: result.message
+      });
+    } catch (error) {
+      setSmtpTestStatus({
+        testing: false,
+        success: false,
+        message: error.message || 'An error occurred during the test'
+      });
+    }
+  };
+  
+  const handleSmtpChange = (e) => {
+    const { name, value } = e.target;
+    setSmtpSettings(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  const handleSaveSmtpSettings = async () => {
+    try {
+      const result = await EmailService.saveSmtpSettings(smtpSettings);
+      setSnackbar({
+        open: true,
+        message: result.message,
+        severity: 'success'
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to save SMTP settings',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!smtpSettings.host || !smtpSettings.username || !smtpSettings.password) {
+      setSnackbar({
+        open: true,
+        message: 'Please configure and save SMTP settings first',
+        severity: 'warning'
+      });
+      return;
+    }
+    
+    try {
+      await EmailService.sendTestEmail(smtpSettings.username);
+      setSnackbar({
+        open: true,
+        message: 'Test email sent successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to send test email',
+        severity: 'error'
+      });
+    }
+  };
+
+  // useEffect für das Laden der SMTP-Einstellungen
+  useEffect(() => {
+    // Lade SMTP-Einstellungen
+    const loadSmtpSettings = async () => {
+      try {
+        const settings = await EmailService.getSmtpSettings();
+        setSmtpSettings(settings);
+      } catch (error) {
+        console.error('Error loading SMTP settings:', error);
+      }
+    };
+    
+    loadSmtpSettings();
+  }, []);
+
   return (
     <Box sx={{ py: 3, px: { xs: 2, md: 3 } }}>
       <Typography variant="h4" gutterBottom fontWeight={600}>
@@ -211,6 +342,7 @@ export default function Settings() {
           <StyledTab icon={<SmartToyIcon sx={{ mr: 1 }} />} iconPosition="start" label="AI Assistant" />
           <StyledTab icon={<SecurityIcon sx={{ mr: 1 }} />} iconPosition="start" label="Security" />
           <StyledTab icon={<InfoIcon sx={{ mr: 1 }} />} iconPosition="start" label="About" />
+          <StyledTab icon={<EmailIcon sx={{ mr: 1 }} />} iconPosition="start" label="Email Settings" />
         </Tabs>
       </Box>
 
@@ -292,11 +424,28 @@ export default function Settings() {
                       color="primary"
                     />
                   }
-                  label="Enable Notifications"
+                  label="Enable In-App Notifications"
                 />
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 3 }}>
-                  Enable notifications to stay informed about important events and updates.
+                  Receive notifications within the application for important events.
                 </Typography>
+                
+                <FormControlLabel
+                  control={
+                    <Switch 
+                      defaultChecked 
+                      color="primary"
+                    />
+                  }
+                  label="Enable Email Notifications"
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 3 }}>
+                  Receive important notifications via email (requires SMTP configuration).
+                </Typography>
+                
+                <Alert severity="info" sx={{ mb: 3 }}>
+                  To configure email notifications, please set up your SMTP server in the <strong>Email Settings</strong> tab.
+                </Alert>
                 
                 <Divider sx={{ my: 2 }} />
                 
@@ -327,6 +476,19 @@ export default function Settings() {
                   label="System updates"
                   sx={{ display: 'block', mb: 1 }}
                 />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button 
+                    variant="contained" 
+                    color="primary"
+                    startIcon={<SaveIcon />}
+                    onClick={handleSave}
+                  >
+                    Save Notification Settings
+                  </Button>
+                </Box>
               </Grid>
             </Grid>
           </CardContent>
@@ -867,6 +1029,145 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
+      {/* Email Settings Tab */}
+      <TabPanel value={activeTab} index={7}>
+        <SettingCard>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              SMTP Configuration
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Configure your SMTP server for sending email notifications
+            </Typography>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={8}>
+                <TextField
+                  fullWidth
+                  label="SMTP Server"
+                  name="host"
+                  value={smtpSettings.host}
+                  onChange={handleSmtpChange}
+                  placeholder="smtp.example.com"
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  label="Port"
+                  name="port"
+                  value={smtpSettings.port}
+                  onChange={handleSmtpChange}
+                  placeholder="587"
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Username"
+                  name="username"
+                  value={smtpSettings.username}
+                  onChange={handleSmtpChange}
+                  placeholder="your-email@example.com"
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Password"
+                  name="password"
+                  type="password"
+                  value={smtpSettings.password}
+                  onChange={handleSmtpChange}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="From Email"
+                  name="fromEmail"
+                  value={smtpSettings.fromEmail}
+                  onChange={handleSmtpChange}
+                  placeholder="notifications@yourdomain.com"
+                  helperText="Leave empty to use username as from address"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="From Name"
+                  name="fromName"
+                  value={smtpSettings.fromName}
+                  onChange={handleSmtpChange}
+                  placeholder="Mole Database Manager"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel id="encryption-label">Encryption</InputLabel>
+                  <Select
+                    labelId="encryption-label"
+                    id="encryption"
+                    name="encryption"
+                    value={smtpSettings.encryption}
+                    onChange={handleSmtpChange}
+                    label="Encryption"
+                  >
+                    <MenuItem value="tls">TLS</MenuItem>
+                    <MenuItem value="ssl">SSL</MenuItem>
+                    <MenuItem value="none">None</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              
+              {smtpTestStatus.message && (
+                <Grid item xs={12}>
+                  <Alert 
+                    severity={smtpTestStatus.success ? "success" : "error"}
+                    sx={{ mt: 2 }}
+                  >
+                    {smtpTestStatus.message}
+                  </Alert>
+                </Grid>
+              )}
+              
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="outlined"
+                    onClick={handleTestSmtpConnection}
+                    disabled={smtpTestStatus.testing}
+                    startIcon={smtpTestStatus.testing ? <CircularProgress size={20} /> : <CheckIcon />}
+                  >
+                    Test Connection
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    onClick={handleSendTestEmail}
+                    disabled={!smtpSettings.host || !smtpSettings.username || !smtpSettings.password}
+                  >
+                    Send Test Email
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleSaveSmtpSettings}
+                    startIcon={<SaveIcon />}
+                  >
+                    Save Settings
+                  </Button>
+                </Box>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </SettingCard>
+      </TabPanel>
+
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
         <Button 
           variant="contained" 
@@ -878,6 +1179,21 @@ export default function Settings() {
           Save All Settings
         </Button>
       </Box>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+      >
+        <Alert 
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
+          severity={snackbar.severity} 
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 } 

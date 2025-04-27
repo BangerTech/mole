@@ -170,8 +170,11 @@ export default function Dashboard() {
     setAiResponse('');
     
     try {
+      // Get the API base URL
+      const apiBaseUrl = getApiBaseUrl();
+      
       // Make API call to AI query endpoint
-      const response = await fetch('/api/ai/query', {
+      const response = await fetch(`${apiBaseUrl}/api/ai/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: aiQuery })

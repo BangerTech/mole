@@ -1,5 +1,5 @@
-import React, { useState, createContext, useMemo, useContext } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useState, createContext, useMemo, useContext, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import Dashboard from './pages/Dashboard';
 import DatabasesList from './pages/DatabasesList';
@@ -9,8 +9,13 @@ import DatabaseCreate from './pages/DatabaseCreate';
 import TableView from './pages/TableView';
 import QueryEditor from './pages/QueryEditor';
 import Settings from './pages/Settings';
+import Profile from './pages/Profile';
+import Login from './pages/Login';
+import Register from './pages/Register';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
+import { UserProvider } from './components/UserContext';
+import AuthService from './services/AuthService';
 import './App.css';
 
 // Create a theme context
@@ -21,6 +26,33 @@ export const ThemeModeContext = createContext({
 
 // Custom hook to use the theme context
 export const useThemeMode = () => useContext(ThemeModeContext);
+
+// Protected route component to check authentication
+const ProtectedRoute = ({ children }) => {
+  const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const checkAuth = async () => {
+      const isLoggedIn = AuthService.isLoggedIn();
+      setIsAuthenticated(isLoggedIn);
+      setLoading(false);
+      
+      if (!isLoggedIn) {
+        navigate('/login');
+      }
+    };
+    
+    checkAuth();
+  }, [navigate]);
+  
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+  
+  return isAuthenticated ? children : null;
+};
 
 function App() {
   const [mode, setMode] = useState('dark');
@@ -189,26 +221,47 @@ function App() {
   return (
     <ThemeModeContext.Provider value={themeMode}>
       <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <div className={`app-container ${mode}`}>
-          <Sidebar open={sidebarOpen} />
-          <div className={`content ${!sidebarOpen ? 'content-full' : ''}`}>
-            <TopBar toggleSidebar={toggleSidebar} />
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/databases" element={<DatabasesList />} />
-              <Route path="/databases/create" element={<DatabaseForm />} />
-              <Route path="/databases/new" element={<DatabaseCreate />} />
-              <Route path="/databases/edit/:id" element={<DatabaseForm />} />
-              <Route path="/databases/:id" element={<DatabaseDetails />} />
-              <Route path="/database/:type/:name/tables" element={<DatabasesList />} />
-              <Route path="/database/:type/:name/table/:table" element={<TableView />} />
-              <Route path="/query" element={<QueryEditor />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </div>
-        </div>
+        <UserProvider>
+          <CssBaseline />
+          <Routes>
+            {/* Authentication routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            
+            {/* Protected routes */}
+            <Route path="/" element={
+              <ProtectedRoute>
+                <div className={`app-container ${mode}`}>
+                  <Sidebar open={sidebarOpen} />
+                  <div className={`content ${!sidebarOpen ? 'content-full' : ''}`}>
+                    <TopBar toggleSidebar={toggleSidebar} />
+                    <Routes>
+                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/databases" element={<DatabasesList />} />
+                      <Route path="/databases/create" element={<DatabaseForm />} />
+                      <Route path="/databases/new" element={<DatabaseCreate />} />
+                      <Route path="/databases/edit/:id" element={<DatabaseForm />} />
+                      <Route path="/databases/:id" element={<DatabaseDetails />} />
+                      <Route path="/database/:type/:name/tables" element={<DatabasesList />} />
+                      <Route path="/database/:type/:name/table/:table" element={<TableView />} />
+                      <Route path="/query" element={<QueryEditor />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/profile" element={<Profile />} />
+                    </Routes>
+                  </div>
+                </div>
+              </ProtectedRoute>
+            } />
+
+            {/* Redirect all other paths to login or dashboard based on auth state */}
+            <Route path="*" element={
+              AuthService.isLoggedIn() 
+                ? <Navigate to="/dashboard" replace /> 
+                : <Navigate to="/login" replace />
+            } />
+          </Routes>
+        </UserProvider>
       </ThemeProvider>
     </ThemeModeContext.Provider>
   );
