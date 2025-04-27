@@ -137,7 +137,7 @@ const DatabaseDetails = () => {
         await new Promise(resolve => setTimeout(resolve, 800));
         
         // Mock data for demonstration
-        const typeKey = dbType.toLowerCase();
+        const typeKey = dbType ? dbType.toLowerCase() : 'postgresql'; // Fallback to PostgreSQL if dbType is undefined
         const dbDetails = generateMockDatabaseDetails(typeKey, dbName);
         const tablesList = generateMockTables();
         const structureData = generateMockStructure();

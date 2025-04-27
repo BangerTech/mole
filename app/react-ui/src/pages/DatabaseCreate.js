@@ -1,162 +1,189 @@
 import React, { useState } from 'react';
 import {
   Box,
-  Paper,
   Typography,
+  Card,
   TextField,
-  Button,
-  Stepper,
-  Step,
-  StepLabel,
-  Grid,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  FormHelperText,
+  Button,
+  Stepper,
+  Step,
+  StepLabel,
+  CircularProgress,
   Alert,
   IconButton,
-  InputAdornment,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  useTheme
+  Stack,
+  Divider,
+  Paper
 } from '@mui/material';
-import {
-  DatabaseAdd as DatabaseIcon,
-  ChevronLeft as BackIcon,
-  ChevronRight as NextIcon,
-  Check as CheckIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon
-} from '@mui/icons-material';
+import { styled } from '@mui/material/styles';
+import { useNavigate } from 'react-router-dom';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 
-const DatabaseCreate = () => {
-  const theme = useTheme();
+// Styled components
+const RootStyle = styled('div')({
+  height: '100%',
+  padding: '24px'
+});
+
+const ContentCard = styled(Card)(({ theme }) => ({
+  padding: theme.spacing(3),
+  boxShadow: theme.shadows[2],
+  borderRadius: theme.shape.borderRadius,
+}));
+
+export default function DatabaseCreate() {
+  const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [createStatus, setCreateStatus] = useState({ status: '', message: '' });
+  
   const [formData, setFormData] = useState({
-    type: 'mysql',
     name: '',
-    host: '',
-    port: '',
+    engine: 'PostgreSQL',
+    host: 'localhost',
+    port: '5432',
     username: '',
     password: '',
-    advanced: {
-      charset: 'utf8mb4',
-      collation: 'utf8mb4_unicode_ci'
-    }
   });
-  const [errors, setErrors] = useState({});
-  const [showPassword, setShowPassword] = useState(false);
-  const [success, setSuccess] = useState(false);
 
-  const steps = ['Datenbanktyp wählen', 'Verbindungsdaten eingeben', 'Fertigstellen'];
-
-  const handleTypeChange = (event) => {
-    const type = event.target.value;
-    let port = '';
-
-    switch (type) {
-      case 'mysql':
-        port = '3306';
-        break;
-      case 'postgresql':
-        port = '5432';
-        break;
-      case 'influxdb':
-        port = '8086';
-        break;
-      default:
-        port = '';
-    }
-
-    setFormData({
-      ...formData,
-      type,
-      port,
-      advanced: type === 'mysql' 
-        ? { charset: 'utf8mb4', collation: 'utf8mb4_unicode_ci' }
-        : type === 'postgresql'
-          ? { template: 'template0', encoding: 'UTF8' }
-          : {}
-    });
-  };
-
-  const handleInputChange = (event) => {
-    const { name, value } = event.target;
-    
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
-      setFormData({
-        ...formData,
-        [parent]: {
-          ...formData[parent],
-          [child]: value
-        }
-      });
-    } else {
-      setFormData({
-        ...formData,
-        [name]: value
-      });
-    }
-  };
-
-  const validateStep = () => {
-    const newErrors = {};
-
-    if (activeStep === 0) {
-      if (!formData.type) {
-        newErrors.type = 'Bitte wähle einen Datenbanktyp';
-      }
-    } else if (activeStep === 1) {
-      if (!formData.name) {
-        newErrors.name = 'Bitte gib einen Datenbanknamen ein';
-      }
-      if (!formData.host) {
-        newErrors.host = 'Bitte gib einen Hostnamen ein';
-      }
-      if (!formData.port) {
-        newErrors.port = 'Bitte gib einen Port ein';
-      }
-      if (!formData.username) {
-        newErrors.username = 'Bitte gib einen Benutzernamen ein';
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleNext = () => {
-    if (validateStep()) {
-      setActiveStep((prevActiveStep) => prevActiveStep + 1);
-    }
+  const defaultPorts = {
+    PostgreSQL: '5432',
+    MySQL: '3306',
+    InfluxDB: '8086'
   };
 
   const handleBack = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep - 1);
+    navigate('/databases');
   };
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
-    if (validateStep()) {
-      console.log('Form data submitted:', formData);
-      // Hier würde der API-Aufruf kommen, um die Datenbank zu erstellen
-      setSuccess(true);
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+
+    // Set default port when engine changes
+    if (name === 'engine') {
+      setFormData(prev => ({
+        ...prev,
+        port: defaultPorts[value]
+      }));
     }
   };
 
-  const getPortPlaceholder = () => {
-    switch (formData.type) {
-      case 'mysql':
-        return '3306';
-      case 'postgresql':
-        return '5432';
-      case 'influxdb':
-        return '8086';
+  const handleNext = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep + 1);
+  };
+
+  const handleBack2 = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep - 1);
+  };
+
+  const handleCreateDatabase = () => {
+    setLoading(true);
+    setCreateStatus({ status: '', message: '' });
+
+    // Map our engine names to the db_type expected by the API
+    const dbTypeMap = {
+      'PostgreSQL': 'postgresql',
+      'MySQL': 'mysql',
+      'InfluxDB': 'influxdb'
+    };
+
+    // Prepare data for the create-database.php endpoint
+    const createData = {
+      db_type: dbTypeMap[formData.engine],
+      db_name: formData.name,
+      db_host: formData.host,
+      db_port: formData.port,
+      db_user: formData.username,
+      db_pass: formData.password
+    };
+
+    // Dynamically get the API base URL
+    const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+      ? 'http://localhost:5000' 
+      : `http://${window.location.hostname}:5000`;
+
+    // Make the API call to create database
+    fetch(`${apiBaseUrl}/api/database/create`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(createData)
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        setCreateStatus({
+          status: 'success',
+          message: data.message || 'Database created successfully!'
+        });
+        
+        // Add the new database to localStorage for persistence
+        const storedDatabases = localStorage.getItem('mole_real_databases');
+        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+        
+        // Add the new database to the list
+        const newDatabase = {
+          name: formData.name,
+          engine: formData.engine,
+          host: formData.host,
+          port: formData.port,
+          database: formData.name,
+          username: formData.username,
+          password: formData.password,
+          size: '0 MB',  // New database has no size initially
+          tables: 0,     // New database has no tables initially
+          isSample: false
+        };
+        
+        realDatabases.push(newDatabase);
+        localStorage.setItem('mole_real_databases', JSON.stringify(realDatabases));
+        
+        // After 2 seconds, navigate back to databases list
+        setTimeout(() => {
+          navigate('/databases');
+        }, 2000);
+      } else {
+        setCreateStatus({
+          status: 'error',
+          message: data.message || 'Failed to create database. Please check your inputs and try again.'
+        });
+      }
+    })
+    .catch(error => {
+      console.error('Error creating database:', error);
+      setCreateStatus({
+        status: 'error',
+        message: 'Network error: Failed to connect to the server.'
+      });
+    })
+    .finally(() => {
+      setLoading(false);
+    });
+  };
+
+  const steps = ['Database Type', 'Server Details', 'Database Creation'];
+
+  const isStepValid = (step) => {
+    switch (step) {
+      case 0:
+        return formData.engine !== '';
+      case 1:
+        return formData.name && formData.host && formData.port && 
+               formData.username && formData.password;
+      case 2:
+        return true;
       default:
-        return '';
+        return true;
     }
   };
 
@@ -164,316 +191,160 @@ const DatabaseCreate = () => {
     switch (step) {
       case 0:
         return (
-          <Box>
-            <Typography variant="h6" fontWeight={500} gutterBottom>
-              Wähle den Datenbanktyp aus
+          <Stack spacing={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Select the type of database you want to create
             </Typography>
             
-            <Paper 
-              elevation={0}
-              sx={{ 
-                p: 3, 
-                mt: 2,
-                border: `1px solid ${theme.palette.divider}`,
-                borderRadius: 2
-              }}
-            >
-              <RadioGroup
-                aria-label="database-type"
-                name="type"
-                value={formData.type}
-                onChange={handleTypeChange}
+            <FormControl fullWidth required>
+              <InputLabel>Database Engine</InputLabel>
+              <Select
+                name="engine"
+                value={formData.engine}
+                onChange={handleInputChange}
+                label="Database Engine"
               >
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={4}>
-                    <Paper 
-                      elevation={0} 
-                      sx={{ 
-                        p: 2, 
-                        borderRadius: 2,
-                        border: `2px solid ${formData.type === 'mysql' ? theme.palette.primary.main : theme.palette.divider}`,
-                        bgcolor: formData.type === 'mysql' ? `${theme.palette.primary.main}08` : 'transparent',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      <FormControlLabel 
-                        value="mysql" 
-                        control={<Radio color="primary" />} 
-                        label={
-                          <Box>
-                            <Typography variant="subtitle1" fontWeight={500}>MySQL</Typography>
-                            <Typography variant="body2" color="textSecondary">
-                              Relationale Datenbank mit hoher Performance
-                            </Typography>
-                          </Box>
-                        }
-                        sx={{ width: '100%', m: 0 }}
-                      />
-                    </Paper>
-                  </Grid>
-                  
-                  <Grid item xs={12} md={4}>
-                    <Paper 
-                      elevation={0} 
-                      sx={{ 
-                        p: 2, 
-                        borderRadius: 2,
-                        border: `2px solid ${formData.type === 'postgresql' ? theme.palette.primary.main : theme.palette.divider}`,
-                        bgcolor: formData.type === 'postgresql' ? `${theme.palette.primary.main}08` : 'transparent',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      <FormControlLabel 
-                        value="postgresql" 
-                        control={<Radio color="primary" />} 
-                        label={
-                          <Box>
-                            <Typography variant="subtitle1" fontWeight={500}>PostgreSQL</Typography>
-                            <Typography variant="body2" color="textSecondary">
-                              Erweiterbare, objektrelationale Datenbank
-                            </Typography>
-                          </Box>
-                        }
-                        sx={{ width: '100%', m: 0 }}
-                      />
-                    </Paper>
-                  </Grid>
-                  
-                  <Grid item xs={12} md={4}>
-                    <Paper 
-                      elevation={0} 
-                      sx={{ 
-                        p: 2, 
-                        borderRadius: 2,
-                        border: `2px solid ${formData.type === 'influxdb' ? theme.palette.primary.main : theme.palette.divider}`,
-                        bgcolor: formData.type === 'influxdb' ? `${theme.palette.primary.main}08` : 'transparent',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      <FormControlLabel 
-                        value="influxdb" 
-                        control={<Radio color="primary" />} 
-                        label={
-                          <Box>
-                            <Typography variant="subtitle1" fontWeight={500}>InfluxDB</Typography>
-                            <Typography variant="body2" color="textSecondary">
-                              Zeitreihen-Datenbank für Metriken
-                            </Typography>
-                          </Box>
-                        }
-                        sx={{ width: '100%', m: 0 }}
-                      />
-                    </Paper>
-                  </Grid>
-                </Grid>
-              </RadioGroup>
-              
-              {errors.type && (
-                <FormHelperText error>{errors.type}</FormHelperText>
-              )}
-            </Paper>
-          </Box>
+                <MenuItem value="PostgreSQL">PostgreSQL</MenuItem>
+                <MenuItem value="MySQL">MySQL</MenuItem>
+                <MenuItem value="InfluxDB">InfluxDB</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                {formData.engine === 'PostgreSQL' && 
+                  "PostgreSQL is a powerful, open-source object-relational database system with over 30 years of active development. It's known for reliability, feature robustness, and performance."}
+                {formData.engine === 'MySQL' && 
+                  "MySQL is a popular open-source relational database management system. It's known for its proven reliability, ease of use, and high performance."}
+                {formData.engine === 'InfluxDB' && 
+                  "InfluxDB is an open-source time series database optimized for high-write-volume time series data. It's ideal for operations monitoring, application metrics, and IoT sensor data."}
+              </Typography>
+            </Box>
+          </Stack>
         );
-      
       case 1:
         return (
-          <Box>
-            <Typography variant="h6" fontWeight={500} gutterBottom>
-              Verbindungsdaten eingeben
-            </Typography>
-            <Typography variant="body2" color="textSecondary" paragraph>
-              Bitte gib die Verbindungsdaten für deine {formData.type === 'mysql' ? 'MySQL' : formData.type === 'postgresql' ? 'PostgreSQL' : 'InfluxDB'} Datenbank ein.
-            </Typography>
+          <Stack spacing={3}>
+            <TextField
+              fullWidth
+              label="Database Name"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              placeholder="my_database"
+              required
+              helperText="Name for your new database (no spaces or special characters)"
+            />
             
-            <Paper 
-              elevation={0}
-              sx={{ 
-                p: 3, 
-                mt: 2,
-                border: `1px solid ${theme.palette.divider}`,
-                borderRadius: 2
-              }}
-            >
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Datenbankname"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    error={!!errors.name}
-                    helperText={errors.name}
-                    placeholder="z.B. my_database"
-                    variant="outlined"
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={8}>
-                  <TextField
-                    fullWidth
-                    label="Host"
-                    name="host"
-                    value={formData.host}
-                    onChange={handleInputChange}
-                    error={!!errors.host}
-                    helperText={errors.host}
-                    placeholder="z.B. localhost oder 192.168.1.1"
-                    variant="outlined"
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Port"
-                    name="port"
-                    type="number"
-                    value={formData.port}
-                    onChange={handleInputChange}
-                    error={!!errors.port}
-                    helperText={errors.port}
-                    placeholder={getPortPlaceholder()}
-                    variant="outlined"
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Benutzername"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleInputChange}
-                    error={!!errors.username}
-                    helperText={errors.username}
-                    variant="outlined"
-                  />
-                </Grid>
-                
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="Passwort"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    error={!!errors.password}
-                    helperText={errors.password}
-                    variant="outlined"
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            aria-label="toggle password visibility"
-                            onClick={() => setShowPassword(!showPassword)}
-                            edge="end"
-                          >
-                            {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-          </Box>
+            <TextField
+              fullWidth
+              label="Host"
+              name="host"
+              value={formData.host}
+              onChange={handleInputChange}
+              placeholder="localhost"
+              required
+              helperText="Database server hostname or IP address"
+            />
+            
+            <TextField
+              fullWidth
+              label="Port"
+              name="port"
+              value={formData.port}
+              onChange={handleInputChange}
+              placeholder={defaultPorts[formData.engine]}
+              required
+              type="number"
+              helperText="Database server port number"
+            />
+            
+            <TextField
+              fullWidth
+              label="Admin Username"
+              name="username"
+              value={formData.username}
+              onChange={handleInputChange}
+              required
+              helperText="Username with database creation privileges"
+            />
+            
+            <TextField
+              fullWidth
+              label="Admin Password"
+              name="password"
+              type="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              required
+              helperText="Password for the admin user"
+            />
+          </Stack>
         );
-      
       case 2:
         return (
-          <Box>
-            <Typography variant="h6" fontWeight={500} gutterBottom>
-              Bestätigung
+          <Stack spacing={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Review your database configuration
             </Typography>
             
-            {success ? (
+            <Alert severity="info">
+              You are about to create a new {formData.engine} database named "{formData.name}". 
+              This operation requires administrative privileges on the database server.
+            </Alert>
+            
+            <Paper variant="outlined" sx={{ p: 3, bgcolor: 'background.neutral' }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Database Configuration
+              </Typography>
+              <Divider sx={{ my: 2 }} />
+              <Stack spacing={2}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Database Type:</Typography>
+                  <Typography variant="body2" fontWeight={500}>{formData.engine}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Database Name:</Typography>
+                  <Typography variant="body2" fontWeight={500}>{formData.name}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Host:</Typography>
+                  <Typography variant="body2" fontWeight={500}>{formData.host}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Port:</Typography>
+                  <Typography variant="body2" fontWeight={500}>{formData.port}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Admin Username:</Typography>
+                  <Typography variant="body2" fontWeight={500}>{formData.username}</Typography>
+                </Box>
+              </Stack>
+            </Paper>
+            
+            {createStatus.status && (
               <Alert 
-                severity="success" 
-                sx={{ 
-                  mt: 2, 
-                  borderRadius: 2,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
+                severity={createStatus.status}
+                icon={createStatus.status === 'success' ? <CheckCircleOutlineIcon /> : undefined}
               >
-                Datenbank wurde erfolgreich erstellt!
+                {createStatus.message}
               </Alert>
-            ) : (
-              <>
-                <Typography variant="body2" color="textSecondary" paragraph>
-                  Überprüfe bitte die eingegebenen Daten und bestätige die Erstellung der Datenbank.
-                </Typography>
-                
-                <Paper 
-                  elevation={0}
-                  sx={{ 
-                    p: 3, 
-                    mt: 2,
-                    border: `1px solid ${theme.palette.divider}`,
-                    borderRadius: 2
-                  }}
-                >
-                  <Typography variant="subtitle1" fontWeight={500} gutterBottom>
-                    Zusammenfassung
-                  </Typography>
-                  
-                  <Grid container spacing={2}>
-                    <Grid item xs={4} sm={3}>
-                      <Typography variant="body2" color="textSecondary">Datenbanktyp:</Typography>
-                    </Grid>
-                    <Grid item xs={8} sm={9}>
-                      <Typography variant="body2" fontWeight={500}>{formData.type === 'mysql' ? 'MySQL' : formData.type === 'postgresql' ? 'PostgreSQL' : 'InfluxDB'}</Typography>
-                    </Grid>
-                    
-                    <Grid item xs={4} sm={3}>
-                      <Typography variant="body2" color="textSecondary">Name:</Typography>
-                    </Grid>
-                    <Grid item xs={8} sm={9}>
-                      <Typography variant="body2" fontWeight={500}>{formData.name}</Typography>
-                    </Grid>
-                    
-                    <Grid item xs={4} sm={3}>
-                      <Typography variant="body2" color="textSecondary">Host:</Typography>
-                    </Grid>
-                    <Grid item xs={8} sm={9}>
-                      <Typography variant="body2" fontWeight={500}>{formData.host}</Typography>
-                    </Grid>
-                    
-                    <Grid item xs={4} sm={3}>
-                      <Typography variant="body2" color="textSecondary">Port:</Typography>
-                    </Grid>
-                    <Grid item xs={8} sm={9}>
-                      <Typography variant="body2" fontWeight={500}>{formData.port}</Typography>
-                    </Grid>
-                    
-                    <Grid item xs={4} sm={3}>
-                      <Typography variant="body2" color="textSecondary">Benutzername:</Typography>
-                    </Grid>
-                    <Grid item xs={8} sm={9}>
-                      <Typography variant="body2" fontWeight={500}>{formData.username}</Typography>
-                    </Grid>
-                  </Grid>
-                </Paper>
-              </>
             )}
-          </Box>
+          </Stack>
         );
-      
       default:
         return null;
     }
   };
 
   return (
-    <Box>
-      <Box className="page-header">
-        <Typography variant="h4" fontWeight={600} gutterBottom>
-          Datenbank erstellen
-        </Typography>
-        <Typography variant="body1" color="textSecondary">
-          Erstelle eine neue Datenbank und verbinde dich mit einem Datenbankserver
+    <RootStyle>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+        <IconButton onClick={handleBack} sx={{ mr: 2 }}>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h4">
+          Create New Database
         </Typography>
       </Box>
 
@@ -484,63 +355,42 @@ const DatabaseCreate = () => {
           </Step>
         ))}
       </Stepper>
-      
-      <form onSubmit={handleSubmit}>
-        {renderStepContent(activeStep)}
+
+      <ContentCard>
+        <Box sx={{ p: 1 }}>
+          {renderStepContent(activeStep)}
+        </Box>
         
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
           <Button
-            startIcon={<BackIcon />}
-            onClick={handleBack}
             disabled={activeStep === 0}
-            sx={{ 
-              borderRadius: 20,
-              pl: 2,
-              textTransform: 'none',
-              fontWeight: 500,
-            }}
+            onClick={handleBack2}
+            variant="outlined"
           >
-            Zurück
+            Back
           </Button>
-          
           <Box>
             {activeStep === steps.length - 1 ? (
               <Button
                 variant="contained"
-                color="primary"
-                type="submit"
-                endIcon={<CheckIcon />}
-                disabled={success}
-                sx={{ 
-                  borderRadius: 20,
-                  pr: 2,
-                  textTransform: 'none',
-                  fontWeight: 500,
-                }}
+                onClick={handleCreateDatabase}
+                disabled={!isStepValid(activeStep) || loading}
+                startIcon={loading ? <CircularProgress size={16} /> : null}
               >
-                Datenbank erstellen
+                Create Database
               </Button>
             ) : (
               <Button
                 variant="contained"
-                color="primary"
                 onClick={handleNext}
-                endIcon={<NextIcon />}
-                sx={{ 
-                  borderRadius: 20,
-                  pr: 2,
-                  textTransform: 'none',
-                  fontWeight: 500,
-                }}
+                disabled={!isStepValid(activeStep)}
               >
-                Weiter
+                Next
               </Button>
             )}
           </Box>
         </Box>
-      </form>
-    </Box>
+      </ContentCard>
+    </RootStyle>
   );
-};
-
-export default DatabaseCreate; 
+} 

@@ -92,9 +92,7 @@ const AiQueryBox = styled(Box)(({ theme }) => ({
 
 // Mock data - would be replaced with real API calls
 const mockDatabases = [
-  { name: 'production_db', engine: 'PostgreSQL', size: '1.2 GB', tables: 32 },
-  { name: 'testing_db', engine: 'MySQL', size: '450 MB', tables: 18 },
-  { name: 'development_db', engine: 'PostgreSQL', size: '320 MB', tables: 24 }
+  { name: 'Sample Database', engine: 'PostgreSQL', size: '128 MB', tables: 6, isSample: true }
 ];
 
 const mockSystemInfo = {
@@ -106,17 +104,7 @@ const mockSystemInfo = {
 
 // Mock health data
 const mockHealthData = {
-  production_db: {
-    score: 92,
-    issues: [],
-    warnings: ['High number of idle connections']
-  },
-  testing_db: {
-    score: 78,
-    issues: ['Slow growing transaction log'],
-    warnings: ['Low cache hit ratio']
-  },
-  development_db: {
+  "Sample Database": {
     score: 95,
     issues: [],
     warnings: []
@@ -218,12 +206,18 @@ export default function Dashboard() {
         const sysInfoResponse = await fetch(`${apiBaseUrl}/api/system/info`);
         const sysInfoData = await sysInfoResponse.json();
         
-        // Get databases
-        const dbResponse = await fetch(`${apiBaseUrl}/api/databases`);
-        const dbData = await dbResponse.json();
+        // Überprüfen Sie LocalStorage auf echte Datenbanken
+        const storedDatabases = localStorage.getItem('mole_real_databases');
+        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+        
+        if (realDatabases.length > 0) {
+          setDatabases(realDatabases);
+        } else {
+          // Nur eine Demo-Datenbank anzeigen, wenn keine echten Datenbanken vorhanden sind
+          setDatabases(mockDatabases);
+        }
         
         setSystemInfo(sysInfoData);
-        setDatabases(dbData);
         
         // In a real implementation, we would fetch these from the API too
         setHealthData(mockHealthData);
@@ -231,7 +225,18 @@ export default function Dashboard() {
       } catch (error) {
         console.error("Failed to fetch data:", error);
         // Fallback to mock data if API fails
-        setDatabases(mockDatabases);
+        
+        // Überprüfen Sie LocalStorage auf echte Datenbanken
+        const storedDatabases = localStorage.getItem('mole_real_databases');
+        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+        
+        if (realDatabases.length > 0) {
+          setDatabases(realDatabases);
+        } else {
+          // Nur eine Demo-Datenbank anzeigen, wenn keine echten Datenbanken vorhanden sind
+          setDatabases(mockDatabases);
+        }
+        
         setSystemInfo(mockSystemInfo);
         setHealthData(mockHealthData);
         setPerformanceData(mockPerformanceData);
@@ -308,26 +313,50 @@ export default function Dashboard() {
                       <StorageIcon />
                     </Box>
                   </Box>
-                  <Button 
-                    variant="contained" 
-                    size="small" 
-                    onClick={() => navigate('/databases/create')}
-                    startIcon={<AddIcon />}
-                    sx={{ 
-                      bgcolor: '#ffffff', 
-                      color: '#0047AB',
-                      fontWeight: 'bold',
-                      fontSize: '0.875rem',
-                      padding: '8px 16px',
-                      boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-                      '&:hover': {
-                        bgcolor: '#f0f0f0',
-                        boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
-                      }
-                    }}
-                  >
-                    New Database
-                  </Button>
+                  <Stack direction="row" spacing={1}>
+                    <Button 
+                      variant="contained" 
+                      size="small" 
+                      onClick={() => navigate('/databases/create')}
+                      startIcon={<AddIcon />}
+                      sx={{ 
+                        bgcolor: '#ffffff', 
+                        color: '#0047AB',
+                        fontWeight: 'bold',
+                        fontSize: '0.75rem',
+                        padding: '6px 12px',
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+                        '&:hover': {
+                          bgcolor: '#f0f0f0',
+                          boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+                        },
+                        flex: 1
+                      }}
+                    >
+                      Connect Database
+                    </Button>
+                    <Button 
+                      variant="contained" 
+                      size="small" 
+                      onClick={() => navigate('/databases/new')}
+                      startIcon={<AddIcon />}
+                      sx={{ 
+                        bgcolor: '#50C878', 
+                        color: '#ffffff',
+                        fontWeight: 'bold',
+                        fontSize: '0.75rem',
+                        padding: '6px 12px',
+                        boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+                        '&:hover': {
+                          bgcolor: '#40A060',
+                          boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+                        },
+                        flex: 1
+                      }}
+                    >
+                      Create Database
+                    </Button>
+                  </Stack>
                 </CardContent>
               </StatsCard>
             </Grid>

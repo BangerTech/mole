@@ -181,7 +181,28 @@ export default function DatabaseForm() {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // In a real app, this would be a real API call to save the database connection
+      // Create database object
+      const newDatabase = {
+        ...formValues,
+        id: isEditMode ? id : String(Date.now()),
+        lastConnected: new Date().toISOString().split('T')[0]
+      };
+      
+      // Save to localStorage
+      const storedDatabases = localStorage.getItem('mole_real_databases');
+      const existingDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+      
+      if (isEditMode) {
+        // Update existing database
+        const updatedDatabases = existingDatabases.map(db => 
+          db.id === id ? newDatabase : db
+        );
+        localStorage.setItem('mole_real_databases', JSON.stringify(updatedDatabases));
+      } else {
+        // Add new database
+        existingDatabases.push(newDatabase);
+        localStorage.setItem('mole_real_databases', JSON.stringify(existingDatabases));
+      }
       
       setSnackbar({
         open: true,
@@ -198,10 +219,11 @@ export default function DatabaseForm() {
     } catch (err) {
       setSnackbar({
         open: true,
-        message: 'Failed to save database connection.',
+        message: 'An error occurred. Please try again.',
         severity: 'error',
       });
       console.error(err);
+    } finally {
       setSaving(false);
     }
   };

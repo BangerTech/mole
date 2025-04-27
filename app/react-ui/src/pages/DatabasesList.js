@@ -99,6 +99,7 @@ export default function DatabasesList() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sortOption, setSortOption] = useState('name');
   const [sortAnchorEl, setSortAnchorEl] = useState(null);
+  const [hasRealDatabase, setHasRealDatabase] = useState(false);
 
   // Fetch database connections
   useEffect(() => {
@@ -108,54 +109,30 @@ export default function DatabasesList() {
         // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 1500));
         
-        // Mock database data
-        const mockDatabases = [
-          {
-            id: '1',
-            name: 'Production PostgreSQL',
-            engine: 'PostgreSQL',
-            host: 'db.example.com',
-            port: 5432,
-            database: 'production_db',
-            lastConnected: '2023-05-20',
-          },
-          {
-            id: '2',
-            name: 'Development MySQL',
-            engine: 'MySQL',
-            host: 'localhost',
-            port: 3306,
-            database: 'dev_db',
-            lastConnected: '2023-05-18',
-          },
-          {
-            id: '3',
-            name: 'Analytics Database',
-            engine: 'PostgreSQL',
-            host: 'analytics.example.com',
-            port: 5432,
-            database: 'analytics',
-            lastConnected: '2023-05-15',
-          },
-          {
-            id: '4',
-            name: 'Local SQLite',
-            engine: 'SQLite',
-            database: '/usr/local/data/app.db',
-            lastConnected: '2023-04-30',
-          },
-          {
-            id: '5',
-            name: 'Legacy System',
-            engine: 'MySQL',
-            host: 'legacy.internal',
-            port: 3307,
-            database: 'legacy_system',
-            lastConnected: '2023-03-12',
-          }
-        ];
+        // Check local storage or make API call to see if real databases exist
+        // This is just a placeholder - in a real implementation, this would be an API call
+        const storedDatabases = localStorage.getItem('mole_real_databases');
+        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
         
-        setDatabases(mockDatabases);
+        if (realDatabases.length > 0) {
+          setHasRealDatabase(true);
+          setDatabases(realDatabases);
+        } else {
+          // Only show one sample database if no real databases exist
+          const sampleDatabase = {
+            id: '1',
+            name: 'Sample Database',
+            engine: 'PostgreSQL',
+            host: 'localhost',
+            port: 5432,
+            database: 'sample_db',
+            lastConnected: '2023-05-20',
+            isSample: true // Mark this as a sample database
+          };
+          
+          setDatabases([sampleDatabase]);
+        }
+        
         setError(null);
       } catch (err) {
         setError('Failed to load database connections. Please try again.');
@@ -170,6 +147,33 @@ export default function DatabasesList() {
 
   const handleCreateDatabase = () => {
     navigate('/databases/create');
+  };
+
+  // Function to add a new database
+  const addDatabase = (newDatabase) => {
+    // Get existing real databases
+    const storedDatabases = localStorage.getItem('mole_real_databases');
+    let realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+    
+    // Add the new database
+    const databaseWithId = {
+      ...newDatabase,
+      id: String(Date.now()), // Generate a unique ID
+      lastConnected: new Date().toISOString().split('T')[0]
+    };
+    
+    realDatabases.push(databaseWithId);
+    
+    // Save to local storage
+    localStorage.setItem('mole_real_databases', JSON.stringify(realDatabases));
+    
+    // Remove sample database if this is the first real database
+    if (!hasRealDatabase) {
+      setHasRealDatabase(true);
+      setDatabases(realDatabases);
+    } else {
+      setDatabases([...databases.filter(db => !db.isSample), databaseWithId]);
+    }
   };
 
   const handleDatabaseClick = (id) => {
@@ -200,8 +204,37 @@ export default function DatabasesList() {
   };
 
   const handleDeleteDatabase = () => {
-    // Simulate API call
-    setDatabases(databases.filter(db => db.id !== selectedDatabase.id));
+    // If it's a real database, update local storage
+    if (!selectedDatabase.isSample) {
+      const storedDatabases = localStorage.getItem('mole_real_databases');
+      if (storedDatabases) {
+        const realDatabases = JSON.parse(storedDatabases);
+        const updatedDatabases = realDatabases.filter(db => db.id !== selectedDatabase.id);
+        localStorage.setItem('mole_real_databases', JSON.stringify(updatedDatabases));
+        
+        // If no more real databases, show sample database again
+        if (updatedDatabases.length === 0) {
+          setHasRealDatabase(false);
+          const sampleDatabase = {
+            id: '1',
+            name: 'Sample Database',
+            engine: 'PostgreSQL',
+            host: 'localhost',
+            port: 5432,
+            database: 'sample_db',
+            lastConnected: '2023-05-20',
+            isSample: true
+          };
+          setDatabases([sampleDatabase]);
+        } else {
+          setDatabases(updatedDatabases);
+        }
+      }
+    } else {
+      // Just remove from state if it's a sample
+      setDatabases(databases.filter(db => db.id !== selectedDatabase.id));
+    }
+    
     setDeleteDialogOpen(false);
   };
 
@@ -260,6 +293,82 @@ export default function DatabasesList() {
         return <PostgreSQLIcon />;
     }
   };
+
+  // Add button description for sample database
+  const renderDatabaseCard = (db) => (
+    <Grid item xs={12} sm={6} md={4} key={db.id}>
+      <DatabaseCard 
+        engine={db.engine} 
+        onClick={() => handleDatabaseClick(db.id)}
+        sx={{ cursor: 'pointer' }}
+      >
+        <DatabaseCardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              {getEngineIcon(db.engine)}
+              <Typography variant="subtitle1" sx={{ ml: 1 }}>
+                {db.name}
+                {db.isSample && (
+                  <Tooltip title="This is a sample database for demonstration purposes. It will be removed automatically when you add your first real database.">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        ml: 1,
+                        bgcolor: 'info.main',
+                        color: 'info.contrastText',
+                        px: 1,
+                        py: 0.3,
+                        borderRadius: 1
+                      }}
+                    >
+                      DEMO
+                    </Typography>
+                  </Tooltip>
+                )}
+              </Typography>
+            </Box>
+            <IconButton 
+              size="small" 
+              onClick={(e) => handleMenuOpen(e, db)}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          
+          <Divider sx={{ my: 1 }} />
+          
+          <Box sx={{ my: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Engine:</strong> {db.engine}
+            </Typography>
+            {db.host && (
+              <Typography variant="body2" color="text.secondary" noWrap>
+                <strong>Host:</strong> {db.host}:{db.port}
+              </Typography>
+            )}
+            <Typography variant="body2" color="text.secondary" noWrap>
+              <strong>Database:</strong> {db.database}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Last Connected:</strong> {db.lastConnected}
+            </Typography>
+          </Box>
+        </DatabaseCardContent>
+        <CardActions>
+          <Button 
+            size="small" 
+            startIcon={<OpenInNewIcon />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDatabaseClick(db.id);
+            }}
+          >
+            Connect
+          </Button>
+        </CardActions>
+      </DatabaseCard>
+    </Grid>
+  );
 
   if (loading && databases.length === 0) {
     return (
@@ -356,63 +465,7 @@ export default function DatabasesList() {
 
       {sortedDatabases.length > 0 ? (
         <Grid container spacing={3}>
-          {sortedDatabases.map((db) => (
-            <Grid item xs={12} sm={6} md={4} key={db.id}>
-              <DatabaseCard 
-                engine={db.engine} 
-                onClick={() => handleDatabaseClick(db.id)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <DatabaseCardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      {getEngineIcon(db.engine)}
-                      <Typography variant="subtitle1" sx={{ ml: 1 }}>
-                        {db.name}
-                      </Typography>
-                    </Box>
-                    <IconButton 
-                      size="small" 
-                      onClick={(e) => handleMenuOpen(e, db)}
-                    >
-                      <MoreVertIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                  
-                  <Divider sx={{ my: 1 }} />
-                  
-                  <Box sx={{ my: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Engine:</strong> {db.engine}
-                    </Typography>
-                    {db.host && (
-                      <Typography variant="body2" color="text.secondary" noWrap>
-                        <strong>Host:</strong> {db.host}:{db.port}
-                      </Typography>
-                    )}
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      <strong>Database:</strong> {db.database}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      <strong>Last Connected:</strong> {db.lastConnected}
-                    </Typography>
-                  </Box>
-                </DatabaseCardContent>
-                <CardActions>
-                  <Button 
-                    size="small" 
-                    startIcon={<OpenInNewIcon />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDatabaseClick(db.id);
-                    }}
-                  >
-                    Connect
-                  </Button>
-                </CardActions>
-              </DatabaseCard>
-            </Grid>
-          ))}
+          {sortedDatabases.map(db => renderDatabaseCard(db))}
         </Grid>
       ) : (
         !loading && (

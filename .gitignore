@@ -25,6 +25,7 @@ yarn-error.log
 
 # Cursor editor configuration
 .cursor/
+/home/mole/mole/.cursor/rules/documentation.mdc
 
 # Logs
 logs
@@ -33,6 +34,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+/home/mole/mole/app/db-sync/logs/sync.log
+app/db-sync/logs/sync.log
 
 # Docker
 .docker-data/

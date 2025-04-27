@@ -13,6 +13,7 @@ from datetime import datetime
 import subprocess
 import sys
 import json
+import requests
 from typing import Dict, List, Optional, Union, Any
 import psutil
 from flask import Flask, jsonify, request
@@ -637,6 +638,41 @@ def analyze_query(query):
     # Default response if no pattern matches
     else:
         return "I've analyzed your query but don't have specific information about that. Please try asking about temperatures, energy consumption, user activity, transactions, or system performance."
+
+# Add a new API endpoint for database creation
+@app.route('/api/database/create', methods=['POST'])
+def create_database():
+    """
+    Create a new database using the create-database.php script
+    """
+    try:
+        data = request.json
+        
+        # Validate required fields
+        required_fields = ['db_type', 'db_name', 'db_host', 'db_port', 'db_user', 'db_pass']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'message': f'Missing required field: {field}'})
+        
+        # Forward request to the create-database.php script
+        create_db_url = "http://app/db-creation/create-database.php"
+        response = requests.post(create_db_url, data=data)
+        
+        # Log the response
+        logger.info(f"Database creation request: {data['db_type']} - {data['db_name']} on {data['db_host']}")
+        
+        # Return the response from the PHP script
+        try:
+            return response.json()
+        except:
+            return jsonify({
+                'success': False, 
+                'message': f'Error parsing response from create-database.php: {response.text}'
+            })
+            
+    except Exception as e:
+        logger.error(f"Error creating database: {str(e)}")
+        return jsonify({'success': False, 'message': f'Server error: {str(e)}'})
 
 if __name__ == "__main__":
     sync_manager = DatabaseSync()

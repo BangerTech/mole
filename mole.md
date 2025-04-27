@@ -41,6 +41,7 @@ Die Mole-Anwendung verwendet eine interne Systemdatenbank zur Speicherung von Ko
 | password      | TEXT     | Passwort (verschlüsselt gespeichert)   |
 | ssl_enabled   | BOOLEAN  | SSL-Verbindung aktiviert               |
 | notes         | TEXT     | Benutzernotizen zur Verbindung         |
+| isSample      | BOOLEAN  | Kennzeichen für Demo-Datenbankverbindung |
 | created_at    | DATETIME | Erstellungszeit                        |
 | last_connected| DATETIME | Zeitpunkt der letzten Verbindung       |
 
@@ -87,6 +88,7 @@ CREATE TABLE database_connections (
     password TEXT,
     ssl_enabled BOOLEAN DEFAULT 0,
     notes TEXT,
+    isSample BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_connected DATETIME
 );
@@ -118,11 +120,31 @@ CREATE TABLE sync_logs (
 );
 ```
 
+### Migration 002 - Erweiterung für Demo-Datenbanken (2023-11-10)
+
+```sql
+-- Falls isSample noch nicht existiert, fügen wir es hinzu
+ALTER TABLE database_connections ADD COLUMN IF NOT EXISTS isSample BOOLEAN DEFAULT 0;
+
+-- Index für schnellere Abfragen nach Demo-Datenbanken
+CREATE INDEX IF NOT EXISTS idx_is_sample ON database_connections(isSample);
+```
+
 ## Frontend-Komponenten
 
 ### Hauptkomponenten
 
 1. **DatabasesList**: Zeigt eine Liste aller konfigurierten Datenbankverbindungen an
+   - Übersichtliche Darstellung aller Datenbankverbindungen als Karten
+   - Intelligentes Demo-Datenbankmanagement:
+     - Zeigt eine einzelne Demo-Datenbankverbindung für neue Benutzer
+     - Entfernt Demo-Datenbankverbindungen automatisch, sobald echte hinzugefügt werden
+     - Bringt Demo-Verbindung zurück, wenn alle echten Verbindungen gelöscht werden
+   - Filterfunktion zur schnellen Suche in Datenbankverbindungen
+   - Sortieroptionen nach Namen, Engine oder letztem Verbindungszeitpunkt
+   - Kontextmenü mit Optionen zum Bearbeiten und Löschen von Verbindungen
+   - Button zum Hinzufügen neuer Datenbankverbindungen
+   - Persistiert echte Datenbankverbindungen im LocalStorage des Browsers
 2. **DatabaseDetails**: Zeigt Details einer ausgewählten Datenbank (Tabellen, Struktur, usw.)
    - Anzeige von Grundinformationen zur Datenbank (Engine, Host, Port, Benutzer)
    - Tabellenansicht mit Übersicht aller Tabellen und Views
@@ -130,7 +152,17 @@ CREATE TABLE sync_logs (
    - SQL-Query-Editor für die direkte Ausführung von SQL-Abfragen
    - Responsive Benutzeroberfläche mit Material UI
 3. **DatabaseForm**: Formular zum Erstellen und Bearbeiten von Datenbankverbindungen
-4. **QueryEditor**: SQL-Editor zum Ausführen von Abfragen
+   - Stepper-basierter Ansatz für eine übersichtliche Dateneingabe
+   - Verbindet zu bestehenden Datenbanken (lokal oder remote)
+   - Validierung der Verbindungsdaten durch Test-Verbindungsaufbau
+   - Unterstützung verschiedener Datenbanktypen (PostgreSQL, MySQL, SQLite)
+4. **DatabaseCreate**: Formular zur Erstellung neuer Datenbanken
+   - Ermöglicht das Erstellen neuer Datenbanken direkt aus der Web-Oberfläche
+   - Stepper-basierter Ansatz für eine übersichtliche Dateneingabe
+   - Unterstützung für verschiedene Datenbanktypen (PostgreSQL, MySQL, InfluxDB)
+   - Benötigt Administratorrechte auf dem Datenbankserver
+   - Speichert neu erstellte Datenbanken automatisch in der Verbindungsliste
+5. **QueryEditor**: SQL-Editor zum Ausführen von Abfragen
    - Zwei Modi: Einfacher Modus und Experten-Modus
    - Einfacher Modus: Benutzerfreundliche Oberfläche zur Tabellenverwaltung ohne SQL-Kenntnisse
      - Visuelle Darstellung von Tabellen und Spalten
@@ -140,13 +172,35 @@ CREATE TABLE sync_logs (
      - Direktes Schreiben und Ausführen von SQL-Befehlen
      - Anzeige der Ergebnisse in tabellarischer Form
      - Export-Möglichkeit für Ergebnisse
-5. **Settings**: Umfassende Einstellungsseite für die Anwendungskonfiguration
+6. **Settings**: Umfassende Einstellungsseite für die Anwendungskonfiguration
    - Erscheinungsbild-Einstellungen (Dark Mode, Sprache, Schriftgröße)
    - Benachrichtigungseinstellungen
    - Datenbankeinstellungen (Standard-Datenbanktyp, Zeichensatz, Backup-Konfiguration)
    - Synchronisierungseinstellungen für DB-Sync-Service
    - Sicherheitseinstellungen (Passwort, Sitzungsverwaltung)
    - Informationsbereich zur Anwendung
+
+### Dashboard Komponente
+
+Das Dashboard bietet eine zentrale Übersicht über alle Datenbanken und Systemfunktionen:
+
+1. **Datenbank-Management**
+   - Statistik-Karte mit Gesamtzahl der konfigurierten Datenbanken
+   - Zwei-Button-Ansatz für Datenbankverwaltung:
+     - "Connect Database": Verbindet zu einer bestehenden Datenbank (lokaler oder Remote-Server)
+     - "Create Database": Erstellt eine neue Datenbank direkt aus der Web-Oberfläche
+   - Liste der zuletzt verwendeten Datenbanken mit Schnellzugriff
+
+2. **System-Informationen**
+   - Echtzeitstatistiken zu CPU-, Speicher- und Festplattennutzung
+   - Systemlaufzeit und Performance-Metriken
+   - Visuelle Darstellung der Ressourcennutzung mit Fortschrittsbalken
+
+3. **Registerkarten-Navigation**
+   - Übersicht: Kernstatistiken und Verbindungsinformationen
+   - Gesundheit: Status und Monitoring-Informationen zu Datenbanken
+   - Performance: Detaillierte Leistungsmetriken und Abfragestatistiken
+   - KI-Assistent: Natürlichsprachliche Datenbankabfragen und Analyse
 
 ### KI-Assistent
 
@@ -207,6 +261,17 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
 
 ## Änderungsprotokoll
 
+### Version 0.4.1 (in Entwicklung)
+- Implementierung der neuen Datenbankerstellen-Funktionalität
+  - Neue DatabaseCreate-Komponente für die Erstellung eigener Datenbanken
+  - Klare Unterscheidung zwischen "Connect Database" und "Create Database" im Dashboard
+  - Unterstützung für die Erstellung von PostgreSQL, MySQL und InfluxDB Datenbanken
+  - API-Endpunkt für die Datenbankerstellen über create-database.php
+- Frontend-Verbesserungen für das Dashboard:
+  - Neu gestaltete Datenbankstatistik-Karte mit zwei-Button-Design
+  - Farbliche Unterscheidung zwischen Verbinden (blau) und Erstellen (grün)
+  - Verbesserte visuelle Hierarchie für wichtige Aktionen
+
 ### Version 0.4.0 (aktuell)
 - Integration eines KI-basierten Assistenten für natürlichsprachliche Datenbankabfragen
   - Benutzer können in natürlicher Sprache Fragen zu ihren Daten stellen
@@ -231,6 +296,11 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
 - Verbesserte UI-Elemente mit konsistenten Schatten, Rändern und Hintergrundfarben
 - Bessere visuelle Hierarchie durch angepasste Kontraste und Farbakzente
 - Optimierung der Benutzeroberfläche für bessere Lesbarkeit und ergonomische Bedienung
+- Optimierte Datenbankverwaltung für bessere Benutzerfreundlichkeit:
+  - Reduzierung auf eine einzelne Demo-Datenbank für neue Benutzer
+  - Automatische Entfernung der Demo-Datenbank, sobald eine echte Datenbank hinzugefügt wird
+  - Verbesserte Kennzeichnung von Demo-Inhalten
+  - Verwendung von LocalStorage zur Persistierung von Datenbankverbindungen im Browser
 
 ### Version 0.3.0 (in Entwicklung)
 - Implementierung der neuen DatabaseDetails-Komponente für detaillierte Datenbankansicht

@@ -185,17 +185,28 @@ export default function QueryEditor() {
     const fetchDatabase = async () => {
       setLoading(true);
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Überprüfen Sie LocalStorage auf echte Datenbanken
+        const storedDatabases = localStorage.getItem('mole_real_databases');
+        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
         
-        // Mock database data
-        setDatabase({
-          id: id || '1',
-          name: 'Production Database',
-          engine: 'PostgreSQL',
-          host: 'db.example.com',
-          database: 'production_db'
-        });
+        let db;
+        
+        if (realDatabases.length > 0) {
+          // Wenn echte Datenbanken vorhanden sind, verwenden wir die angegebene oder die erste
+          db = id ? realDatabases.find(db => db.id === id) : realDatabases[0];
+        } else {
+          // Wenn keine echten Datenbanken vorhanden sind, verwenden wir die Demo-Datenbank
+          db = {
+            id: '1',
+            name: 'Sample Database',
+            engine: 'PostgreSQL',
+            host: 'localhost',
+            database: 'sample_db',
+            isSample: true
+          };
+        }
+        
+        setDatabase(db);
         
         const tablesData = await getDatabaseTables();
         setTables(tablesData);

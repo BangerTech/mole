@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import DatabasesList from './pages/DatabasesList';
 import DatabaseDetails from './pages/DatabaseDetails';
 import DatabaseForm from './pages/DatabaseForm';
+import DatabaseCreate from './pages/DatabaseCreate';
 import TableView from './pages/TableView';
 import QueryEditor from './pages/QueryEditor';
 import Settings from './pages/Settings';
@@ -198,6 +199,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/databases" element={<DatabasesList />} />
               <Route path="/databases/create" element={<DatabaseForm />} />
+              <Route path="/databases/new" element={<DatabaseCreate />} />
               <Route path="/databases/edit/:id" element={<DatabaseForm />} />
               <Route path="/databases/:id" element={<DatabaseDetails />} />
               <Route path="/database/:type/:name/tables" element={<DatabasesList />} />
