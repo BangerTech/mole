@@ -1,0 +1,33 @@
+sync:
+  enabled: false
+  interval: 86400  # Default: 1 day in seconds
+  log_level: info
+  connections: []
+  # Example of a connection configuration:
+  # connections:
+  #   - name: "MySQL Prod to Dev"
+  #     enabled: true
+  #     source:
+  #       type: mysql
+  #       host: prod-mysql.example.com
+  #       port: 3306
+  #       user: backup_user
+  #       password: secure_password
+  #       database: app_database
+  #     target:
+  #       type: mysql
+  #       host: dev-mysql.example.com
+  #       port: 3306
+  #       user: backup_user
+  #       password: dev_password
+  #       database: app_database
+  #     schedule:
+  #       frequency: daily  # Options: hourly, daily, weekly, monthly, custom
+  #       time: "02:00"     # For daily, weekly, monthly
+  #       days: [1, 3, 5]   # For weekly (1=Monday, 7=Sunday)
+  #       custom: "0 */6 * * *"  # Custom cron expression
+  #     options:
+  #       tables_only: ["users", "products"]  # Only sync these tables
+  #       tables_exclude: ["logs", "sessions"]  # Exclude these tables
+  #       structure_only: false  # Only sync table structure, not data
+  #       drop_target_first: false  # Drop target tables before sync

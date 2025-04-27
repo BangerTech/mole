@@ -1,0 +1,90 @@
+version: '3'
+
+services:
+  # Frontend web UI based on React with modern Material UI styling
+  mole-ui:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: mole-ui
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./app/react-ui:/var/www/html
+    networks:
+      - mole-network
+    depends_on:
+      - mysql
+      - postgres
+
+  # Database sync service
+  db-sync:
+    build:
+      context: ./app/db-sync
+      dockerfile: Dockerfile
+    container_name: mole-sync
+    restart: unless-stopped
+    environment:
+      - SYNC_INTERVAL=86400  # Default sync interval in seconds (1 day)
+    volumes:
+      - ./app/db-sync/config:/app/config
+      - ./app/db-sync/logs:/app/logs
+    networks:
+      - mole-network
+
+  # Example MySQL service for testing (optional)
+  mysql:
+    image: mysql:8.0
+    container_name: mole-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=mole_secret
+      - MYSQL_DATABASE=moledb
+      - MYSQL_USER=mole
+      - MYSQL_PASSWORD=mole_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - mole-network
+
+  # Example PostgreSQL service for testing (optional)
+  postgres:
+    image: postgres:14
+    container_name: mole-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=mole_secret
+      - POSTGRES_USER=mole
+      - POSTGRES_DB=moledb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mole-network
+
+  # Example InfluxDB service for testing (optional)
+  influxdb:
+    image: influxdb:2.6
+    container_name: mole-influxdb
+    restart: unless-stopped
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=mole
+      - DOCKER_INFLUXDB_INIT_PASSWORD=mole_secret
+      - DOCKER_INFLUXDB_INIT_ORG=mole-org
+      - DOCKER_INFLUXDB_INIT_BUCKET=mole-bucket
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    networks:
+      - mole-network
+
+volumes:
+  mysql_data:
+  postgres_data:
+  influxdb_data:
+
+networks:
+  mole-network:
+    driver: bridge 
