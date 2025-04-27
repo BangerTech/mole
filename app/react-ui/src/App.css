@@ -107,6 +107,7 @@
   height: 100vh;
   overflow: hidden;
   color: #fff;
+  box-sizing: border-box;
 }
 
 .app-container.dark {
@@ -122,9 +123,11 @@
   flex-grow: 1;
   transition: all 0.3s ease;
   overflow-y: auto;
-  padding: 0;
-  margin-left: 280px;
+  padding: 20px;
   width: calc(100% - 280px);
+  box-sizing: border-box;
+  position: relative;
+  left: 0;
 }
 
 .app-container.dark .content {
@@ -138,6 +141,7 @@
 .content-full {
   margin-left: 0 !important;
   width: 100% !important;
+  padding: 20px !important;
 }
 
 /* Dark and Light mode specific adjustments */

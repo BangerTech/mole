@@ -868,9 +868,9 @@ export default function Settings() {
       </TabPanel>
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-        <Button
-          variant="contained"
-          color="primary"
+        <Button 
+          variant="contained" 
+          color="primary" 
           startIcon={<SaveIcon />}
           onClick={handleSave}
           size="large"

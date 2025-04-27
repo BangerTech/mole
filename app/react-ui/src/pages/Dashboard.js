@@ -161,6 +161,16 @@ export default function Dashboard() {
   const [aiResponse, setAiResponse] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // Dynamisch die API-Basis-URL basierend auf dem aktuellen Host ermitteln
+  const getApiBaseUrl = () => {
+    // Wenn die App auf dem gleichen Server wie die API läuft, können wir relative URLs verwenden
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    } 
+    // Ansonsten verwenden wir den aktuellen Hostname mit Port 5000
+    return `http://${window.location.hostname}:5000`;
+  };
+
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
@@ -202,12 +212,14 @@ export default function Dashboard() {
     // Fetch real system data and databases
     const fetchData = async () => {
       try {
+        const apiBaseUrl = getApiBaseUrl();
+        
         // Get system info
-        const sysInfoResponse = await fetch('/api/system/info');
+        const sysInfoResponse = await fetch(`${apiBaseUrl}/api/system/info`);
         const sysInfoData = await sysInfoResponse.json();
         
         // Get databases
-        const dbResponse = await fetch('/api/databases');
+        const dbResponse = await fetch(`${apiBaseUrl}/api/databases`);
         const dbData = await dbResponse.json();
         
         setSystemInfo(sysInfoData);
@@ -233,7 +245,8 @@ export default function Dashboard() {
     // Set up polling to update system info every 30 seconds
     const intervalId = setInterval(async () => {
       try {
-        const sysInfoResponse = await fetch('/api/system/info');
+        const apiBaseUrl = getApiBaseUrl();
+        const sysInfoResponse = await fetch(`${apiBaseUrl}/api/system/info`);
         const sysInfoData = await sysInfoResponse.json();
         setSystemInfo(sysInfoData);
       } catch (error) {

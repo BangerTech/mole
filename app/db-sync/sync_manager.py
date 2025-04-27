@@ -19,7 +19,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all /api routes with all origins
 
 # Configure logging
 logging.basicConfig(
@@ -640,5 +640,12 @@ def analyze_query(query):
 
 if __name__ == "__main__":
     sync_manager = DatabaseSync()
-    sync_manager.run()
-    app.run(host='0.0.0.0', port=5000, debug=True) 
+    # start the sync manager as a thread so it doesn't block the API server
+    import threading
+    thread = threading.Thread(target=sync_manager.run)
+    thread.daemon = True
+    thread.start()
+    
+    # Start the API server
+    logger.info("Starting API server on port 5000")
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False) 

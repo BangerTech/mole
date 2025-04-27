@@ -18,16 +18,16 @@ const RootStyle = styled('div')(({ theme }) => ({
 }));
 
 const LogoStyle = styled('img')({
-  width: 140,
-  height: 140,
+  width: 180,
+  height: 180,
   objectFit: 'contain'
 });
 
 const LogoContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   justifyContent: 'center',
-  padding: theme.spacing(3, 0),
-  marginBottom: theme.spacing(2)
+  padding: theme.spacing(0, 0),
+  marginBottom: theme.spacing(0)
 }));
 
 const navConfig = [
@@ -58,7 +58,7 @@ export default function Sidebar({ open }) {
   const { pathname } = useLocation();
 
   const renderContent = (
-    <Box sx={{ px: 2.5, py: 3, display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ px: 2.5, pt: 1, pb: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
       <LogoContainer>
         <Link component="div" onClick={() => navigate('/')} sx={{ display: 'flex' }}>
           <LogoStyle src="/images/logo.png" alt="Mole Logo" />
