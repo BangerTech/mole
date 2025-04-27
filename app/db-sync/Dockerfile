@@ -1,7 +1,8 @@
 FROM python:3.10-alpine
 
 # Install dependencies
-RUN apk add --no-cache mysql-client postgresql-client bash curl
+RUN apk add --no-cache mysql-client postgresql-client bash curl \
+    gcc python3-dev musl-dev linux-headers
 
 # Set working directory
 WORKDIR /app

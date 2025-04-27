@@ -66,3 +66,7 @@
 2025-04-27 08:30:00,372 [INFO] Database Sync Manager initialized
 2025-04-27 08:30:00,373 [INFO] Starting sync manager
 2025-04-27 08:30:00,373 [INFO] Sync service is disabled in configuration
+2025-04-27 08:54:51 [INFO] Starting database sync service
+2025-04-27 08:54:51,924 [INFO] Database Sync Manager initialized
+2025-04-27 08:54:51,925 [INFO] Starting sync manager
+2025-04-27 08:54:51,926 [INFO] Sync service is disabled in configuration

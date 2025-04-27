@@ -14,6 +14,8 @@ A modern, web-based database management tool with a beautiful interface inspired
 - **Table Management**: Create, modify, and delete tables; add and edit data
 - **Database Synchronization**: Schedule and manage database synchronization between servers
 - **Customizable**: Easy to customize themes and configuration
+- **Advanced Monitoring**: Comprehensive performance metrics, health scores, and visual indicators
+- **AI-Powered Analysis**: Ask questions about your database in natural language and get intelligent insights
 
 ## Quick Start
 

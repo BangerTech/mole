@@ -148,7 +148,78 @@ CREATE TABLE sync_logs (
    - Sicherheitseinstellungen (Passwort, Sitzungsverwaltung)
    - Informationsbereich zur Anwendung
 
+### KI-Assistent
+
+Der KI-Assistent ermöglicht die natürlichsprachliche Abfrage von Datenbanken und ist wie folgt implementiert:
+
+1. **AI Assistant Tab im Dashboard**
+   - Integriert in das Dashboard als separate Registerkarte
+   - Einfache Texteingabe für die Fragestellung
+   - Anzeige der KI-Antwort mit formatiertem Text
+   - Beispielabfragen zur Vereinfachung des Einstiegs
+
+2. **Backend-Endpunkt für KI-Abfragen**
+   - REST API Endpunkt unter `/api/ai/query`
+   - Verarbeitung der natürlichsprachlichen Eingabe
+   - Konvertierung in SQL oder andere datenbankspezifische Abfragen
+   - Ausführung der generierten Abfragen und Rückgabe strukturierter Ergebnisse
+
+3. **KI-Konfigurationsschnittstelle**
+   - Teil der Einstellungsseite
+   - Auswahl und Konfiguration verschiedener KI-Modelle:
+     - **OpenAI** (GPT-3.5, GPT-4) - erfordert API-Schlüssel
+     - **Hugging Face** - Auswahl aus verschiedenen offenen NLP-Modellen
+     - **Lokale Modelle** - Möglichkeit zur Ausführung lokaler Modelle für erhöhte Datensicherheit
+   - Einstellungen für Abfragegenauigkeit und -geschwindigkeit
+   - Möglichkeit, benutzerdefinierte Prompt-Vorlagen zu erstellen
+
+## Verwendete KI-Technologien
+
+Mole Database Manager unterstützt verschiedene KI-Technologien zur Datenabfrage:
+
+1. **OpenAI API** (GPT-Modelle)
+   - Standardoption für hochpräzise natürlichsprachliche Verarbeitung
+   - Fortgeschrittenes Verständnis komplexer Abfragen
+   - Erfordert einen gültigen OpenAI API-Schlüssel
+
+2. **Perplexity AI**
+   - Leistungsstarkes KI-Suchmodell für datenintensive Abfragen
+   - Hervorragend für analytische Aufgaben und komplexe Datenbankabfragen
+   - Effiziente Verarbeitung großer Datenmengen mit präzisen Ergebnissen
+   - Erfordert einen gültigen Perplexity API-Schlüssel
+
+3. **Hugging Face Transformers**
+   - Open-Source-Alternative für natürlichsprachliche Verarbeitung
+   - Unterstützung für verschiedene spezialisierte Modelle
+   - Geringere Anforderungen an API-Schlüssel (einige Modelle erfordern dennoch Authentifizierung)
+
+4. **LLama-basierte lokale Modelle**
+   - Vollständig lokale Ausführung für höhere Datensicherheit
+   - Geeignet für sensible Daten, die nicht an externe Dienste gesendet werden sollen
+   - Höhere Hardware-Anforderungen für die Ausführung
+
+5. **SQLPal (integriertes Spezialmodell)**
+   - Leichtgewichtiges, auf SQL-Abfragen spezialisiertes KI-Modell
+   - Optimiert für schnelle Antwortzeiten bei Standardabfragen
+   - Vollständig lokal ausführbar ohne externe Abhängigkeiten
+
+Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite der Anwendung. Standardmäßig wird SQLPal verwendet, um ohne zusätzliche Konfiguration sofort betriebsbereit zu sein.
+
 ## Änderungsprotokoll
+
+### Version 0.4.0 (aktuell)
+- Integration eines KI-basierten Assistenten für natürlichsprachliche Datenbankabfragen
+  - Benutzer können in natürlicher Sprache Fragen zu ihren Daten stellen
+  - KI analysiert die Anfrage und erstellt automatisch passende Datenbankabfragen
+  - Unterstützung verschiedener Abfragetypen (Temperatur, Energieverbrauch, Nutzeraktivitäten, etc.)
+- Erweitertes Monitoring-Dashboard mit verbesserter Datenvisualisierung
+  - Neuer Gesundheitsbereich mit visuellen Indikatoren für Datenbankzustand
+  - Detaillierte Performance-Metriken für Abfragen und Transaktionen
+  - Überwachung von Lock-Konflikten und Index-Nutzung
+- Umfangreiche KI-Konfigurationsoptionen in den Einstellungen
+  - Auswahl verschiedener KI-Modelle (OpenAI, Hugging Face, lokale Modelle)
+  - Anpassbare Prompt-Vorlagen für spezifische Anwendungsfälle
+  - API-Schlüsselverwaltung für verschiedene KI-Provider
 
 ### Version 0.3.1 (in Entwicklung)
 - Verbessertes Dark Theme mit konsistenterer Farbpalette und besserem Kontrast

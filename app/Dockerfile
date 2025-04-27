@@ -11,7 +11,13 @@ RUN apk add --no-cache \
 
 # Copy package files and install dependencies
 COPY ./react-ui/package.json ./react-ui/package-lock.json* ./
-RUN npm install
+
+# Increase npm timeout and fix potential permission issues
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm config set fetch-timeout 300000 && \
+    npm cache clean --force && \
+    npm install --no-optional --legacy-peer-deps && \
+    npm install ajv@8.12.0 ajv-keywords@5.1.0
 
 # Copy all app files
 COPY ./react-ui/ ./

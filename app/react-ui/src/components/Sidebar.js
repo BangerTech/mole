@@ -18,8 +18,8 @@ const RootStyle = styled('div')(({ theme }) => ({
 }));
 
 const LogoStyle = styled('img')({
-  width: 70,
-  height: 70,
+  width: 140,
+  height: 140,
   objectFit: 'contain'
 });
 

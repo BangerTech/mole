@@ -454,13 +454,13 @@ export default function QueryEditor() {
         >
           <Tab 
             value="simple" 
-            label="Einfacher Modus" 
+            label="Simple Mode" 
             icon={<TableViewIcon />} 
             iconPosition="start"
           />
           <Tab 
             value="expert" 
-            label="Experten-Modus"
+            label="Expert Mode"
             icon={<CodeIcon />} 
             iconPosition="start"
           />
@@ -470,7 +470,7 @@ export default function QueryEditor() {
       {database && (
         <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle1">
-            Verbunden mit: <Chip label={database.name} color="primary" size="small" sx={{ ml: 1 }} />
+            Connected to: <Chip label={database.name} color="primary" size="small" sx={{ ml: 1 }} />
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {database.engine} • {database.host} • {database.database}
@@ -486,7 +486,7 @@ export default function QueryEditor() {
 
       {results && results.success && (
         <Alert severity="success" sx={{ mb: 3 }}>
-          {results.message} {results.affectedRows > 0 && `(${results.affectedRows} Zeilen betroffen)`}
+          {results.message} {results.affectedRows > 0 && `(${results.affectedRows} rows affected)`}
         </Alert>
       )}
 
@@ -498,9 +498,9 @@ export default function QueryEditor() {
               <Paper sx={{ height: '100%', overflow: 'auto', p: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="subtitle1" fontWeight={500}>
-                    Tabellen
+                    Tables
                   </Typography>
-                  <Tooltip title="Neue Tabelle erstellen">
+                  <Tooltip title="Create new table">
                     <IconButton size="small" color="primary" onClick={handleCreateTable}>
                       <AddIcon />
                     </IconButton>
@@ -514,7 +514,7 @@ export default function QueryEditor() {
                       key={table.name}
                       secondaryAction={
                         <Typography variant="caption" color="text.secondary">
-                          {table.rows} Zeilen
+                          {table.rows} rows
                         </Typography>
                       }
                     >
@@ -537,7 +537,7 @@ export default function QueryEditor() {
                 {tables.length === 0 && (
                   <Box sx={{ textAlign: 'center', py: 4 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Keine Tabellen gefunden.
+                      No tables found.
                     </Typography>
                     <Button
                       variant="outlined"
@@ -545,7 +545,7 @@ export default function QueryEditor() {
                       onClick={handleCreateTable}
                       sx={{ mt: 2, textTransform: 'none' }}
                     >
-                      Tabelle erstellen
+                      Create table
                     </Button>
                   </Box>
                 )}
@@ -561,12 +561,12 @@ export default function QueryEditor() {
                         {selectedTable}
                       </Typography>
                       <Box>
-                        <Tooltip title="Tabelle löschen">
+                        <Tooltip title="Delete table">
                           <IconButton color="error" size="small" onClick={handleDeleteTable}>
                             <DeleteIcon />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Als SQL bearbeiten">
+                        <Tooltip title="Edit as SQL">
                           <IconButton 
                             color="primary" 
                             size="small" 
@@ -580,9 +580,9 @@ export default function QueryEditor() {
                     </Box>
                     
                     <Tabs value={0} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
-                      <Tab label="Struktur" />
-                      <Tab label="Daten" />
-                      <Tab label="Indizes" />
+                      <Tab label="Structure" />
+                      <Tab label="Data" />
+                      <Tab label="Indexes" />
                     </Tabs>
                     
                     <Box sx={{ p: 2, flexGrow: 1, overflow: 'auto' }}>
@@ -595,11 +595,11 @@ export default function QueryEditor() {
                           <Table size="small">
                             <TableHead>
                               <TableRow>
-                                <TableCell>Spalte</TableCell>
-                                <TableCell>Typ</TableCell>
+                                <TableCell>Column</TableCell>
+                                <TableCell>Type</TableCell>
                                 <TableCell>Null</TableCell>
-                                <TableCell>Schlüssel</TableCell>
-                                <TableCell>Standard</TableCell>
+                                <TableCell>Key</TableCell>
+                                <TableCell>Default</TableCell>
                                 <TableCell>Extra</TableCell>
                               </TableRow>
                             </TableHead>
@@ -608,13 +608,13 @@ export default function QueryEditor() {
                                 <TableRow key={row.column}>
                                   <TableCell>{row.column}</TableCell>
                                   <TableCell>{row.type}</TableCell>
-                                  <TableCell>{row.nullable ? 'Ja' : 'Nein'}</TableCell>
+                                  <TableCell>{row.nullable ? 'Yes' : 'No'}</TableCell>
                                   <TableCell>
                                     {row.key === 'PRI' && (
-                                      <Chip size="small" label="Primär" color="primary" />
+                                      <Chip size="small" label="Primary" color="primary" />
                                     )}
                                     {row.key === 'UNI' && (
-                                      <Chip size="small" label="Einzigartig" color="secondary" />
+                                      <Chip size="small" label="Unique" color="secondary" />
                                     )}
                                     {row.key === 'MUL' && (
                                       <Chip size="small" label="Index" color="info" />
@@ -637,19 +637,19 @@ export default function QueryEditor() {
                           color="primary"
                           startIcon={<AddIcon />}
                         >
-                          Spalte hinzufügen
+                          Add column
                         </ActionButton>
                         <ActionButton
                           variant="outlined"
                           startIcon={<SearchIcon />}
                         >
-                          Daten durchsuchen
+                          Search data
                         </ActionButton>
                         <ActionButton
                           variant="outlined"
                           startIcon={<EditIcon />}
                         >
-                          Datensatz bearbeiten
+                          Edit record
                         </ActionButton>
                       </Stack>
                     </Box>
@@ -657,10 +657,10 @@ export default function QueryEditor() {
                 ) : (
                   <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="100%">
                     <Typography variant="h6" color="text.secondary" gutterBottom>
-                      Keine Tabelle ausgewählt
+                      No table selected
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center', maxWidth: 400 }}>
-                      Wählen Sie eine Tabelle aus der linken Seitenleiste aus, oder erstellen Sie eine neue Tabelle.
+                      Select a table from the left sidebar, or create a new table.
                     </Typography>
                     <Button
                       variant="contained"
@@ -668,7 +668,7 @@ export default function QueryEditor() {
                       startIcon={<AddIcon />}
                       onClick={handleCreateTable}
                     >
-                      Neue Tabelle erstellen
+                      Create new table
                     </Button>
                   </Box>
                 )}
@@ -686,7 +686,7 @@ export default function QueryEditor() {
                   fullWidth
                   multiline
                   rows={8}
-                  placeholder="Geben Sie Ihre SQL-Abfrage hier ein..."
+                  placeholder="Enter your SQL query here..."
                   value={query}
                   onChange={handleQueryChange}
                   variant="outlined"
@@ -703,14 +703,14 @@ export default function QueryEditor() {
                     onClick={handleRun}
                     disabled={loading || !query.trim()}
                   >
-                    Abfrage ausführen
+                    Run query
                   </Button>
                   <Button
                     variant="outlined"
                     startIcon={<ClearIcon />}
                     onClick={handleClear}
                   >
-                    Leeren
+                    Clear
                   </Button>
                   {results && results.rows && (
                     <Button
@@ -718,7 +718,7 @@ export default function QueryEditor() {
                       startIcon={<DownloadIcon />}
                       onClick={downloadResults}
                     >
-                      Ergebnisse herunterladen
+                      Download results
                     </Button>
                   )}
                 </Box>
@@ -729,7 +729,7 @@ export default function QueryEditor() {
                   <CardContent sx={{ p: 0, '&:last-child': { pb: 0 }, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                     <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
                       <Typography variant="subtitle1">
-                        Ergebnisse: {results.rows.length} Zeilen
+                        Results: {results.rows.length} rows
                       </Typography>
                     </Box>
                     <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
@@ -785,16 +785,16 @@ export default function QueryEditor() {
           sx: { borderRadius: 2 }
         }}
       >
-        <DialogTitle>Neue Tabelle erstellen</DialogTitle>
+        <DialogTitle>Create new table</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 3 }}>
-            Definieren Sie die Struktur Ihrer neuen Tabelle.
+            Define the structure of your new table.
           </DialogContentText>
           
           <TextField
             autoFocus
             margin="dense"
-            label="Tabellenname"
+            label="Table name"
             fullWidth
             value={newTableName}
             onChange={(e) => setNewTableName(e.target.value)}
@@ -803,7 +803,7 @@ export default function QueryEditor() {
           />
           
           <Typography variant="subtitle1" gutterBottom>
-            Spalten
+            Columns
           </Typography>
           
           {newColumns.map((column, index) => (
@@ -812,7 +812,7 @@ export default function QueryEditor() {
                 <Grid item xs={12} sm={4}>
                   <TextField
                     fullWidth
-                    label="Spaltenname"
+                    label="Column name"
                     value={column.name}
                     onChange={(e) => handleColumnChange(index, 'name', e.target.value)}
                     variant="outlined"
@@ -821,11 +821,11 @@ export default function QueryEditor() {
                 </Grid>
                 <Grid item xs={12} sm={3}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Datentyp</InputLabel>
+                    <InputLabel>Data type</InputLabel>
                     <Select
                       value={column.type}
                       onChange={(e) => handleColumnChange(index, 'type', e.target.value)}
-                      label="Datentyp"
+                      label="Data type"
                     >
                       <MenuItem value="INT">INT</MenuItem>
                       <MenuItem value="VARCHAR(255)">VARCHAR(255)</MenuItem>
@@ -890,11 +890,11 @@ export default function QueryEditor() {
             onClick={handleAddColumn}
             sx={{ mb: 3, textTransform: 'none' }}
           >
-            Spalte hinzufügen
+            Add column
           </Button>
           
           <Typography variant="subtitle1" gutterBottom>
-            Generiertes SQL
+            Generated SQL
           </Typography>
           <Box 
             sx={{ 
@@ -913,7 +913,7 @@ export default function QueryEditor() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button onClick={handleCloseCreateTableDialog} sx={{ textTransform: 'none' }}>
-            Abbrechen
+            Cancel
           </Button>
           <Button 
             onClick={handleRunCreateTableSQL} 
@@ -922,7 +922,7 @@ export default function QueryEditor() {
             startIcon={<CodeIcon />}
             sx={{ textTransform: 'none', mr: 1 }}
           >
-            Als SQL-Abfrage
+            As SQL query
           </Button>
           <Button 
             onClick={handleConfirmCreateTable} 
@@ -932,7 +932,7 @@ export default function QueryEditor() {
             disabled={!newTableName.trim() || newColumns.some(col => !col.name.trim())}
             sx={{ textTransform: 'none' }}
           >
-            Tabelle erstellen
+            Create table
           </Button>
         </DialogActions>
       </Dialog>
@@ -947,16 +947,16 @@ export default function QueryEditor() {
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center' }}>
           <WarningIcon color="error" sx={{ mr: 1 }} />
-          Tabelle löschen
+          Delete table
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Sind Sie sicher, dass Sie die Tabelle <strong>{selectedTable}</strong> löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.
+            Are you sure you want to delete the table <strong>{selectedTable}</strong>? This action cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button onClick={() => setOpenDeleteTableDialog(false)} sx={{ textTransform: 'none' }}>
-            Abbrechen
+            Cancel
           </Button>
           <Button 
             onClick={handleConfirmDeleteTable} 
@@ -964,7 +964,7 @@ export default function QueryEditor() {
             color="error"
             sx={{ textTransform: 'none' }}
           >
-            Löschen
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
