@@ -237,7 +237,7 @@ export default function DatabasesList() {
   const handleDeleteConfirmOpen = (event) => {
     event.stopPropagation();
     setDeleteDialogOpen(true);
-    handleMenuClose();
+    setAnchorEl(null);
   };
 
   const handleDeleteDatabase = () => {

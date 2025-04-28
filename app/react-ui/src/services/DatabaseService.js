@@ -234,6 +234,62 @@ class DatabaseService {
       return false;
     }
   }
+
+  /**
+   * Get database schema (tables, columns, etc.) for a specific connection
+   * @param {string|number} id - Connection ID
+   * @returns {Promise} Promise with database schema information
+   */
+  async getDatabaseSchema(id) {
+    try {
+      // Debug connection information
+      console.log('Fetching schema for database ID:', id);
+      console.log('API URL used:', `${API_URL}/${id}/schema`);
+      
+      // Try to fetch from API
+      const response = await axios.get(`${API_URL}/${id}/schema`);
+      console.log('Schema response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching database schema:', error);
+      
+      // Return a fallback with empty data
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to fetch database schema',
+        tables: [],
+        tableColumns: {}
+      };
+    }
+  }
+
+  /**
+   * Execute a SQL query on a database
+   * @param {string|number} id - Connection ID
+   * @param {string} query - SQL query to execute
+   * @returns {Promise} Promise with query results
+   */
+  async executeQuery(id, query) {
+    try {
+      // Debug connection information
+      console.log('Executing query for database ID:', id);
+      console.log('API URL used:', `${API_URL}/${id}/execute`);
+      
+      // Try to execute via API
+      const response = await axios.post(`${API_URL}/${id}/execute`, { query });
+      console.log('Query execution response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error executing query:', error);
+      
+      // Return error details
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to execute query',
+        error: error.response?.data?.error || error.message
+      };
+    }
+  }
 }
 
 export default new DatabaseService(); 

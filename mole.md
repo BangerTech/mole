@@ -201,31 +201,33 @@ CREATE TABLE IF NOT EXISTS sync_logs (
 CREATE INDEX IF NOT EXISTS idx_is_sample ON database_connections(isSample);
 ```
 
-### Migration 004 - ORM-Integration und Datensicherheit (2024-08-05)
+### Migration 004 - Real Database Schema and Query Execution (2024-09-20)
 
-Diese Migration führt Sequelize ORM für verbesserte Datenbankinteraktionen ein und erhöht die Sicherheit des Systems. Die Änderungen umfassen:
+In dieser Migration wurden Funktionen für den Zugriff auf echte Datenbanken implementiert. Folgende Änderungen wurden vorgenommen:
 
-1. **Sequelize ORM-Integration**
-   - Verbesserte Datenbankmodellierung mit Typsicherheit und Validierung
-   - Unterstützung für mehrere Datenbanktypen (SQLite, MySQL, PostgreSQL)
-   - Strukturierte Datenmodelle mit klaren Beziehungen
+1. **Backend-API-Erweiterungen:**
+   - Neuer Endpunkt `/api/databases/:id/schema` zum Abrufen des Datenbankschemas (Tabellen, Spalten)
+   - Neuer Endpunkt `/api/databases/:id/execute` zur Ausführung von SQL-Abfragen
+   - Unterstützung für MySQL und PostgreSQL mit entsprechenden Adaptern
+   - Ver- und Entschlüsselung von Datenbankpasswörtern für sicheren Zugriff
 
-2. **Verbesserte Sicherheit**
-   - AES-256-CBC Verschlüsselung für sensible Verbindungsdaten
-   - Verschlüsselungshilfsprogramme für konsistenten Sicherheitsansatz
-   - Sichere Handhabung von Datenbankpasswörtern
+2. **Frontend-Erweiterungen:**
+   - Aktualisierung des `DatabaseService` zur Nutzung der neuen API-Endpunkte
+   - Dynamische Anzeige von Tabellen- und Spaltendaten aus echten Datenbanken
+   - Ausführung von SQL-Abfragen gegen echte Datenbanken
+   - Verbesserte Benutzeroberfläche für Tabellenauswahl und Strukturansicht
 
-3. **Service-Layer-Architektur**
-   - Klare Trennung von Zuständigkeiten durch Service-Schicht
-   - Verbesserte Wartbarkeit und Testbarkeit
-   - Reduzierung von Geschäftslogik in Controllern
+Diese Erweiterungen ermöglichen folgende neue Funktionen:
+- Anzeige aller Tabellen und Views aus realen Datenbanken
+- Detaillierte Anzeige der Tabellenstruktur mit Spaltentypen, Primärschlüsseln und anderen Eigenschaften
+- Ausführung beliebiger SQL-Abfragen mit Ergebnisanzeige
+- Automatische Generierung von SQL-Abfragen basierend auf der Tabellenauswahl
 
-Die Migration erhält die Kompatibilität mit der bestehenden SQLite-Implementierung während der Übergangsphase, sodass ein nahtloser Wechsel zur neuen Architektur möglich ist.
+Für die Implementierung wurden die bestehenden Backend-Controller und Frontend-Komponenten erweitert, sodass sowohl die Sample-Datenbank als auch echte Datenbanken unterstützt werden. Die Sample-Datenbank wird nur angezeigt, wenn keine echten Datenbankverbindungen vorhanden sind.
 
 ```sql
--- Erweiterte Tabellenstruktur für ORM-Unterstützung
-ALTER TABLE database_connections ADD COLUMN IF NOT EXISTS updated_at DATETIME;
-ALTER TABLE database_connections ADD COLUMN IF NOT EXISTS encrypted_password TEXT;
+-- Keine Datenbankänderungen notwendig, da die Schema- und Abfrageausführung
+-- direkt auf den konfigurierten Datenbanken arbeitet und keine lokale Speicherung erfordert
 ```
 
 ## Frontend-Komponenten
@@ -774,3 +776,23 @@ Bei Klick auf eine Datenbankverbindung wurde nicht die tatsächliche Datenbank a
 4. Die Anzeige von echten Datenbankverbindungen wurde sichergestellt
 
 Diese Änderungen ermöglichen die korrekte Anzeige der tatsächlichen Datenbankverbindungen statt der Sample-Datenbank. 
+
+#### Real-Datenbank-Funktionalität (✓ Behoben)
+Die Real-Datenbank-Funktionalität konnte Tabellen und Spalten nicht korrekt anzeigen und SQL-Abfragen nicht ausführen. Folgende Änderungen wurden vorgenommen:
+
+1. Backend-Endpunkte für Schema-Abfrage und SQL-Ausführung implementiert:
+   - `GET /api/databases/:id/schema` für Tabellen- und Spalteninformationen
+   - `POST /api/databases/:id/execute` für SQL-Abfrageausführung
+   
+2. Frontend-Komponenten aktualisiert:
+   - `DatabaseService.js` um neue Endpunkte anzusprechen
+   - `DatabaseDetails.js` für dynamische Anzeige von Tabellen und Ausführung von Abfragen
+   - Interaktive Tabellenauswahl mit Strukturansicht
+   - SQL-Abfragefunktion mit Ergebnisanzeige
+
+3. Implementierung von Datenbankadaptern:
+   - MySQL-Unterstützung mit `mysql2`-Modul
+   - PostgreSQL-Unterstützung mit `pg`-Modul
+   - SQLite-Basisunterstützung (eingeschränkt)
+
+Diese Änderungen ermöglichen die vollständige Interaktion mit echten Datenbanken, einschließlich Schemaanzeige und Abfrageausführung. Die Sample-Datenbank wird jetzt nur noch angezeigt, wenn keine echten Datenbankverbindungen vorhanden sind. 

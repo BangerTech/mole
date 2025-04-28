@@ -21,6 +21,14 @@ router.get('/connections', databaseController.getAllConnections);
 router.post('/', databaseController.createConnection);
 router.post('/connections', databaseController.createConnection);
 
+// Get database schema (tables, columns, etc.)
+router.get('/:id/schema', databaseController.getDatabaseSchema);
+router.get('/connections/:id/schema', databaseController.getDatabaseSchema);
+
+// Execute SQL query
+router.post('/:id/execute', databaseController.executeQuery);
+router.post('/connections/:id/execute', databaseController.executeQuery);
+
 // Routes for specific database connection by ID
 // Compatibility with both new and old API paths
 router.get('/:id', databaseController.getConnectionById);

@@ -30,7 +30,11 @@ import {
   useTheme,
   Breadcrumbs,
   Link as MuiLink,
-  Tooltip
+  Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -44,6 +48,7 @@ import {
   Code as QueryIcon,
   PlayArrow as RunIcon
 } from '@mui/icons-material';
+import DatabaseService from '../services/DatabaseService';
 
 // Styled components
 const RootStyle = (theme) => ({
@@ -123,6 +128,8 @@ const DatabaseDetails = () => {
   const [database, setDatabase] = useState(null);
   const [tables, setTables] = useState([]);
   const [structure, setStructure] = useState([]);
+  const [tableColumns, setTableColumns] = useState({});
+  const [selectedTable, setSelectedTable] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
   const [sqlQuery, setSqlQuery] = useState('SELECT * FROM users LIMIT 10;');
   const [queryResult, setQueryResult] = useState(null);
@@ -198,13 +205,49 @@ const DatabaseDetails = () => {
         setDatabase(databaseInfo);
         console.log('Database details loaded:', databaseInfo);
         
-        // For tables and structure, we would normally make a separate API call here
-        // For now, we'll use mock data
-        const tablesList = generateMockTables();
-        const structureData = generateMockStructure();
+        // For real (non-sample) databases, try to fetch actual schema information
+        if (databaseInfo && !databaseInfo.isSample) {
+          try {
+            console.log('Fetching real database schema for:', databaseInfo.name);
+            const schemaInfo = await DatabaseService.getDatabaseSchema(databaseInfo.id);
+            
+            if (schemaInfo.success) {
+              console.log('Real database schema loaded:', schemaInfo);
+              // Use real tables data
+              setTables(schemaInfo.tables);
+              
+              // Extract structure for the first table (if available) to show in the Structure tab
+              const firstTableName = schemaInfo.tables[0]?.name;
+              if (firstTableName && schemaInfo.tableColumns[firstTableName]) {
+                setStructure(schemaInfo.tableColumns[firstTableName]);
+                setTableColumns(schemaInfo.tableColumns);
+                setSelectedTable(firstTableName);
+              } else {
+                // Fallback to mock structure data if no tables or columns available
+                setStructure(generateMockStructure());
+              }
+            } else {
+              console.warn('Failed to load real schema, using mock data:', schemaInfo.message);
+              // Fallback to mock data if schema fetch fails
+              setTables(generateMockTables());
+              setStructure(generateMockStructure());
+            }
+          } catch (err) {
+            console.error('Error fetching schema:', err);
+            // Fallback to mock data
+            setTables(generateMockTables());
+            setStructure(generateMockStructure());
+          }
+        } else {
+          // For sample database just use mock data
+          console.log('Using mock data for sample database');
+          const tablesList = generateMockTables();
+          const structureData = generateMockStructure();
+          
+          setTables(tablesList);
+          setStructure(structureData);
+        }
         
-        setTables(tablesList);
-        setStructure(structureData);
         setError(null);
       } catch (err) {
         console.error('Error fetching database details:', err);
@@ -219,6 +262,11 @@ const DatabaseDetails = () => {
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
+    
+    // If switching to SQL Query tab and we have a selected table, suggest a query
+    if (newValue === 2 && selectedTable) {
+      setSqlQuery(`SELECT * FROM ${selectedTable} LIMIT 10;`);
+    }
   };
 
   const handleSqlQueryChange = (event) => {
@@ -230,20 +278,38 @@ const DatabaseDetails = () => {
       setQueryLoading(true);
       setQueryError(null);
       
-      // In a real app, this would be an API call to execute the SQL query
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock query result
-      const mockResult = {
-        columns: ['id', 'name', 'email', 'created_at', 'status'],
-        rows: [
-          { id: 1, name: 'Max Mustermann', email: 'max@example.com', created_at: '2023-04-12 10:30:45', status: 1 },
-          { id: 2, name: 'Lisa Schmidt', email: 'lisa@example.com', created_at: '2023-04-15 14:22:31', status: 1 },
-          { id: 3, name: 'Tom Müller', email: 'tom@example.com', created_at: '2023-04-18 09:15:22', status: 0 }
-        ]
-      };
-      
-      setQueryResult(mockResult);
+      // Check if we have a real (non-sample) database
+      if (database && !database.isSample) {
+        // Execute query against real database
+        const result = await DatabaseService.executeQuery(database.id, sqlQuery);
+        
+        if (result.success) {
+          // Format the result for display
+          setQueryResult({
+            columns: result.columns,
+            rows: result.rows
+          });
+        } else {
+          // Show error
+          setQueryError(result.message || 'Failed to execute query');
+        }
+      } else {
+        // For sample database, use mock data
+        // In a real app, this would be an API call to execute the SQL query
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Mock query result
+        const mockResult = {
+          columns: ['id', 'name', 'email', 'created_at', 'status'],
+          rows: [
+            { id: 1, name: 'Max Mustermann', email: 'max@example.com', created_at: '2023-04-12 10:30:45', status: 1 },
+            { id: 2, name: 'Lisa Schmidt', email: 'lisa@example.com', created_at: '2023-04-15 14:22:31', status: 1 },
+            { id: 3, name: 'Tom Müller', email: 'tom@example.com', created_at: '2023-04-18 09:15:22', status: 0 }
+          ]
+        };
+        
+        setQueryResult(mockResult);
+      }
     } catch (err) {
       setQueryError('Failed to execute query. Please check your syntax and try again.');
       console.error('Error executing query:', err);
@@ -280,7 +346,19 @@ const DatabaseDetails = () => {
   };
 
   const handleTableClick = (table) => {
-    navigate(`/database/${dbType}/${dbName}/table/${table.name}`);
+    // Set the selected table for the structure view
+    setSelectedTable(table.name);
+    
+    // Update structure if we have columns for this table
+    if (tableColumns && tableColumns[table.name]) {
+      setStructure(tableColumns[table.name]);
+    }
+    
+    // Switch to structure tab
+    setActiveTab(1);
+    
+    // Alternatively, navigate to table view
+    // navigate(`/database/${dbType}/${dbName}/table/${table.name}`);
   };
 
   // Loading state
@@ -540,22 +618,53 @@ const DatabaseDetails = () => {
               <Grid item xs={12} md={6}>
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" color="textSecondary">User</Typography>
-                  <Typography variant="body1">{database.user}</Typography>
+                  <Typography variant="body1">{database.username || database.user}</Typography>
+                </Box>
+                
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" color="textSecondary">Database</Typography>
+                  <Typography variant="body1">{database.database}</Typography>
                 </Box>
                 
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" color="textSecondary">Size</Typography>
                   <Typography variant="body1">{database.size}</Typography>
                 </Box>
-                
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="textSecondary">Created</Typography>
-                  <Typography variant="body1">{database.created}</Typography>
-                </Box>
               </Grid>
             </Grid>
             
-            <Typography variant="h6" gutterBottom>Schema Structure</Typography>
+            {/* Table Selection for Structure View */}
+            {tables.length > 0 && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" gutterBottom>Table Structure</Typography>
+                
+                <FormControl fullWidth variant="outlined" sx={{ mb: 3 }}>
+                  <InputLabel>Select Table</InputLabel>
+                  <Select
+                    value={selectedTable || ''}
+                    onChange={(e) => {
+                      const tableName = e.target.value;
+                      setSelectedTable(tableName);
+                      
+                      // Find the columns for this table if available
+                      if (tableColumns && tableColumns[tableName]) {
+                        setStructure(tableColumns[tableName]);
+                      } else {
+                        // Fallback to default structure
+                        setStructure(generateMockStructure());
+                      }
+                    }}
+                    label="Select Table"
+                  >
+                    {tables.map((table) => (
+                      <MenuItem key={table.name} value={table.name}>
+                        {table.name} ({table.type})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            )}
             
             <TableContainer sx={{ mb: 3 }}>
               <Table size="small">

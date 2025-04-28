@@ -1,8 +1,10 @@
 const crypto = require('crypto');
 
-// Verwende Umgebungsvariablen oder Standardwerte für Verschlüsselungsschlüssel
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'a-default-key-that-should-be-changed-in-production';
-const IV_LENGTH = 16; // Für AES ist dies ein Standard-IV-Length
+// Use environment variables or default values for encryption keys
+// Ensure the key is exactly 32 bytes (256 bits) for AES-256-CBC
+const ENCRYPTION_KEY_RAW = process.env.ENCRYPTION_KEY || 'a-default-key-that-should-be-changed-in-prod';
+const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_KEY_RAW).digest('hex').substring(0, 32);
+const IV_LENGTH = 16; // For AES, this is the standard IV length
 
 /**
  * Verschlüsselt einen String mit AES-256-CBC
