@@ -387,6 +387,28 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
 
 ## Änderungsprotokoll
 
+### Version 0.5.0 (aktuell)
+- Vollständige Integration eines KI-Assistenten mit umfassender Konfigurationsoberfläche:
+  - Benutzerfreundliche Konfiguration für API-Tokens und Modellauswahl
+  - Automatische Auswahl der KI mit SQLPal als Fallback-Modell 
+  - Backend-Integration mit Node.js- und Python-Komponenten:
+    - Node.js-Controller zur Verwaltung von Einstellungen (`aiController.js`)
+    - Python-Backend zur Ausführung der AI-Modelle
+    - Sichere Speicherung verschlüsselter API-Keys
+  - Erweiterte AI-Service-Komponente auf der Frontend-Seite
+  - Verbesserte KI-Antworten mit Anzeige des verwendeten Providers
+  - Anzeige der generierten SQL-Abfragen und Ergebnisdaten in Tabellenform
+  - Zukunftssicher durch einfache Erweiterbarkeit um weitere KI-Anbieter
+  - Anpassbare Einstellungen für SQL-Generierung und Abfrageparameter
+- Integration des axios-Pakets in die Backend-Abhängigkeiten
+  - Implementierung für HTTP-Anfragen zwischen Node.js-Backend und Python-Service
+  - Sichere Übertragung von KI-Einstellungen zwischen den Diensten
+- Verbesserung der Python-Containerumgebung:
+  - Umstellung auf Debian-basiertes Docker-Image für vollständige KI-Kompatibilität
+  - Integration von Rust und allen notwendigen Build-Tools für Tokenizers
+  - Vollständige Unterstützung für PyTorch und Hugging Face Transformers
+  - Sicherstellung der Kompatibilität aller KI-Modelle (lokal und remote)
+
 ### Version 0.4.3 (in Entwicklung)
 - Behebung eines wichtigen Fehlers bei der Anzeige von Datenbankverbindungen:
   - Korrektur der Navigation von der Datenbankübersicht zur Detailansicht mit erweitertem Routing-Format (`/database/id/:id`)

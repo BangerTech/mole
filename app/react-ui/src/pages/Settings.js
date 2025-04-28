@@ -51,6 +51,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import EmailService from '../services/EmailService';
+import AIService from '../services/AIService';
 
 // Styled Components
 const StyledTab = styled(Tab)(({ theme }) => ({

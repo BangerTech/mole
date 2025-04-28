@@ -11,6 +11,7 @@ dotenv.config();
 const emailRoutes = require('./routes/emailRoutes');
 const authRoutes = require('./routes/authRoutes');
 const databaseRoutes = require('./routes/databaseRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 // Create Express app
 const app = express();
@@ -24,6 +25,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use('/api/email', emailRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/databases', databaseRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Base route
 app.get('/', (req, res) => {

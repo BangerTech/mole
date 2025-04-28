@@ -1,0 +1,33 @@
+# AI Provider Configuration
+
+# Default provider to use (if available)
+default_provider: "openai"
+
+# Provider configurations
+providers:
+  openai:
+    enabled: true
+    model: "gpt-3.5-turbo"
+    # API key can also be set via environment variable OPENAI_API_KEY
+    api_key: ""
+    
+  perplexity:
+    enabled: true
+    model: "pplx-7b-online"
+    # API key can also be set via environment variable PERPLEXITY_API_KEY
+    api_key: ""
+    
+  llama:
+    enabled: true
+    model_path: "/app/models/llama"
+    
+  sqlpal:
+    enabled: true
+    model_path: "/app/models/sqlpal"
+
+# SQL generation settings
+sql_generation:
+  max_tokens: 150
+  temperature: 0.1
+  include_schema: true
+  timeout: 10 

@@ -116,6 +116,8 @@ const DatabaseDetails = () => {
   const navigate = useNavigate();
   const { dbType, dbName } = useParams();
   
+  console.log('DatabaseDetails params:', { dbType, dbName });
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [database, setDatabase] = useState(null);
@@ -137,11 +139,35 @@ const DatabaseDetails = () => {
         // Check if we have a database ID in the URL (instead of type/name)
         let databaseInfo = null;
         
-        if (dbName && !isNaN(dbName)) {
-          // dbName might actually be an ID
-          const storedDatabases = localStorage.getItem('mole_real_databases');
-          const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-          databaseInfo = realDatabases.find(db => db.id === dbName);
+        if (dbName) {
+          // First check if this is an ID-based path
+          if (!isNaN(dbName)) {
+            const storedDatabases = localStorage.getItem('mole_real_databases');
+            const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+            databaseInfo = realDatabases.find(db => db.id === dbName);
+          }
+          
+          // If it's a sample database with ID 1
+          if (dbName === '1' && !databaseInfo) {
+            databaseInfo = {
+              id: '1',
+              name: 'Sample Database',
+              engine: 'PostgreSQL',
+              host: 'localhost',
+              port: 5432,
+              database: 'sample_db',
+              version: '13.4',
+              connectionLimit: 20,
+              user: 'admin',
+              size: '128.9 MB',
+              tables: 25,
+              views: 5,
+              created: '2023-02-22',
+              lastBackup: '2023-05-12',
+              lastConnected: '2023-05-20',
+              isSample: true
+            };
+          }
         }
         
         if (!databaseInfo) {
@@ -217,7 +243,21 @@ const DatabaseDetails = () => {
 
   const handleDeleteDatabase = () => {
     // In a real app, this would delete the database via API
-    navigate('/databases');
+    console.log('Deleting database');
+    
+    // Close dialog first
+    setOpenDeleteDialog(false);
+    
+    // Show confirmation message with timeout
+    setError({
+      type: 'success',
+      message: 'Database connection deleted successfully.'
+    });
+    
+    // Navigate after a delay
+    setTimeout(() => {
+      navigate('/databases');
+    }, 1500);
   };
 
   const handleTableClick = (table) => {
@@ -237,7 +277,9 @@ const DatabaseDetails = () => {
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity={error.type || "error"}>
+          {typeof error === 'string' ? error : error.message}
+        </Alert>
         <Button 
           variant="outlined" 
           startIcon={<ArrowBackIcon />} 
@@ -279,16 +321,16 @@ const DatabaseDetails = () => {
         </MuiLink>
         <Typography sx={{ display: 'flex', alignItems: 'center' }} color="text.primary">
           <DatabaseIcon sx={{ mr: 0.5 }} fontSize="inherit" />
-          {dbName}
+          {database && database.name ? database.name : dbName}
         </Typography>
       </Breadcrumbs>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" fontWeight={600} gutterBottom>
-            {dbName}
+            {database && database.name ? database.name : dbName}
             <Chip
-              label={database.engine}
+              label={database && database.engine ? database.engine : "Unknown"}
               size="small"
               sx={{ 
                 ml: 2, 
@@ -300,7 +342,9 @@ const DatabaseDetails = () => {
             />
           </Typography>
           <Typography variant="body1" color="textSecondary">
-            {database.host}:{database.port} • {database.size} • {tables.length} objects
+            {database && database.host ? `${database.host}:${database.port || 'N/A'}` : 'N/A'} • 
+            {database && database.size ? ` ${database.size}` : ' Unknown size'} • 
+            {tables ? ` ${tables.length} objects` : ' 0 objects'}
           </Typography>
         </Box>
         

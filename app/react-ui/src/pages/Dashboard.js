@@ -16,7 +16,19 @@ import {
   IconButton,
   Tooltip,
   Tab,
-  Tabs
+  Tabs,
+  ToggleButtonGroup,
+  ToggleButton,
+  InputAdornment,
+  TableContainer,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  List,
+  ListItem,
+  ListItemText
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import StorageIcon from '@mui/icons-material/Storage';
@@ -32,7 +44,9 @@ import HelpIcon from '@mui/icons-material/Help';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LockIcon from '@mui/icons-material/Lock';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
+import SendIcon from '@mui/icons-material/Send';
 import { useNavigate } from 'react-router-dom';
+import AIService from '../services/AIService';
 
 // Styled components
 const RootStyle = styled('div')({
@@ -146,8 +160,12 @@ export default function Dashboard() {
   const [performanceData, setPerformanceData] = useState({});
   const [activeTab, setActiveTab] = useState(0);
   const [aiQuery, setAiQuery] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiResponse, setAiResponse] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [aiProvider, setAiProvider] = useState(null);
+  const [availableProviders, setAvailableProviders] = useState([]);
+  const [selectedProvider, setSelectedProvider] = useState(null);
 
   // Dynamisch die API-Basis-URL basierend auf dem aktuellen Host ermitteln
   const getApiBaseUrl = () => {
@@ -163,40 +181,32 @@ export default function Dashboard() {
     setActiveTab(newValue);
   };
 
-  const handleAiQuerySubmit = async () => {
-    if (!aiQuery.trim()) return;
+  const handleAIQuery = async () => {
+    if (!aiQuery) return;
     
-    setIsAnalyzing(true);
-    setAiResponse('');
+    setAiLoading(true);
+    setAiError(null);
+    setAiResponse(null);
     
     try {
-      // Get the API base URL
-      const apiBaseUrl = getApiBaseUrl();
+      // Use selected database connection ID, if any
+      const connectionId = activeDatabaseId || null;
       
-      // Make API call to AI query endpoint
-      const response = await fetch(`${apiBaseUrl}/api/ai/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: aiQuery })
-      });
+      // Query AI with selected provider
+      const response = await AIService.query(aiQuery, connectionId, selectedProvider);
       
-      if (!response.ok) {
-        throw new Error(`API responded with status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      setAiResponse(data.result);
+      setAiResponse(response);
+      setAiProvider(response.provider);
     } catch (error) {
-      console.error('Error getting AI response:', error);
-      setAiResponse('Sorry, I encountered an error analyzing your database. Please try again.');
+      console.error('Error querying AI:', error);
+      setAiError('Failed to get response from AI assistant');
     } finally {
-      setIsAnalyzing(false);
+      setAiLoading(false);
     }
+  };
+
+  const handleProviderChange = (provider) => {
+    setSelectedProvider(provider);
   };
 
   useEffect(() => {
@@ -263,6 +273,31 @@ export default function Dashboard() {
     }, 30000);
     
     return () => clearInterval(intervalId);
+  }, []);
+
+  // Load available AI providers on mount
+  useEffect(() => {
+    const loadAISettings = async () => {
+      try {
+        // Get settings to see which provider is default
+        const settings = await AIService.getSettings();
+        if (settings && settings.defaultProvider) {
+          setSelectedProvider(settings.defaultProvider);
+        }
+        
+        // Get available providers 
+        const providers = await AIService.getProviders();
+        if (providers && providers.available_providers) {
+          setAvailableProviders(providers.available_providers);
+        }
+      } catch (error) {
+        console.error('Error loading AI settings:', error);
+        // Default to SQLPal if we can't load settings
+        setSelectedProvider('sqlpal');
+      }
+    };
+    
+    loadAISettings();
   }, []);
 
   if (loading) {
@@ -924,104 +959,156 @@ export default function Dashboard() {
       {activeTab === 3 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
-            <RegularCard>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                  <SmartToyIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6">
-                    AI Database Assistant
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              AI Assistant
+            </Typography>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                Ask questions about your data in natural language
+              </Typography>
+              
+              {availableProviders.length > 0 && (
+                <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+                  <Typography variant="body2" sx={{ mr: 2 }}>
+                    AI Provider:
                   </Typography>
+                  <ToggleButtonGroup
+                    value={selectedProvider}
+                    exclusive
+                    onChange={(e, newValue) => handleProviderChange(newValue)}
+                    size="small"
+                  >
+                    {availableProviders.map(provider => (
+                      <ToggleButton key={provider} value={provider}>
+                        {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                      </ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
                 </Box>
-                
-                <Typography variant="body2" color="text.secondary" paragraph>
-                  Ask questions about your database in natural language. The AI will analyze your data and provide insights.
-                </Typography>
-                
-                <AiQueryBox>
-                  <TextField
-                    fullWidth
-                    variant="outlined"
-                    label="Ask a question about your database"
-                    placeholder="e.g., What was the highest temperature recorded in the weather_data table?"
-                    value={aiQuery}
-                    onChange={(e) => setAiQuery(e.target.value)}
-                    InputProps={{
-                      endAdornment: (
-                        <Button 
-                          variant="contained"
-                          onClick={handleAiQuerySubmit}
-                          disabled={isAnalyzing || !aiQuery.trim()}
+              )}
+              
+              <TextField
+                fullWidth
+                label="Ask a question about your data"
+                variant="outlined"
+                value={aiQuery}
+                onChange={(e) => setAiQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAIQuery()}
+                disabled={aiLoading}
+                sx={{ mb: 2 }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Tooltip title="Ask AI Assistant">
+                        <IconButton 
+                          edge="end" 
+                          onClick={handleAIQuery}
+                          disabled={!aiQuery || aiLoading}
                         >
-                          {isAnalyzing ? 'Analyzing...' : 'Ask AI'}
-                        </Button>
-                      ),
-                    }}
-                    sx={{ mb: 2 }}
-                  />
-                  
-                  {isAnalyzing && (
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Analyzing your database...
-                      </Typography>
-                      <LinearProgress />
-                    </Box>
-                  )}
-                  
-                  {aiResponse && (
-                    <Paper 
-                      elevation={0}
-                      sx={{ 
-                        p: 3, 
-                        bgcolor: 'background.neutral',
-                        borderRadius: 2,
-                        borderLeft: '4px solid',
-                        borderColor: 'primary.main'
-                      }}
-                    >
-                      <Typography variant="subtitle1" paragraph>
-                        AI Analysis Result
-                      </Typography>
-                      <Typography variant="body1">
-                        {aiResponse}
-                      </Typography>
-                    </Paper>
-                  )}
-                </AiQueryBox>
-                
-                <Divider sx={{ my: 3 }} />
-                
-                <Typography variant="subtitle1" gutterBottom>
-                  Sample Questions You Can Ask:
-                </Typography>
-                
-                <Grid container spacing={2}>
-                  {[
-                    "What was the highest value recorded in column X?",
-                    "How has the average order value changed over the past year?",
-                    "Which user has the most transactions in the database?",
-                    "What's the distribution of values in the status column?",
-                    "When do we see peak activity in our system?",
-                    "What are the common patterns in our failed transactions?"
-                  ].map((question, index) => (
-                    <Grid item xs={12} md={6} key={index}>
-                      <Button 
-                        fullWidth
-                        variant="outlined"
-                        color="primary"
-                        sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-                        onClick={() => {
-                          setAiQuery(question);
-                          setAiResponse('');
-                        }}
-                      >
-                        {question}
-                      </Button>
-                    </Grid>
-                  ))}
-                </Grid>
-              </CardContent>
-            </RegularCard>
+                          {aiLoading ? <CircularProgress size={24} /> : <SendIcon />}
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              
+              {aiResponse && (
+                <Card variant="outlined" sx={{ mb: 2 }}>
+                  <CardContent>
+                    <Typography variant="subtitle2" color="primary" gutterBottom>
+                      Response using {aiProvider || 'AI'}:
+                    </Typography>
+                    
+                    <Typography variant="body1" gutterBottom>
+                      {aiResponse.formatted_results}
+                    </Typography>
+                    
+                    {aiResponse.sql && (
+                      <>
+                        <Divider sx={{ my: 2 }} />
+                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                          Generated SQL:
+                        </Typography>
+                        <Box sx={{ 
+                          p: 1, 
+                          bgcolor: 'background.paper', 
+                          borderRadius: 1,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          maxHeight: '100px',
+                          overflow: 'auto'
+                        }}>
+                          <Typography variant="body2" component="pre" sx={{ margin: 0 }}>
+                            {aiResponse.sql}
+                          </Typography>
+                        </Box>
+                      </>
+                    )}
+                    
+                    {aiResponse.results && aiResponse.results.length > 0 && (
+                      <>
+                        <Divider sx={{ my: 2 }} />
+                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                          Result Data:
+                        </Typography>
+                        <TableContainer component={Paper} sx={{ maxHeight: '200px' }}>
+                          <Table size="small" stickyHeader>
+                            <TableHead>
+                              <TableRow>
+                                {Object.keys(aiResponse.results[0]).map(key => (
+                                  <TableCell key={key}>{key}</TableCell>
+                                ))}
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {aiResponse.results.map((row, i) => (
+                                <TableRow key={i}>
+                                  {Object.values(row).map((value, j) => (
+                                    <TableCell key={j}>
+                                      {typeof value === 'object' ? JSON.stringify(value) : value}
+                                    </TableCell>
+                                  ))}
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+              
+              {aiError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {aiError}
+                </Alert>
+              )}
+              
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Example questions:
+                  </Typography>
+                  <List dense>
+                    <ListItem button onClick={() => setAiQuery('How many users are in the database?')}>
+                      <ListItemText primary="How many users are in the database?" />
+                    </ListItem>
+                    <ListItem button onClick={() => setAiQuery('What is the average price of all products?')}>
+                      <ListItemText primary="What is the average price of all products?" />
+                    </ListItem>
+                    <ListItem button onClick={() => setAiQuery('Show me the most expensive products')}>
+                      <ListItemText primary="Show me the most expensive products" />
+                    </ListItem>
+                    <ListItem button onClick={() => setAiQuery('List all tables in the database')}>
+                      <ListItemText primary="List all tables in the database" />
+                    </ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Box>
           </Grid>
         </Grid>
       )}

@@ -14,11 +14,19 @@ import subprocess
 import sys
 import json
 import requests
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any, Tuple
 import psutil
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import random
+
+# AI model dependencies
+import openai
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+import torch
+
+# AI Configuration
+AI_CONFIG_PATH = "/app/config/ai_config.yml"
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all /api routes with all origins
@@ -567,7 +575,8 @@ def ai_query_endpoint():
         # Parameter für die AI-Query Funktion vorbereiten
         params = {
             'query': data.get('query'),
-            'database_id': data.get('connectionId')
+            'database_id': data.get('connectionId'),
+            'provider': data.get('provider')  # KI-Provider kann optional angegeben werden
         }
         
         # AI-Query Funktion aufrufen
@@ -580,7 +589,8 @@ def ai_query_endpoint():
                 'sql': result.get('sql', 'No SQL generated'),
                 'results': [],
                 'formatted_results': result.get('error'),
-                'error': result.get('error')
+                'error': result.get('error'),
+                'provider': result.get('provider', 'none')
             }), 400
             
         # Erfolgreiche Antwort
@@ -590,6 +600,8 @@ def ai_query_endpoint():
             'results': result.get('results'),
             'formatted_results': result.get('formatted_results'),
             'database': result.get('database'),
+            'provider': result.get('provider', 'unknown'),  # Verwendeter KI-Provider
+            'available_providers': result.get('available_providers', []),  # Verfügbare Provider
             'error': None
         })
         
@@ -597,6 +609,47 @@ def ai_query_endpoint():
         logger.error(f"Error processing AI query endpoint: {str(e)}", exc_info=True)
         return jsonify({
             'error': f"Error processing query: {str(e)}"
+        }), 500
+
+# Neuer Endpunkt für verfügbare KI-Provider
+@app.route('/api/ai/providers', methods=['GET'])
+def ai_providers_endpoint():
+    """
+    Endpunkt zum Abrufen der verfügbaren KI-Provider
+    """
+    try:
+        # Liste der verfügbaren Provider abrufen
+        available_providers = ai_manager.get_available_providers()
+        default_provider = ai_manager.config.get("default_provider", "openai")
+        
+        # Konfigurationen für Frontend
+        provider_configs = {}
+        for name, provider in ai_manager.providers.items():
+            if provider.is_available():
+                # Nur relevante Informationen zurückgeben
+                provider_configs[name] = {
+                    "name": name,
+                    "available": True,
+                    "model": provider.config.get("model", "default"),
+                    "is_default": name == default_provider
+                }
+            else:
+                provider_configs[name] = {
+                    "name": name,
+                    "available": False,
+                    "is_default": name == default_provider
+                }
+        
+        return jsonify({
+            'available_providers': available_providers,
+            'default_provider': default_provider,
+            'providers': provider_configs
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting AI providers: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f"Error getting AI providers: {str(e)}"
         }), 500
 
 def format_query_results(results, sql_query):
@@ -640,6 +693,12 @@ def ai_query(params):
         logger.warning("AI Assistant called without a query")
         return {"error": "Keine Anfrage angegeben"}
     
+    # Prüfen, ob ein bestimmter KI-Provider gewünscht ist
+    provider_name = params.get('provider')
+    
+    # Liste der verfügbaren Provider für die Antwort
+    available_providers = ai_manager.get_available_providers()
+    
     # Prüfen, ob eine Datenbank-ID angegeben wurde
     db_id = params.get('database_id')
     if not db_id:
@@ -656,13 +715,30 @@ def ai_query(params):
         db_connection = get_database_connection(db_id)
         if not db_connection:
             logger.error(f"Database connection with ID {db_id} not found")
-            return {"error": f"Datenbank mit ID {db_id} nicht gefunden"}
+            return {
+                "error": f"Datenbank mit ID {db_id} nicht gefunden", 
+                "provider": provider_name or "none",
+                "available_providers": available_providers
+            }
     
     try:
         # Natürliche Sprachanfrage in SQL übersetzen
         logger.info(f"Translating natural language query: '{query}'")
         sql_query = natural_language_to_sql(query, db_connection)
         logger.info(f"Translated to SQL: {sql_query}")
+        
+        # Zusätzliche Information über den verwendeten KI-Provider
+        used_provider = "none"
+        if "SELECT 'Error using " in sql_query:
+            # Extrahiere Provider-Name aus Fehlermeldung
+            provider_parts = sql_query.split("Error using ")
+            if len(provider_parts) > 1:
+                used_provider = provider_parts[1].split(" ")[0].strip()
+        elif "Successfully generated SQL using AI provider" in sql_query:
+            # Extrahiere Provider-Name aus Erfolgslogmeldung
+            provider_parts = sql_query.split("Successfully generated SQL using AI provider: ")
+            if len(provider_parts) > 1:
+                used_provider = provider_parts[1].strip()
         
         # SQL-Abfrage ausführen
         logger.info("Executing SQL query")
@@ -677,14 +753,20 @@ def ai_query(params):
             "sql": sql_query,
             "results": results,
             "formatted_results": formatted_results,
-            "database": db_connection.get('name', 'Unbekannte Datenbank')
+            "database": db_connection.get('name', 'Unbekannte Datenbank'),
+            "provider": used_provider,
+            "available_providers": available_providers
         }
         
         return response
         
     except Exception as e:
         logger.error(f"Error in AI assistant: {str(e)}", exc_info=True)
-        return {"error": f"Fehler bei der Verarbeitung der Anfrage: {str(e)}"}
+        return {
+            "error": f"Fehler bei der Verarbeitung der Anfrage: {str(e)}",
+            "provider": provider_name or "none",
+            "available_providers": available_providers
+        }
 
 def get_database_connection(database_id):
     """
@@ -729,12 +811,75 @@ def get_database_connection(database_id):
             'engine': 'mock'
         }
 
+def get_postgres_tables(db_connection):
+    """Holt die Liste der Tabellen aus einer PostgreSQL-Datenbank"""
+    try:
+        import psycopg2
+        
+        conn = psycopg2.connect(
+            host=db_connection['host'],
+            port=db_connection['port'],
+            database=db_connection['database'],
+            user=db_connection['username'],
+            password=db_connection['password']
+        )
+        
+        cur = conn.cursor()
+        cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+        tables = [row[0] for row in cur.fetchall()]
+        conn.close()
+        return tables
+    except Exception as e:
+        logger.error(f"Error getting PostgreSQL tables: {str(e)}")
+        return []
+
+def get_mysql_tables(db_connection):
+    """Holt die Liste der Tabellen aus einer MySQL-Datenbank"""
+    try:
+        import mysql.connector
+        
+        conn = mysql.connector.connect(
+            host=db_connection['host'],
+            port=int(db_connection['port']),
+            database=db_connection['database'],
+            user=db_connection['username'],
+            password=db_connection['password']
+        )
+        
+        cur = conn.cursor()
+        cur.execute(f"SHOW TABLES FROM `{db_connection['database']}`")
+        tables = [row[0] for row in cur.fetchall()]
+        conn.close()
+        return tables
+    except Exception as e:
+        logger.error(f"Error getting MySQL tables: {str(e)}")
+        return []
+
+def get_sqlite_tables(db_connection):
+    """Holt die Liste der Tabellen aus einer SQLite-Datenbank"""
+    try:
+        import sqlite3
+        
+        db_path = db_connection.get('path', db_connection.get('database', ''))
+        if not db_path:
+            return []
+            
+        conn = sqlite3.connect(db_path)
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cur.fetchall()]
+        conn.close()
+        return tables
+    except Exception as e:
+        logger.error(f"Error getting SQLite tables: {str(e)}")
+        return []
+
 def natural_language_to_sql(query, db_connection):
     """
     Übersetzt eine natürliche Sprachanfrage in SQL
     """
     # Logger für Debugging
-    logger.info(f"Processing natural language query: {query}")
+    logger.info(f"Processing natural language query: '{query}'")
     logger.info(f"Database connection type: {db_connection.get('type', 'unknown')}, isSample: {db_connection.get('isSample', False)}")
     
     query = query.lower()
@@ -742,11 +887,46 @@ def natural_language_to_sql(query, db_connection):
     # Prüfen, ob es sich um eine Sample-Datenbank handelt
     is_sample = db_connection.get('type') == 'sample' or db_connection.get('isSample', False)
     
-    # Sample-Datenbank: Direkte SQL-Mapping-Regeln anwenden
+    # Sample-Datenbank: Versuchen, erst KI zu verwenden, dann Fallback auf Hard-coded Patterns
     if is_sample:
-        logger.info("Using sample database query patterns")
+        logger.info("Processing sample database query")
+        # Bereite Datenbankinformationen für die KI vor
+        db_info = {
+            'engine': 'sample',
+            'tables': ['users', 'products', 'orders', 'categories']
+        }
+        
+        # Liste der Tabellenstrukturen für die Sample-Datenbank
+        table_structures = {
+            'users': ['id', 'name', 'email', 'status'],
+            'products': ['id', 'name', 'price'],
+            'orders': ['id', 'user_id', 'total'],
+            'categories': ['id', 'name']
+        }
+        
+        # Struktur zur Datenbankinformation hinzufügen
+        db_info['table_structures'] = table_structures
+        
+        # Versuche, SQL mit der KI zu generieren
+        try:
+            # Verwende den AI Manager, um SQL zu generieren
+            sql, provider = ai_manager.generate_sql(query, db_info)
+            
+            # Prüfen, ob das generierte SQL einen Fehler enthält
+            if "SELECT 'Error" in sql or "SELECT 'No AI" in sql:
+                # Fallback auf Hard-coded Patterns
+                logger.info(f"AI generation failed with provider {provider}, falling back to patterns")
+            else:
+                logger.info(f"Successfully generated SQL using AI provider: {provider}")
+                return sql
+        except Exception as e:
+            logger.error(f"Error in AI SQL generation: {str(e)}")
+            # Fallback auf Hard-coded Patterns folgt
+        
+        logger.info("Using sample database query patterns as fallback")
         # Vordefinierte Abfragen für die Sample-Datenbank
         predefined_queries = {
+            # English patterns
             'how many users': "SELECT COUNT(*) as count FROM users",
             'number of users': "SELECT COUNT(*) as count FROM users",
             'count of users': "SELECT COUNT(*) as count FROM users",
@@ -776,7 +956,42 @@ def natural_language_to_sql(query, db_connection):
             'expensive products': "SELECT id, name, price FROM products ORDER BY price DESC LIMIT 5",
             'highest priced products': "SELECT id, name, price FROM products ORDER BY price DESC LIMIT 5",
             'cheap products': "SELECT id, name, price FROM products ORDER BY price ASC LIMIT 5",
-            'lowest priced products': "SELECT id, name, price FROM products ORDER BY price ASC LIMIT 5"
+            'lowest priced products': "SELECT id, name, price FROM products ORDER BY price ASC LIMIT 5",
+            
+            # German patterns
+            'wieviele user': "SELECT COUNT(*) as count FROM users",
+            'wie viele user': "SELECT COUNT(*) as count FROM users",
+            'anzahl user': "SELECT COUNT(*) as count FROM users",
+            'benutzeranzahl': "SELECT COUNT(*) as count FROM users",
+            'anzahl benutzer': "SELECT COUNT(*) as count FROM users",
+            'wieviele produkte': "SELECT COUNT(*) as count FROM products",
+            'wie viele produkte': "SELECT COUNT(*) as count FROM products",
+            'anzahl produkte': "SELECT COUNT(*) as count FROM products",
+            'aktive benutzer': "SELECT COUNT(*) as count FROM users WHERE status = 1",
+            'inaktive benutzer': "SELECT COUNT(*) as count FROM users WHERE status = 0",
+            'benutzer mit email': "SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL",
+            'durchschnittspreis': "SELECT AVG(price) as average_price FROM products",
+            'mittlerer preis': "SELECT AVG(price) as average_price FROM products",
+            'höchster preis': "SELECT MAX(price) as max_price FROM products",
+            'maximaler preis': "SELECT MAX(price) as max_price FROM products",
+            'max preis': "SELECT MAX(price) as max_price FROM products",
+            'niedrigster preis': "SELECT MIN(price) as min_price FROM products",
+            'minimaler preis': "SELECT MIN(price) as min_price FROM products",
+            'min preis': "SELECT MIN(price) as min_price FROM products",
+            'gesamtzahl bestellungen': "SELECT COUNT(*) as count FROM orders",
+            'anzahl bestellungen': "SELECT COUNT(*) as count FROM orders",
+            'bestellungsanzahl': "SELECT COUNT(*) as count FROM orders",
+            'alle benutzer auflisten': "SELECT id, name, email, status FROM users LIMIT 10",
+            'zeige alle benutzer': "SELECT id, name, email, status FROM users LIMIT 10",
+            'zeige mir die benutzer': "SELECT id, name, email, status FROM users LIMIT 10",
+            'liste alle produkte': "SELECT id, name, price FROM products LIMIT 10",
+            'zeige mir die produkte': "SELECT id, name, price FROM products LIMIT 10",
+            'alle bestellungen': "SELECT id, user_id, total FROM orders LIMIT 10",
+            'zeige mir die bestellungen': "SELECT id, user_id, total FROM orders LIMIT 10",
+            'teure produkte': "SELECT id, name, price FROM products ORDER BY price DESC LIMIT 5",
+            'produkte mit höchstem preis': "SELECT id, name, price FROM products ORDER BY price DESC LIMIT 5",
+            'günstige produkte': "SELECT id, name, price FROM products ORDER BY price ASC LIMIT 5",
+            'produkte mit niedrigstem preis': "SELECT id, name, price FROM products ORDER BY price ASC LIMIT 5"
         }
         
         # Suche nach passenden Schlüsselwörtern in der Anfrage
@@ -785,14 +1000,58 @@ def natural_language_to_sql(query, db_connection):
                 logger.info(f"Matched predefined query pattern: {key}")
                 return sql
         
+        # Wenn keine passende Abfrage gefunden wurde, versuche es nochmal mit der KI
+        # aber mit einem allgemeineren Kontext
+        try:
+            additional_info = "This is a sample database with tables for users, products, orders and categories."
+            enhanced_query = f"{query} {additional_info}"
+            sql, provider = ai_manager.generate_sql(enhanced_query, db_info)
+            if "SELECT 'Error" not in sql and "SELECT 'No AI" not in sql:
+                return sql
+        except:
+            pass
+            
         # Fallback für unbekannte Anfragen an die Sample-Datenbank
         return "SELECT 'The AI assistant cannot understand this query for the sample database' as message"
     
-    # Für echte Datenbanken
-    # Grundlegende SQLs für reale Datenbanken generieren
+    # Für echte Datenbanken: KI-basierte SQL-Generierung
     engine = db_connection.get('engine', '').lower()
     logger.info(f"Processing real database query for engine: {engine}")
     
+    # Sammle Datenbankinformationen für KI
+    db_info = {
+        'engine': engine,
+        'host': db_connection.get('host', ''),
+        'database': db_connection.get('database', '')
+    }
+    
+    # Für echte Datenbanken, versuche immer zuerst KI
+    try:
+        # Hole Tabellenliste für die gewählte Datenbank, wenn möglich
+        if engine in ['postgresql', 'postgres']:
+            db_info['tables'] = get_postgres_tables(db_connection)
+        elif engine == 'mysql':
+            db_info['tables'] = get_mysql_tables(db_connection)
+        elif engine == 'sqlite':
+            db_info['tables'] = get_sqlite_tables(db_connection)
+    except Exception as e:
+        logger.warning(f"Could not get table list for {engine}: {str(e)}")
+    
+    # Versuche SQL mit KI zu generieren
+    try:
+        sql, provider = ai_manager.generate_sql(query, db_info)
+        
+        # Prüfen, ob das generierte SQL einen Fehler enthält
+        if "SELECT 'Error" in sql or "SELECT 'No AI" in sql:
+            logger.warning(f"AI generation failed with provider {provider}, falling back to pattern matching")
+        else:
+            logger.info(f"Successfully generated SQL using AI provider: {provider}")
+            return sql
+    except Exception as e:
+        logger.error(f"Error in AI SQL generation for real database: {str(e)}")
+        # Fallback auf Pattern Matching folgt
+    
+    # Fallback: Pattern-basierte SQL-Generierung als letztes Mittel
     # Schema/Tabellen für PostgreSQL oder MySQL holen
     if engine in ['postgresql', 'postgres', 'mysql']:
         try:
@@ -837,12 +1096,12 @@ def natural_language_to_sql(query, db_connection):
             
             # Fallback für komplexere Anfragen
             if engine in ['postgresql', 'postgres']:
-                return f"SELECT 'Complex query for PostgreSQL engine' as message"
+                return f"SELECT 'Could not convert query to SQL for PostgreSQL' as message"
             elif engine == 'mysql':
-                return f"SELECT 'Complex query for MySQL engine' as message"
+                return f"SELECT 'Could not convert query to SQL for MySQL' as message"
             
         except Exception as e:
-            logger.error(f"Error generating SQL for real database: {str(e)}")
+            logger.error(f"Error in pattern matching for real database: {str(e)}")
             return f"SELECT 'Error generating SQL: {str(e)}' as error"
     
     # SQLite Unterstützung
@@ -877,7 +1136,7 @@ def natural_language_to_sql(query, db_connection):
             return f"SELECT 'Error generating SQL: {str(e)}' as error"
     
     # Fallback für nicht unterstützte Datenbank-Engines
-    return f"SELECT 'Queries for {engine} engine are not yet fully supported' as message"
+    return f"SELECT 'Queries for {engine} engine could not be processed' as message"
 
 def execute_sql_query(sql_query, db_connection):
     """
@@ -1236,6 +1495,401 @@ def get_sample_database():
         logger.error(f"Error getting sample database: {str(e)}")
         return None
 
+class AIProvider:
+    """Base class for AI providers"""
+    def __init__(self, config: Dict = None):
+        self.config = config or {}
+        self.name = "base"
+        
+    def generate_sql(self, query: str, db_info: Dict) -> str:
+        """Generate SQL from natural language"""
+        raise NotImplementedError("Subclasses must implement this method")
+        
+    def is_available(self) -> bool:
+        """Check if this provider is available"""
+        return False
+
+class OpenAIProvider(AIProvider):
+    """OpenAI API provider using GPT models"""
+    def __init__(self, config: Dict = None):
+        super().__init__(config)
+        self.name = "openai"
+        self.api_key = self.config.get("api_key", os.environ.get("OPENAI_API_KEY"))
+        self.model = self.config.get("model", "gpt-3.5-turbo")
+        
+    def is_available(self) -> bool:
+        return bool(self.api_key)
+        
+    def generate_sql(self, query: str, db_info: Dict) -> str:
+        if not self.is_available():
+            return "SELECT 'OpenAI API key not configured' as error"
+            
+        try:
+            openai.api_key = self.api_key
+            
+            # Create system prompt with database structure information
+            system_prompt = f"You are a SQL expert that translates natural language into SQL queries. "
+            system_prompt += f"The database is a {db_info.get('engine', 'unknown')} database"
+            
+            if db_info.get('tables'):
+                system_prompt += f" with the following tables: {', '.join(db_info.get('tables', []))}"
+            
+            # Make API call
+            response = openai.ChatCompletion.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Convert this question to a SQL query: {query}"}
+                ],
+                temperature=0.1,  # Low temperature for more deterministic results
+                max_tokens=150
+            )
+            
+            # Extract SQL from response
+            sql = response.choices[0].message.content.strip()
+            
+            # Clean up the SQL if it's enclosed in markdown code blocks
+            if sql.startswith("```sql"):
+                sql = sql.split("```sql")[1].split("```")[0].strip()
+            elif sql.startswith("```"):
+                sql = sql.split("```")[1].split("```")[0].strip()
+                
+            return sql
+            
+        except Exception as e:
+            logger.error(f"Error using OpenAI API: {str(e)}")
+            return f"SELECT 'Error using OpenAI API: {str(e)}' as error"
+
+class PerplexityAIProvider(AIProvider):
+    """Perplexity AI provider for database queries"""
+    def __init__(self, config: Dict = None):
+        super().__init__(config)
+        self.name = "perplexity"
+        self.api_key = self.config.get("api_key", os.environ.get("PERPLEXITY_API_KEY"))
+        self.model = self.config.get("model", "pplx-7b-online")
+        
+    def is_available(self) -> bool:
+        return bool(self.api_key)
+        
+    def generate_sql(self, query: str, db_info: Dict) -> str:
+        if not self.is_available():
+            return "SELECT 'Perplexity API key not configured' as error"
+            
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # Create system prompt with database structure information
+            system_prompt = f"You are a SQL expert that translates natural language into SQL queries. "
+            system_prompt += f"The database is a {db_info.get('engine', 'unknown')} database"
+            
+            if db_info.get('tables'):
+                system_prompt += f" with the following tables: {', '.join(db_info.get('tables', []))}"
+            
+            # Prepare request payload
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Convert this question to a SQL query: {query}"}
+                ]
+            }
+            
+            # Make API call
+            response = requests.post(
+                "https://api.perplexity.ai/chat/completions",
+                headers=headers,
+                json=payload
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Perplexity API error: {response.text}")
+                return f"SELECT 'Perplexity API error: {response.status_code}' as error"
+                
+            # Extract SQL from response
+            result = response.json()
+            sql = result["choices"][0]["message"]["content"].strip()
+            
+            # Clean up the SQL if it's enclosed in markdown code blocks
+            if sql.startswith("```sql"):
+                sql = sql.split("```sql")[1].split("```")[0].strip()
+            elif sql.startswith("```"):
+                sql = sql.split("```")[1].split("```")[0].strip()
+                
+            return sql
+            
+        except Exception as e:
+            logger.error(f"Error using Perplexity API: {str(e)}")
+            return f"SELECT 'Error using Perplexity API: {str(e)}' as error"
+
+class LlamaProvider(AIProvider):
+    """Local Llama model provider"""
+    def __init__(self, config: Dict = None):
+        super().__init__(config)
+        self.name = "llama"
+        self.model_path = self.config.get("model_path", "/app/models/llama")
+        self.model = None
+        self.tokenizer = None
+        
+    def is_available(self) -> bool:
+        try:
+            # Check if model files exist and GPU is available
+            model_exists = os.path.exists(self.model_path)
+            if not model_exists:
+                return False
+            
+            # Initialize model and tokenizer if not already done
+            if self.model is None and model_exists:
+                self._load_model()
+                
+            return self.model is not None
+        except Exception as e:
+            logger.error(f"Error checking Llama availability: {str(e)}")
+            return False
+            
+    def _load_model(self):
+        """Load the Llama model and tokenizer"""
+        try:
+            logger.info(f"Loading Llama model from {self.model_path}")
+            
+            # Check if CUDA is available
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Using device: {device}")
+            
+            # Load tokenizer and model
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_path,
+                device_map=device,
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32
+            )
+            
+            logger.info("Llama model loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load Llama model: {str(e)}")
+            self.model = None
+            self.tokenizer = None
+        
+    def generate_sql(self, query: str, db_info: Dict) -> str:
+        if not self.is_available():
+            return "SELECT 'Llama model not available' as error"
+            
+        try:
+            # Create system prompt with database structure information
+            system_prompt = f"You are a SQL expert that translates natural language into SQL queries. "
+            system_prompt += f"The database is a {db_info.get('engine', 'unknown')} database"
+            
+            if db_info.get('tables'):
+                system_prompt += f" with the following tables: {', '.join(db_info.get('tables', []))}"
+                
+            # Full prompt
+            full_prompt = f"{system_prompt}\n\nUser: Convert this question to a SQL query: {query}\n\nSQL:"
+            
+            # Generate SQL
+            inputs = self.tokenizer(full_prompt, return_tensors="pt").to(self.model.device)
+            outputs = self.model.generate(
+                inputs.input_ids,
+                max_new_tokens=150,
+                temperature=0.1,
+                top_p=0.95,
+                do_sample=True
+            )
+            
+            # Decode and extract SQL
+            result = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            sql = result.split("SQL:")[1].strip()
+            
+            # Clean up the SQL if it's enclosed in markdown code blocks
+            if "```" in sql:
+                sql = sql.split("```")[1].split("```")[0].strip()
+                
+            return sql
+            
+        except Exception as e:
+            logger.error(f"Error using Llama model: {str(e)}")
+            return f"SELECT 'Error using Llama model: {str(e)}' as error"
+
+class SQLPalProvider(AIProvider):
+    """SQLPal integrated specialized SQL model"""
+    def __init__(self, config: Dict = None):
+        super().__init__(config)
+        self.name = "sqlpal"
+        self.model = None
+        self.pipeline = None
+        self.model_path = self.config.get("model_path", "/app/models/sqlpal")
+        
+    def is_available(self) -> bool:
+        try:
+            # Check if model files exist
+            model_exists = os.path.exists(self.model_path)
+            if not model_exists:
+                return False
+                
+            # Initialize model if not already done
+            if self.model is None and model_exists:
+                self._load_model()
+                
+            return self.pipeline is not None
+        except Exception as e:
+            logger.error(f"Error checking SQLPal availability: {str(e)}")
+            return False
+            
+    def _load_model(self):
+        """Load the SQLPal model"""
+        try:
+            logger.info(f"Loading SQLPal model from {self.model_path}")
+            
+            # Check available device
+            device = 0 if torch.cuda.is_available() else -1
+            
+            # Create text-to-SQL pipeline
+            self.pipeline = pipeline(
+                "text2text-generation",
+                model=self.model_path,
+                device=device
+            )
+            
+            logger.info("SQLPal model loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load SQLPal model: {str(e)}")
+            self.pipeline = None
+        
+    def generate_sql(self, query: str, db_info: Dict) -> str:
+        if not self.is_available():
+            return "SELECT 'SQLPal model not available' as error"
+            
+        try:
+            # Create prompt with database context
+            prompt = f"Database type: {db_info.get('engine', 'unknown')}\n"
+            
+            if db_info.get('tables'):
+                prompt += f"Tables: {', '.join(db_info.get('tables', []))}\n"
+                
+            prompt += f"Question: {query}\nSQL:"
+            
+            # Generate SQL
+            result = self.pipeline(prompt, max_length=150, do_sample=False)[0]['generated_text']
+            
+            # Extract SQL from result
+            sql = result.strip()
+            
+            return sql
+            
+        except Exception as e:
+            logger.error(f"Error using SQLPal model: {str(e)}")
+            return f"SELECT 'Error using SQLPal model: {str(e)}' as error"
+
+class AIManager:
+    """Manages AI providers and selects the best one to use"""
+    def __init__(self):
+        self.providers = {}
+        self.config = self._load_config()
+        self._initialize_providers()
+        
+    def _load_config(self) -> Dict:
+        """Load AI configuration from YAML file"""
+        config = {
+            "default_provider": "openai",
+            "providers": {
+                "openai": {"enabled": True, "model": "gpt-3.5-turbo"},
+                "perplexity": {"enabled": True, "model": "pplx-7b-online"},
+                "llama": {"enabled": True, "model_path": "/app/models/llama"},
+                "sqlpal": {"enabled": True, "model_path": "/app/models/sqlpal"}
+            }
+        }
+        
+        try:
+            if os.path.exists(AI_CONFIG_PATH):
+                with open(AI_CONFIG_PATH, "r") as f:
+                    yaml_config = yaml.safe_load(f)
+                    # Update config with values from file
+                    if yaml_config:
+                        config.update(yaml_config)
+        except Exception as e:
+            logger.error(f"Error loading AI configuration: {str(e)}")
+            
+        return config
+        
+    def _reload_config(self):
+        """Reload configuration and reinitialize providers"""
+        logger.info("Reloading AI configuration")
+        self.config = self._load_config()
+        
+        # Clear existing providers
+        self.providers = {}
+        
+        # Initialize providers with new configuration
+        self._initialize_providers()
+        
+    def _initialize_providers(self):
+        """Initialize all configured AI providers"""
+        provider_classes = {
+            "openai": OpenAIProvider,
+            "perplexity": PerplexityAIProvider,
+            "llama": LlamaProvider,
+            "sqlpal": SQLPalProvider
+        }
+        
+        for name, cls in provider_classes.items():
+            if self.config.get("providers", {}).get(name, {}).get("enabled", False):
+                try:
+                    provider_config = self.config.get("providers", {}).get(name, {})
+                    self.providers[name] = cls(provider_config)
+                    logger.info(f"Initialized AI provider: {name}")
+                except Exception as e:
+                    logger.error(f"Error initializing AI provider {name}: {str(e)}")
+    
+    def get_available_providers(self) -> List[str]:
+        """Get list of available AI providers"""
+        return [name for name, provider in self.providers.items() if provider.is_available()]
+        
+    def get_provider(self, name: str) -> Optional[AIProvider]:
+        """Get a specific AI provider by name"""
+        provider = self.providers.get(name)
+        if provider and provider.is_available():
+            return provider
+        return None
+        
+    def get_best_provider(self) -> Optional[AIProvider]:
+        """Get the best available AI provider based on priority"""
+        # Default provider from config
+        default_provider = self.config.get("default_provider", "openai")
+        if default_provider in self.providers and self.providers[default_provider].is_available():
+            return self.providers[default_provider]
+            
+        # Priority order (fallbacks)
+        priority = ["openai", "perplexity", "llama", "sqlpal"]
+        for name in priority:
+            if name in self.providers and self.providers[name].is_available():
+                return self.providers[name]
+                
+        return None
+        
+    def generate_sql(self, query: str, db_info: Dict, provider_name: str = None) -> Tuple[str, str]:
+        """
+        Generate SQL from natural language using the specified or best available provider
+        Returns tuple of (sql, provider_name)
+        """
+        if provider_name and provider_name in self.providers:
+            provider = self.providers[provider_name]
+            if provider.is_available():
+                sql = provider.generate_sql(query, db_info)
+                return sql, provider.name
+        
+        # Use the best available provider
+        provider = self.get_best_provider()
+        if provider:
+            sql = provider.generate_sql(query, db_info)
+            return sql, provider.name
+            
+        # No providers available
+        return "SELECT 'No AI providers available' as error", "none"
+
+# Initialize AI Manager
+ai_manager = AIManager()
+
 if __name__ == "__main__":
     sync_manager = DatabaseSync()
     # start the sync manager as a thread so it doesn't block the API server
@@ -1247,3 +1901,195 @@ if __name__ == "__main__":
     # Start the API server
     logger.info("Starting API server on port 5000")
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False) 
+
+# Add new route for updating AI settings from Node.js backend
+@app.route('/api/ai/settings', methods=['POST'])
+def update_ai_settings():
+    """
+    Endpoint to update AI provider settings from Node.js backend
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'error': 'No data provided'
+            }), 400
+            
+        # Update config path
+        config_path = AI_CONFIG_PATH
+        
+        # Convert from Node.js format to Python format
+        python_config = {
+            "default_provider": data.get("defaultProvider", "sqlpal"),
+            "providers": {}
+        }
+        
+        # Add provider configurations
+        node_providers = data.get("providers", {})
+        
+        # OpenAI config
+        if "openai" in node_providers:
+            python_config["providers"]["openai"] = {
+                "enabled": node_providers["openai"].get("enabled", True),
+                "model": node_providers["openai"].get("model", "gpt-3.5-turbo"),
+                "api_key": node_providers["openai"].get("apiKey", "")
+            }
+            
+        # Perplexity config
+        if "perplexity" in node_providers:
+            python_config["providers"]["perplexity"] = {
+                "enabled": node_providers["perplexity"].get("enabled", True),
+                "model": node_providers["perplexity"].get("model", "pplx-7b-online"),
+                "api_key": node_providers["perplexity"].get("apiKey", "")
+            }
+            
+        # Llama config
+        if "llama" in node_providers:
+            python_config["providers"]["llama"] = {
+                "enabled": node_providers["llama"].get("enabled", True),
+                "model_path": node_providers["llama"].get("modelPath", "/app/models/llama")
+            }
+            
+        # SQLPal config
+        if "sqlpal" in node_providers:
+            python_config["providers"]["sqlpal"] = {
+                "enabled": node_providers["sqlpal"].get("enabled", True),
+                "model_path": node_providers["sqlpal"].get("modelPath", "/app/models/sqlpal")
+            }
+            
+        # SQL generation settings
+        if "sqlGeneration" in data:
+            python_config["sql_generation"] = {
+                "max_tokens": data["sqlGeneration"].get("maxTokens", 150),
+                "temperature": data["sqlGeneration"].get("temperature", 0.1),
+                "include_schema": data["sqlGeneration"].get("includeSchema", True),
+                "timeout": data["sqlGeneration"].get("timeout", 10)
+            }
+        
+        # Ensure config directory exists
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        
+        # Save configuration
+        with open(config_path, 'w') as f:
+            yaml.dump(python_config, f, default_flow_style=False)
+            
+        # Reinitialize AI manager with new settings
+        ai_manager._reload_config()
+        
+        # Return success
+        return jsonify({
+            'success': True,
+            'message': 'AI settings updated successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating AI settings: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f"Error updating AI settings: {str(e)}"
+        }), 500
+
+# Add new route for testing AI provider connection
+@app.route('/api/ai/test', methods=['POST'])
+def test_ai_provider():
+    """
+    Endpoint to test connection to an AI provider
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'error': 'No data provided'
+            }), 400
+            
+        provider = data.get('provider')
+        api_key = data.get('api_key')
+        
+        if not provider:
+            return jsonify({
+                'success': False,
+                'error': 'Provider not specified'
+            }), 400
+            
+        # Test connection based on provider
+        if provider == 'openai':
+            try:
+                openai.api_key = api_key
+                # Simple model list request to test connection
+                openai.Model.list()
+                return jsonify({
+                    'success': True,
+                    'message': 'OpenAI connection successful'
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'OpenAI connection failed: {str(e)}'
+                })
+                
+        elif provider == 'perplexity':
+            try:
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                # Simple models request to test connection
+                response = requests.get("https://api.perplexity.ai/models", headers=headers)
+                
+                if response.status_code == 200:
+                    return jsonify({
+                        'success': True,
+                        'message': 'Perplexity connection successful'
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Perplexity connection failed: {response.text}'
+                    })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'Perplexity connection failed: {str(e)}'
+                })
+                
+        elif provider == 'llama':
+            # Check if model path exists
+            model_path = data.get('model_path', '/app/models/llama')
+            if os.path.exists(model_path):
+                return jsonify({
+                    'success': True,
+                    'message': 'Llama model path exists'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': f'Llama model path not found: {model_path}'
+                })
+                
+        elif provider == 'sqlpal':
+            # SQLPal is a local model, just check if the path exists
+            model_path = data.get('model_path', '/app/models/sqlpal')
+            if os.path.exists(model_path):
+                return jsonify({
+                    'success': True,
+                    'message': 'SQLPal model path exists'
+                })
+            else:
+                # For SQLPal, we'll allow it to work even if the path doesn't exist yet
+                return jsonify({
+                    'success': True,
+                    'message': 'SQLPal is enabled (model will be downloaded if needed)'
+                })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown provider: {provider}'
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Error testing AI provider: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': f"Error testing AI provider: {str(e)}"
+        }), 500

@@ -1,11 +1,29 @@
-FROM python:3.10-alpine
+FROM python:3.10-slim
 
-# Install dependencies
-RUN apk add --no-cache mysql-client postgresql-client bash curl \
-    gcc python3-dev musl-dev linux-headers
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    default-mysql-client \
+    postgresql-client \
+    curl \
+    gcc \
+    g++ \
+    make \
+    libssl-dev \
+    pkg-config \
+    bash \
+    git \
+    # Install Rust for tokenizers
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && export PATH="$HOME/.cargo/bin:$PATH" \
+    # Clean up
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
+
+# Add Rust to PATH
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Copy requirements file
 COPY requirements.txt .

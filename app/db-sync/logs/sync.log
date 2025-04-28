@@ -667,3 +667,42 @@
 2025-04-28 08:06:50,544 [INFO] 192.168.2.11 - - [28/Apr/2025 08:06:50] "GET /api/system/info HTTP/1.1" 200 -
 2025-04-28 08:07:20,544 [INFO] 192.168.2.11 - - [28/Apr/2025 08:07:20] "GET /api/system/info HTTP/1.1" 200 -
 2025-04-28 08:07:50,544 [INFO] 192.168.2.11 - - [28/Apr/2025 08:07:50] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:19:34 [INFO] Starting database sync service
+2025-04-28 08:19:36,169 [INFO] Database Sync Manager initialized
+2025-04-28 08:19:36,170 [INFO] Starting sync manager
+2025-04-28 08:19:36,172 [INFO] Starting API server on port 5000
+2025-04-28 08:19:36,172 [INFO] Sync service is disabled in configuration
+2025-04-28 08:19:36,376 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.18.0.3:5000
+2025-04-28 08:19:36,376 [INFO] [33mPress CTRL+C to quit[0m
+2025-04-28 08:21:40,517 [INFO] 192.168.2.11 - - [28/Apr/2025 08:21:40] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:21:48,668 [INFO] 192.168.2.11 - - [28/Apr/2025 08:21:48] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:21:55,410 [INFO] 192.168.2.11 - - [28/Apr/2025 08:21:55] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:23:13,480 [INFO] 192.168.2.11 - - [28/Apr/2025 08:23:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:23:38,829 [INFO] 192.168.2.11 - - [28/Apr/2025 08:23:38] "OPTIONS /api/ai/query HTTP/1.1" 200 -
+2025-04-28 08:23:38,834 [INFO] AI Assistant query initiated
+2025-04-28 08:23:38,835 [WARNING] AI Assistant called without a database_id
+2025-04-28 08:23:38,835 [INFO] Using sample database as fallback
+2025-04-28 08:23:38,836 [INFO] Translating natural language query: 'wieviele user gibt es in der Sample Database in der tabelle users?'
+2025-04-28 08:23:38,836 [INFO] Processing natural language query: wieviele user gibt es in der Sample Database in der tabelle users?
+2025-04-28 08:23:38,836 [INFO] Database connection type: sample, isSample: True
+2025-04-28 08:23:38,837 [INFO] Using sample database query patterns
+2025-04-28 08:23:38,837 [INFO] Translated to SQL: SELECT 'The AI assistant cannot understand this query for the sample database' as message
+2025-04-28 08:23:38,837 [INFO] Executing SQL query
+2025-04-28 08:23:38,838 [INFO] Executing SQL query: SELECT 'The AI assistant cannot understand this query for the sample database' as message
+2025-04-28 08:23:38,838 [INFO] Using database connection: Sample Database
+2025-04-28 08:23:38,839 [INFO] Using sample database response
+2025-04-28 08:23:38,901 [INFO] 192.168.2.11 - - [28/Apr/2025 08:23:38] "POST /api/ai/query HTTP/1.1" 200 -
+2025-04-28 08:23:43,480 [INFO] 192.168.2.11 - - [28/Apr/2025 08:23:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:24:13,483 [INFO] 192.168.2.11 - - [28/Apr/2025 08:24:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:24:43,481 [INFO] 192.168.2.11 - - [28/Apr/2025 08:24:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:25:13,479 [INFO] 192.168.2.11 - - [28/Apr/2025 08:25:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:25:43,480 [INFO] 192.168.2.11 - - [28/Apr/2025 08:25:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:26:13,480 [INFO] 192.168.2.11 - - [28/Apr/2025 08:26:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:26:43,479 [INFO] 192.168.2.11 - - [28/Apr/2025 08:26:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:27:13,478 [INFO] 192.168.2.11 - - [28/Apr/2025 08:27:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:27:43,483 [INFO] 192.168.2.11 - - [28/Apr/2025 08:27:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:28:13,481 [INFO] 192.168.2.11 - - [28/Apr/2025 08:28:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 08:28:43,483 [INFO] 192.168.2.11 - - [28/Apr/2025 08:28:43] "GET /api/system/info HTTP/1.1" 200 -
