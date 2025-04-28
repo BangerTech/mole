@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Union, Any
 import psutil
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+import random
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})  # Enable CORS for all /api routes with all origins
@@ -552,33 +553,576 @@ def get_databases():
     return jsonify(databases)
 
 @app.route('/api/ai/query', methods=['POST'])
-def ai_query():
+def ai_query_endpoint():
+    """
+    Endpunkt zur Verarbeitung von natürlichsprachigen Anfragen durch den KI-Assistenten
+    """
     try:
-        data = request.json
-        query = data.get('query', '')
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'error': 'No data provided'
+            }), 400
+            
+        # Parameter für die AI-Query Funktion vorbereiten
+        params = {
+            'query': data.get('query'),
+            'database_id': data.get('connectionId')
+        }
         
-        if not query:
-            return jsonify({'error': 'No query provided'}), 400
+        # AI-Query Funktion aufrufen
+        result = ai_query(params)
         
-        # In a real implementation, this would:
-        # 1. Parse the natural language query
-        # 2. Translate it to SQL or database-specific commands
-        # 3. Execute the query against the appropriate database
-        # 4. Format the results in a user-friendly way
+        # Fehlerprüfung
+        if 'error' in result:
+            return jsonify({
+                'query': params.get('query'),
+                'sql': result.get('sql', 'No SQL generated'),
+                'results': [],
+                'formatted_results': result.get('error'),
+                'error': result.get('error')
+            }), 400
+            
+        # Erfolgreiche Antwort
+        return jsonify({
+            'query': result.get('query'),
+            'sql': result.get('sql'),
+            'results': result.get('results'),
+            'formatted_results': result.get('formatted_results'),
+            'database': result.get('database'),
+            'error': None
+        })
         
-        # For now, we'll provide mock responses based on keyword matching
-        response = analyze_query(query)
-        
-        return jsonify({'result': response})
     except Exception as e:
-        logger.error(f"Error processing AI query: {str(e)}")
-        return jsonify({'error': 'An error occurred processing your query'}), 500
+        logger.error(f"Error processing AI query endpoint: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': f"Error processing query: {str(e)}"
+        }), 500
+
+def format_query_results(results, sql_query):
+    """
+    Formatiert die Abfrageergebnisse für eine bessere Darstellung im Frontend
+    """
+    # Leere Ergebnisse behandeln
+    if not results or len(results) == 0:
+        return "Die Abfrage hat keine Ergebnisse zurückgegeben."
+    
+    # Überprüfen, ob es sich um eine Fehlermeldung handelt
+    if len(results) == 1 and ('error' in results[0] or 'message' in results[0]):
+        error_msg = results[0].get('error', results[0].get('message', 'Unbekannter Fehler'))
+        return error_msg
+    
+    # Für COUNT, AVG, MIN, MAX Abfragen
+    if len(results) == 1 and any(key in results[0] for key in ['count', 'average_price', 'min_price', 'max_price']):
+        if 'count' in results[0]:
+            return f"Die Anzahl beträgt: {results[0]['count']}"
+        elif 'average_price' in results[0]:
+            return f"Der Durchschnittspreis beträgt: {results[0]['average_price']:.2f}"
+        elif 'max_price' in results[0]:
+            return f"Der höchste Preis beträgt: {results[0]['max_price']:.2f}"
+        elif 'min_price' in results[0]:
+            return f"Der niedrigste Preis beträgt: {results[0]['min_price']:.2f}"
+    
+    # Für mehrere Ergebniszeilen oder komplexere Abfragen
+    # Das Frontend kann die Rohdaten in der Tabelle anzeigen
+    return f"{len(results)} Ergebnisse gefunden."
+
+def ai_query(params):
+    """
+    Verarbeitet natürliche Sprachanfragen über den KI-Assistenten
+    """
+    # Logger aktivieren
+    logger.info("AI Assistant query initiated")
+    
+    # Prüfen, ob eine Anfrage gesendet wurde
+    query = params.get('query')
+    if not query:
+        logger.warning("AI Assistant called without a query")
+        return {"error": "Keine Anfrage angegeben"}
+    
+    # Prüfen, ob eine Datenbank-ID angegeben wurde
+    db_id = params.get('database_id')
+    if not db_id:
+        logger.warning("AI Assistant called without a database_id")
+        # Verwende die Sample-Datenbank als Fallback
+        logger.info("Using sample database as fallback")
+        db_connection = {
+            'type': 'sample',
+            'isSample': True,
+            'name': 'Sample Database'
+        }
+    else:
+        # Datenbankverbindung abrufen
+        db_connection = get_database_connection(db_id)
+        if not db_connection:
+            logger.error(f"Database connection with ID {db_id} not found")
+            return {"error": f"Datenbank mit ID {db_id} nicht gefunden"}
+    
+    try:
+        # Natürliche Sprachanfrage in SQL übersetzen
+        logger.info(f"Translating natural language query: '{query}'")
+        sql_query = natural_language_to_sql(query, db_connection)
+        logger.info(f"Translated to SQL: {sql_query}")
+        
+        # SQL-Abfrage ausführen
+        logger.info("Executing SQL query")
+        results = execute_sql_query(sql_query, db_connection)
+        
+        # Ergebnisse formatieren und zurückgeben
+        formatted_results = format_query_results(results, sql_query)
+        
+        # Antwort erstellen und zurückgeben
+        response = {
+            "query": query,
+            "sql": sql_query,
+            "results": results,
+            "formatted_results": formatted_results,
+            "database": db_connection.get('name', 'Unbekannte Datenbank')
+        }
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in AI assistant: {str(e)}", exc_info=True)
+        return {"error": f"Fehler bei der Verarbeitung der Anfrage: {str(e)}"}
+
+def get_database_connection(database_id):
+    """
+    Holt Informationen zu einer Datenbankverbindung anhand der ID
+    """
+    try:
+        # Wenn keine database_id angegeben wurde, verwende die Sample-Datenbank
+        if not database_id:
+            return {
+                'type': 'sample',
+                'isSample': True,
+                'name': 'Sample Database'
+            }
+        
+        # In einer echten Implementierung würden wir die Datenbankverbindungsinformationen
+        # aus der SQLite-Datenbank oder Sequelize holen
+        conn = get_db_connection()
+        query = "SELECT * FROM database_connections WHERE id = ?"
+        result = conn.execute(query, (database_id,)).fetchone()
+        conn.close()
+        
+        if result:
+            return {
+                'type': 'real',
+                'id': result['id'],
+                'name': result['name'],
+                'engine': result['engine'],
+                'host': result['host'],
+                'port': result['port'],
+                'database': result['database'],
+                'username': result['username'],
+                'password': result['encrypted_password'],  # In der realen Implementierung würden wir das Passwort entschlüsseln
+                'isSample': result['isSample'] == 1
+            }
+        return None
+    except Exception as e:
+        logger.error(f"Error getting database connection: {str(e)}")
+        # Fallback zur Sample-Datenbank
+        return {
+            'type': 'sample',
+            'name': 'Sample Database',
+            'engine': 'mock'
+        }
+
+def natural_language_to_sql(query, db_connection):
+    """
+    Übersetzt eine natürliche Sprachanfrage in SQL
+    """
+    # Logger für Debugging
+    logger.info(f"Processing natural language query: {query}")
+    logger.info(f"Database connection type: {db_connection.get('type', 'unknown')}, isSample: {db_connection.get('isSample', False)}")
+    
+    query = query.lower()
+    
+    # Prüfen, ob es sich um eine Sample-Datenbank handelt
+    is_sample = db_connection.get('type') == 'sample' or db_connection.get('isSample', False)
+    
+    # Sample-Datenbank: Direkte SQL-Mapping-Regeln anwenden
+    if is_sample:
+        logger.info("Using sample database query patterns")
+        # Vordefinierte Abfragen für die Sample-Datenbank
+        predefined_queries = {
+            'how many users': "SELECT COUNT(*) as count FROM users",
+            'number of users': "SELECT COUNT(*) as count FROM users",
+            'count of users': "SELECT COUNT(*) as count FROM users",
+            'users count': "SELECT COUNT(*) as count FROM users",
+            'how many products': "SELECT COUNT(*) as count FROM products",
+            'number of products': "SELECT COUNT(*) as count FROM products",
+            'active users': "SELECT COUNT(*) as count FROM users WHERE status = 1",
+            'inactive users': "SELECT COUNT(*) as count FROM users WHERE status = 0",
+            'users with email': "SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL",
+            'average price': "SELECT AVG(price) as average_price FROM products",
+            'mean price': "SELECT AVG(price) as average_price FROM products",
+            'highest price': "SELECT MAX(price) as max_price FROM products",
+            'maximum price': "SELECT MAX(price) as max_price FROM products",
+            'max price': "SELECT MAX(price) as max_price FROM products",
+            'lowest price': "SELECT MIN(price) as min_price FROM products",
+            'minimum price': "SELECT MIN(price) as min_price FROM products",
+            'min price': "SELECT MIN(price) as min_price FROM products",
+            'total orders': "SELECT COUNT(*) as count FROM orders",
+            'order count': "SELECT COUNT(*) as count FROM orders",
+            'number of orders': "SELECT COUNT(*) as count FROM orders",
+            'list all users': "SELECT id, name, email, status FROM users LIMIT 10",
+            'show me the users': "SELECT id, name, email, status FROM users LIMIT 10",
+            'list all products': "SELECT id, name, price FROM products LIMIT 10",
+            'show me the products': "SELECT id, name, price FROM products LIMIT 10",
+            'list all orders': "SELECT id, user_id, total FROM orders LIMIT 10",
+            'show me the orders': "SELECT id, user_id, total FROM orders LIMIT 10",
+            'expensive products': "SELECT id, name, price FROM products ORDER BY price DESC LIMIT 5",
+            'highest priced products': "SELECT id, name, price FROM products ORDER BY price DESC LIMIT 5",
+            'cheap products': "SELECT id, name, price FROM products ORDER BY price ASC LIMIT 5",
+            'lowest priced products': "SELECT id, name, price FROM products ORDER BY price ASC LIMIT 5"
+        }
+        
+        # Suche nach passenden Schlüsselwörtern in der Anfrage
+        for key, sql in predefined_queries.items():
+            if key in query:
+                logger.info(f"Matched predefined query pattern: {key}")
+                return sql
+        
+        # Fallback für unbekannte Anfragen an die Sample-Datenbank
+        return "SELECT 'The AI assistant cannot understand this query for the sample database' as message"
+    
+    # Für echte Datenbanken
+    # Grundlegende SQLs für reale Datenbanken generieren
+    engine = db_connection.get('engine', '').lower()
+    logger.info(f"Processing real database query for engine: {engine}")
+    
+    # Schema/Tabellen für PostgreSQL oder MySQL holen
+    if engine in ['postgresql', 'postgres', 'mysql']:
+        try:
+            # Einfache Muster-Erkennung für häufige Abfragen
+            if 'list tables' in query or 'show tables' in query or 'what tables' in query:
+                if engine in ['postgresql', 'postgres']:
+                    return "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+                elif engine == 'mysql':
+                    return f"SHOW TABLES FROM `{db_connection['database']}`"
+            
+            if 'count rows' in query and 'table' in query:
+                # Versuchen, den Tabellennamen zu extrahieren
+                words = query.split()
+                table_idx = words.index('table') if 'table' in words else -1
+                if table_idx > -1 and table_idx + 1 < len(words):
+                    table_name = words[table_idx + 1].strip('.,?!')
+                    return f"SELECT COUNT(*) FROM {table_name}"
+            
+            if ('schema' in query or 'structure' in query or 'columns' in query) and 'table' in query:
+                # Versuchen, den Tabellennamen zu extrahieren
+                words = query.split()
+                table_idx = words.index('table') if 'table' in words else -1
+                if table_idx > -1 and table_idx + 1 < len(words):
+                    table_name = words[table_idx + 1].strip('.,?!')
+                    if engine in ['postgresql', 'postgres']:
+                        return f"SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = '{table_name}'"
+                    elif engine == 'mysql':
+                        return f"DESCRIBE `{table_name}`"
+            
+            # Allgemeine Anfrage zum Auflisten aller Daten aus einer Tabelle
+            if ('show' in query or 'list' in query or 'get' in query) and 'from' in query:
+                words = query.split()
+                if 'from' in words:
+                    table_idx = words.index('from') + 1
+                    if table_idx < len(words):
+                        table_name = words[table_idx].strip('.,?!')
+                        return f"SELECT * FROM {table_name} LIMIT 10"
+            
+            # Allgemeines SQL für andere Anfragen
+            if 'select' in query:
+                return query
+            
+            # Fallback für komplexere Anfragen
+            if engine in ['postgresql', 'postgres']:
+                return f"SELECT 'Complex query for PostgreSQL engine' as message"
+            elif engine == 'mysql':
+                return f"SELECT 'Complex query for MySQL engine' as message"
+            
+        except Exception as e:
+            logger.error(f"Error generating SQL for real database: {str(e)}")
+            return f"SELECT 'Error generating SQL: {str(e)}' as error"
+    
+    # SQLite Unterstützung
+    elif engine == 'sqlite':
+        try:
+            if 'list tables' in query or 'show tables' in query or 'what tables' in query:
+                return "SELECT name FROM sqlite_master WHERE type='table'"
+                
+            if 'count rows' in query and 'table' in query:
+                words = query.split()
+                table_idx = words.index('table') if 'table' in words else -1
+                if table_idx > -1 and table_idx + 1 < len(words):
+                    table_name = words[table_idx + 1].strip('.,?!')
+                    return f"SELECT COUNT(*) FROM {table_name}"
+            
+            if ('schema' in query or 'structure' in query or 'columns' in query) and 'table' in query:
+                words = query.split()
+                table_idx = words.index('table') if 'table' in words else -1
+                if table_idx > -1 and table_idx + 1 < len(words):
+                    table_name = words[table_idx + 1].strip('.,?!')
+                    return f"PRAGMA table_info({table_name})"
+                    
+            if ('show' in query or 'list' in query or 'get' in query) and 'from' in query:
+                words = query.split()
+                if 'from' in words:
+                    table_idx = words.index('from') + 1
+                    if table_idx < len(words):
+                        table_name = words[table_idx].strip('.,?!')
+                        return f"SELECT * FROM {table_name} LIMIT 10"
+        except Exception as e:
+            logger.error(f"Error generating SQL for SQLite: {str(e)}")
+            return f"SELECT 'Error generating SQL: {str(e)}' as error"
+    
+    # Fallback für nicht unterstützte Datenbank-Engines
+    return f"SELECT 'Queries for {engine} engine are not yet fully supported' as message"
+
+def execute_sql_query(sql_query, db_connection):
+    """
+    Führt eine SQL-Abfrage auf der angegebenen Datenbank aus
+    """
+    logger.info(f"Executing SQL query: {sql_query}")
+    logger.info(f"Using database connection: {db_connection.get('name', 'unnamed')}")
+    
+    # Prüfen, ob es sich um eine Sample-Datenbank handelt
+    is_sample = db_connection.get('type') == 'sample' or db_connection.get('isSample', False)
+    
+    # Sample-Datenbank: Verwende die Funktion für Sample-Abfrageergebnisse
+    if is_sample:
+        logger.info("Using sample database response")
+        return get_sample_query_results(sql_query)
+    
+    # Für echte Datenbanken: Abfrage ausführen und Ergebnisse zurückgeben
+    try:
+        engine = db_connection.get('engine', '').lower()
+        
+        if engine in ['postgresql', 'postgres']:
+            import psycopg2
+            import psycopg2.extras
+            
+            logger.info(f"Connecting to PostgreSQL database: {db_connection.get('database')}")
+            conn = psycopg2.connect(
+                host=db_connection['host'],
+                port=db_connection['port'],
+                database=db_connection['database'],
+                user=db_connection['username'],
+                password=db_connection['password']
+            )
+            
+            # Dictionary-Cursor verwenden, um benannte Spalten zu erhalten
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute(sql_query)
+            
+            # Ergebnisse abrufen
+            results = cur.fetchall()
+            conn.close()
+            
+            # Konvertiere RealDictRow-Objekte in reguläre Dictionaries
+            results = [dict(row) for row in results]
+            logger.info(f"PostgreSQL query returned {len(results)} rows")
+            return results
+                
+        elif engine == 'mysql':
+            import mysql.connector
+            from mysql.connector import Error
+            
+            logger.info(f"Connecting to MySQL database: {db_connection.get('database')}")
+            conn = mysql.connector.connect(
+                host=db_connection['host'],
+                port=int(db_connection['port']),
+                database=db_connection['database'],
+                user=db_connection['username'],
+                password=db_connection['password']
+            )
+            
+            cur = conn.cursor(dictionary=True)
+            cur.execute(sql_query)
+            
+            # Ergebnisse abrufen
+            results = cur.fetchall()
+            conn.close()
+            
+            logger.info(f"MySQL query returned {len(results)} rows")
+            return results
+        
+        elif engine == 'sqlite':
+            import sqlite3
+            
+            # SQLite-Datenbankpfad aus der Verbindungskonfiguration abrufen
+            db_path = db_connection.get('path', '')
+            
+            if not db_path:
+                logger.error("SQLite database path not specified")
+                return [{"error": "SQLite database path not specified"}]
+                
+            logger.info(f"Connecting to SQLite database: {db_path}")
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            
+            cur = conn.cursor()
+            cur.execute(sql_query)
+            
+            # Ergebnisse abrufen
+            rows = cur.fetchall()
+            conn.close()
+            
+            # Konvertiere Row-Objekte in Dictionaries
+            results = [dict(row) for row in rows]
+            logger.info(f"SQLite query returned {len(results)} rows")
+            return results
+        
+        # Weitere Datenbanktypen hier hinzufügen...
+        
+        logger.warning(f"Unsupported database engine: {engine}")
+        return [{"message": f"Die Datenbankengine '{engine}' wird derzeit nicht unterstützt."}]
+        
+    except Exception as e:
+        logger.error(f"Error executing SQL query: {str(e)}")
+        return [{"error": f"Fehler bei der Ausführung der SQL-Abfrage: {str(e)}"}]
+
+def get_sample_query_results(sql_query):
+    """
+    Gibt simulierte Abfrageergebnisse für die Sample-Datenbank zurück
+    """
+    import random
+    
+    # Mock-Daten für die Sample-Datenbank
+    mock_data = {
+        'users': [
+            {'id': i, 'name': f'User {i}', 'email': f'user{i}@example.com', 'status': i % 3 != 0} 
+            for i in range(1, 235)  # 234 User insgesamt
+        ],
+        'products': [
+            {'id': i, 'name': f'Product {i}', 'price': round(random.uniform(10, 1000), 2)} 
+            for i in range(1, 1246)  # 1245 Produkte
+        ],
+        'orders': [
+            {'id': i, 'user_id': random.randint(1, 234), 'total': round(random.uniform(50, 5000), 2)} 
+            for i in range(1, 4893)  # 4892 Bestellungen
+        ],
+        'categories': [
+            {'id': i, 'name': f'Category {i}'} 
+            for i in range(1, 29)  # 28 Kategorien
+        ]
+    }
+    
+    # SQL-Abfrage analysieren und entsprechende Mock-Ergebnisse zurückgeben
+    
+    # COUNT(*) FROM users
+    if "COUNT(*)" in sql_query and "FROM users" in sql_query:
+        if "WHERE status = 1" in sql_query:
+            # Aktive Benutzer zählen
+            active_users = len([u for u in mock_data['users'] if u['status']])
+            return [{"count": active_users}]
+        
+        elif "WHERE status = 0" in sql_query:
+            # Inaktive Benutzer zählen
+            inactive_users = len([u for u in mock_data['users'] if not u['status']])
+            return [{"count": inactive_users}]
+            
+        elif "WHERE email IS NOT NULL" in sql_query:
+            # Benutzer mit E-Mail zählen
+            users_with_email = len([u for u in mock_data['users'] if u['email']])
+            return [{"count": users_with_email}]
+        
+        # Alle Benutzer zählen
+        return [{"count": len(mock_data['users'])}]
+    
+    # COUNT(*) FROM products
+    elif "COUNT(*)" in sql_query and "FROM products" in sql_query:
+        return [{"count": len(mock_data['products'])}]
+        
+    # AVG(price) FROM products
+    elif "AVG(price)" in sql_query and "FROM products" in sql_query:
+        avg_price = sum(p['price'] for p in mock_data['products']) / len(mock_data['products'])
+        return [{"average_price": round(avg_price, 2)}]
+        
+    # MAX(price) FROM products
+    elif "MAX(price)" in sql_query and "FROM products" in sql_query:
+        max_price = max(p['price'] for p in mock_data['products'])
+        return [{"max_price": max_price}]
+        
+    # MIN(price) FROM products
+    elif "MIN(price)" in sql_query and "FROM products" in sql_query:
+        min_price = min(p['price'] for p in mock_data['products'])
+        return [{"min_price": min_price}]
+        
+    # COUNT(*) FROM orders
+    elif "COUNT(*)" in sql_query and "FROM orders" in sql_query:
+        return [{"count": len(mock_data['orders'])}]
+    
+    # SELECT * FROM users LIMIT
+    elif "FROM users" in sql_query and ("LIMIT" in sql_query or "limit" in sql_query):
+        limit = 10  # Standardwert
+        
+        # Versuchen, den LIMIT-Wert zu extrahieren
+        limit_parts = sql_query.lower().split("limit")
+        if len(limit_parts) > 1:
+            try:
+                limit = int(limit_parts[1].strip())
+            except:
+                pass
+                
+        return mock_data['users'][:limit]
+    
+    # SELECT * FROM products LIMIT
+    elif "FROM products" in sql_query and ("LIMIT" in sql_query or "limit" in sql_query):
+        limit = 10  # Standardwert
+        
+        # Versuchen, den LIMIT-Wert zu extrahieren
+        limit_parts = sql_query.lower().split("limit")
+        if len(limit_parts) > 1:
+            try:
+                limit = int(limit_parts[1].strip())
+            except:
+                pass
+                
+        # Sortierung nach Preis
+        products = mock_data['products'].copy()
+        if "ORDER BY price DESC" in sql_query:
+            products.sort(key=lambda p: p['price'], reverse=True)
+        elif "ORDER BY price ASC" in sql_query:
+            products.sort(key=lambda p: p['price'])
+            
+        return products[:limit]
+    
+    # SELECT * FROM orders LIMIT
+    elif "FROM orders" in sql_query and ("LIMIT" in sql_query or "limit" in sql_query):
+        limit = 10  # Standardwert
+        
+        # Versuchen, den LIMIT-Wert zu extrahieren
+        limit_parts = sql_query.lower().split("limit")
+        if len(limit_parts) > 1:
+            try:
+                limit = int(limit_parts[1].strip())
+            except:
+                pass
+                
+        return mock_data['orders'][:limit]
+    
+    # Error message für unbekannte Abfragen
+    return [{"message": "Die Abfrage konnte nicht auf der Sample-Datenbank ausgeführt werden."}]
+
+def get_db_connection():
+    """Hilfsfunktion für Datenbankzugriff auf die SQLite-Datenbank des Backend-Servers"""
+    import sqlite3
+    # Pfad zur SQLite-Datenbank des Backend
+    db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend/data/mole.db')
+    
+    if not os.path.exists(db_path):
+        logger.error(f"Database file not found at {db_path}")
+        return None
+        
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def analyze_query(query):
     """
-    Analyze a natural language query and provide a response.
-    This is a placeholder - in a real implementation, 
-    this would use NLP and database connections.
+    Legacy-Funktion für Kompatibilität
+    Diese Funktion wird nur verwendet, wenn der neue AI-Abfragemechanismus fehlschlägt
     """
     query = query.lower()
     
@@ -611,7 +1155,7 @@ def analyze_query(query):
         elif 'inactive' in query or 'least' in query:
             return "There are 57 users who haven't logged in for over 90 days. The longest inactive account has been dormant for 412 days."
         else:
-            return "There are currently 342 active user accounts with an average of 24 interactions per user per week."
+            return "There are currently 234 users in the database with an average of 24 interactions per user per week."
     
     # Transaction/order queries
     elif 'transaction' in query or 'order' in query or 'payment' in query:
@@ -673,6 +1217,24 @@ def create_database():
     except Exception as e:
         logger.error(f"Error creating database: {str(e)}")
         return jsonify({'success': False, 'message': f'Server error: {str(e)}'})
+
+def get_sample_database():
+    """
+    Gibt die Konfiguration für die Sample-Datenbank zurück
+    """
+    try:
+        # Sample-Datenbank-Konfiguration
+        return {
+            'type': 'sample',
+            'isSample': True,
+            'name': 'Sample Database',
+            'engine': 'sample',
+            'description': 'Eine Beispieldatenbank für Demo-Zwecke',
+            'id': 'sample-db'
+        }
+    except Exception as e:
+        logger.error(f"Error getting sample database: {str(e)}")
+        return None
 
 if __name__ == "__main__":
     sync_manager = DatabaseSync()

@@ -133,16 +133,31 @@ const DatabaseDetails = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // In a real app, this would be an API call
-        await new Promise(resolve => setTimeout(resolve, 800));
         
-        // Mock data for demonstration
-        const typeKey = dbType ? dbType.toLowerCase() : 'postgresql'; // Fallback to PostgreSQL if dbType is undefined
-        const dbDetails = generateMockDatabaseDetails(typeKey, dbName);
+        // Check if we have a database ID in the URL (instead of type/name)
+        let databaseInfo = null;
+        
+        if (dbName && !isNaN(dbName)) {
+          // dbName might actually be an ID
+          const storedDatabases = localStorage.getItem('mole_real_databases');
+          const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+          databaseInfo = realDatabases.find(db => db.id === dbName);
+        }
+        
+        if (!databaseInfo) {
+          // Fallback to mock data for demonstration
+          const typeKey = dbType ? dbType.toLowerCase() : 'postgresql';
+          databaseInfo = generateMockDatabaseDetails(typeKey, dbName);
+        }
+        
+        // Use the actual database connection information
+        setDatabase(databaseInfo);
+        
+        // For tables and structure, we would normally make a separate API call here
+        // For now, we'll use mock data
         const tablesList = generateMockTables();
         const structureData = generateMockStructure();
         
-        setDatabase(dbDetails);
         setTables(tablesList);
         setStructure(structureData);
         setError(null);

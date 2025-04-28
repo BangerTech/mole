@@ -1,7 +1,14 @@
 import axios from 'axios';
 
-// API Base URL
-const API_URL = 'http://backend:3001/api/databases';
+// Dynamically determine the API base URL based on the current hostname
+// This ensures the app works on any IP address or domain name
+const getApiBaseUrl = () => {
+  const hostname = window.location.hostname;
+  return `http://${hostname}:3001/api/databases`;
+};
+
+// API Base URL - dynamically determined
+const API_URL = getApiBaseUrl();
 
 /**
  * Service for database connection management
@@ -187,6 +194,26 @@ class DatabaseService {
         success: false, 
         message: error.response?.data?.message || 'Failed to test connection'
       };
+    }
+  }
+
+  /**
+   * Synchronize between mole_real_databases and mole_database_connections
+   * This ensures that both localStorage items are kept in sync
+   */
+  syncStoredDatabases() {
+    try {
+      // Get databases from both storage locations
+      const storedRealDatabases = localStorage.getItem('mole_real_databases');
+      const realDatabases = storedRealDatabases ? JSON.parse(storedRealDatabases) : [];
+      
+      // Ensure all real databases are also stored in mole_database_connections
+      localStorage.setItem('mole_database_connections', JSON.stringify(realDatabases));
+      
+      return true;
+    } catch (error) {
+      console.error('Error synchronizing databases:', error);
+      return false;
     }
   }
 }

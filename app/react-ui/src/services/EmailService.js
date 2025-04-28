@@ -1,7 +1,14 @@
 import axios from 'axios';
 
-// API Base URL
-const API_URL = 'http://backend:3001/api/email';
+// Dynamically determine the API base URL based on the current hostname
+// This ensures the app works on any IP address or domain name
+const getApiBaseUrl = () => {
+  const hostname = window.location.hostname;
+  return `http://${hostname}:3001/api/email`;
+};
+
+// API Base URL - dynamically determined
+const API_URL = getApiBaseUrl();
 
 /**
  * Service für die Verwaltung von E-Mail-Funktionalitäten

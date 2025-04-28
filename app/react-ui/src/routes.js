@@ -16,6 +16,7 @@ export const routes = [
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'databases', element: <DatabaseList /> },
       { path: 'database/:dbType/:dbName', element: <DatabaseDetails /> },
+      { path: 'database/id/:dbName', element: <DatabaseDetails /> },
       { path: 'database/:dbType/:dbName/tables', element: <TableList /> },
       { path: 'database/:dbType/:dbName/table/:table', element: <TableView /> },
       { path: 'query/:type/:database', element: <QueryEditor /> },

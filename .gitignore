@@ -26,6 +26,7 @@ yarn-error.log
 # Cursor editor configuration
 .cursor/
 /home/mole/mole/.cursor/rules/documentation.mdc
+/home/mole/mole/mole.md
 
 # Logs
 logs

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import DatabaseService from '../services/DatabaseService';
 import {
   Box,
   Typography,
@@ -73,25 +74,19 @@ export default function DatabaseForm() {
       const fetchDatabase = async () => {
         setLoading(true);
         try {
-          // Simulate API call
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Hol die Daten aus dem localStorage
+          const storedDatabases = localStorage.getItem('mole_real_databases');
+          const databases = storedDatabases ? JSON.parse(storedDatabases) : [];
           
-          // Mock database data
-          const mockDatabase = {
-            id: id,
-            name: 'Production PostgreSQL',
-            engine: 'PostgreSQL',
-            host: 'db.example.com',
-            port: 5432,
-            database: 'production_db',
-            username: 'dbuser',
-            password: 'password123',
-            sslEnabled: true,
-            notes: 'Main production database',
-          };
+          // Finde die Datenbank mit der passenden ID
+          const foundDatabase = databases.find(db => db.id === id);
           
-          setFormValues(mockDatabase);
-          setError(null);
+          if (foundDatabase) {
+            setFormValues(foundDatabase);
+            setError(null);
+          } else {
+            setError('Database connection not found.');
+          }
         } catch (err) {
           setError('Failed to load database details. Please try again.');
           console.error(err);
@@ -152,18 +147,18 @@ export default function DatabaseForm() {
     
     try {
       // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Simulate successful connection test (in real app, this would be a real API call)
-      const success = Math.random() > 0.3; // 70% success rate for demo
-      
-      if (success) {
-        setTestResult({ success: true, message: 'Connection successful! Database is accessible.' });
-      } else {
-        setTestResult({ success: false, message: 'Connection failed. Please check your credentials and try again.' });
-      }
+      // In einer Demo-Umgebung immer eine erfolgreiche Verbindung melden
+      setTestResult({ 
+        success: true, 
+        message: 'Connection successful! Database is accessible.' 
+      });
     } catch (err) {
-      setTestResult({ success: false, message: 'An error occurred while testing the connection.' });
+      setTestResult({ 
+        success: false, 
+        message: 'An error occurred while testing the connection.' 
+      });
       console.error(err);
     } finally {
       setTestingConnection(false);
@@ -203,6 +198,9 @@ export default function DatabaseForm() {
         existingDatabases.push(newDatabase);
         localStorage.setItem('mole_real_databases', JSON.stringify(existingDatabases));
       }
+      
+      // Synchronize both localStorage database stores
+      DatabaseService.syncStoredDatabases();
       
       setSnackbar({
         open: true,

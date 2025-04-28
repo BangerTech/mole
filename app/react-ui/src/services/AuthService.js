@@ -1,7 +1,14 @@
 import axios from 'axios';
 
-// API Basis URL
-const API_URL = 'http://backend:3001/api/auth';
+// Dynamically determine the API base URL based on the current hostname
+// This ensures the app works on any IP address or domain name
+const getApiBaseUrl = () => {
+  const hostname = window.location.hostname;
+  return `http://${hostname}:3001/api/auth`;
+};
+
+// API Basis URL - dynamically determined
+const API_URL = getApiBaseUrl();
 
 // Token-Speicherung in localStorage
 const TOKEN_KEY = 'mole_auth_token';

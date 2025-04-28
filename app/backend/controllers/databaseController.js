@@ -7,8 +7,9 @@ const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2/promise');
 const { Pool } = require('pg');
+const databaseService = require('../services/databaseService');
 
-// Path for storing database connections in a JSON file
+// Path for storing database connections in a JSON file (for migration/fallback)
 const DB_FILE_PATH = path.join(__dirname, '../data/database_connections.json');
 
 // Ensure the data directory exists
@@ -19,46 +20,77 @@ const ensureDataDirExists = () => {
   }
 };
 
-// Initialize database file if it doesn't exist
-const initDbFile = () => {
-  ensureDataDirExists();
-  if (!fs.existsSync(DB_FILE_PATH)) {
-    fs.writeFileSync(DB_FILE_PATH, JSON.stringify([]));
+// Migration helpers
+const migrateLegacyData = async () => {
+  try {
+    // Check if legacy JSON file exists
+    if (fs.existsSync(DB_FILE_PATH)) {
+      const legacyData = JSON.parse(fs.readFileSync(DB_FILE_PATH, 'utf8'));
+      
+      if (legacyData && legacyData.length > 0) {
+        console.log(`Migrating ${legacyData.length} legacy database connections...`);
+        
+        const db = await getDbConnection();
+        
+        // For each legacy connection, insert into the database if not exists
+        for (const connection of legacyData) {
+          // Check if connection already exists in the database
+          const existingConnection = await db.get(
+            'SELECT id FROM database_connections WHERE id = ?',
+            connection.id
+          );
+          
+          if (!existingConnection) {
+            // Insert the connection
+            await db.run(
+              `INSERT INTO database_connections
+               (id, name, engine, host, port, database, username, password, ssl_enabled, notes, isSample, created_at, last_connected, encrypted_password)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                connection.id,
+                connection.name,
+                connection.engine,
+                connection.host,
+                connection.port,
+                connection.database,
+                connection.username,
+                connection.password, // Keep original password for backward compatibility
+                connection.ssl_enabled ? 1 : 0,
+                connection.notes || '',
+                connection.isSample ? 1 : 0,
+                connection.created_at || new Date().toISOString(),
+                connection.last_connected || null,
+                connection.password ? encrypt(connection.password) : null // Store encrypted version
+              ]
+            );
+          }
+        }
+        
+        await db.close();
+        
+        // Rename the JSON file to indicate it's been migrated
+        fs.renameSync(DB_FILE_PATH, `${DB_FILE_PATH}.migrated`);
+        console.log('Legacy data migration completed.');
+      }
+    }
+  } catch (error) {
+    console.error('Error migrating legacy data:', error);
   }
 };
 
-// Load connections from file
-const loadConnections = () => {
-  try {
-    initDbFile();
-    const data = fs.readFileSync(DB_FILE_PATH, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error loading database connections:', error);
-    return [];
-  }
-};
-
-// Save connections to file
-const saveConnections = (connections) => {
-  try {
-    ensureDataDirExists();
-    fs.writeFileSync(DB_FILE_PATH, JSON.stringify(connections, null, 2));
-    return true;
-  } catch (error) {
-    console.error('Error saving database connections:', error);
-    return false;
-  }
-};
+// Run migration on module initialization
+migrateLegacyData().catch(err => {
+  console.error('Migration error:', err);
+});
 
 /**
  * Get all database connections
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-exports.getAllConnections = (req, res) => {
+exports.getAllConnections = async (req, res) => {
   try {
-    const connections = loadConnections();
+    const connections = await databaseService.getAllConnections();
     res.status(200).json(connections);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching database connections', error: error.message });
@@ -70,10 +102,9 @@ exports.getAllConnections = (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-exports.getConnectionById = (req, res) => {
+exports.getConnectionById = async (req, res) => {
   try {
-    const connections = loadConnections();
-    const connection = connections.find(conn => conn.id.toString() === req.params.id);
+    const connection = await databaseService.getConnectionById(req.params.id);
     
     if (!connection) {
       return res.status(404).json({ message: 'Database connection not found' });
@@ -90,22 +121,9 @@ exports.getConnectionById = (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-exports.createConnection = (req, res) => {
+exports.createConnection = async (req, res) => {
   try {
-    const connections = loadConnections();
-    
-    // Create new connection with generated ID
-    const newConnection = {
-      ...req.body,
-      id: Date.now(),
-      created_at: new Date().toISOString(),
-      last_connected: null
-    };
-    
-    // Add to list and save
-    connections.push(newConnection);
-    saveConnections(connections);
-    
+    const newConnection = await databaseService.createConnection(req.body);
     res.status(201).json(newConnection);
   } catch (error) {
     res.status(500).json({ message: 'Error creating database connection', error: error.message });
@@ -117,30 +135,14 @@ exports.createConnection = (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-exports.updateConnection = (req, res) => {
+exports.updateConnection = async (req, res) => {
   try {
-    const connections = loadConnections();
-    const id = req.params.id;
-    
-    // Find the connection index
-    const index = connections.findIndex(conn => conn.id.toString() === id);
-    
-    if (index === -1) {
-      return res.status(404).json({ message: 'Database connection not found' });
-    }
-    
-    // Update the connection
-    const updatedConnection = {
-      ...connections[index],
-      ...req.body,
-      updated_at: new Date().toISOString()
-    };
-    
-    connections[index] = updatedConnection;
-    saveConnections(connections);
-    
+    const updatedConnection = await databaseService.updateConnection(req.params.id, req.body);
     res.status(200).json(updatedConnection);
   } catch (error) {
+    if (error.message === 'Database connection not found') {
+      return res.status(404).json({ message: 'Database connection not found' });
+    }
     res.status(500).json({ message: 'Error updating database connection', error: error.message });
   }
 };
@@ -150,24 +152,14 @@ exports.updateConnection = (req, res) => {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-exports.deleteConnection = (req, res) => {
+exports.deleteConnection = async (req, res) => {
   try {
-    let connections = loadConnections();
-    const id = req.params.id;
-    
-    // Check if connection exists
-    const connectionExists = connections.some(conn => conn.id.toString() === id);
-    
-    if (!connectionExists) {
-      return res.status(404).json({ message: 'Database connection not found' });
-    }
-    
-    // Filter out the connection to delete
-    connections = connections.filter(conn => conn.id.toString() !== id);
-    saveConnections(connections);
-    
+    await databaseService.deleteConnection(req.params.id);
     res.status(200).json({ message: 'Database connection deleted successfully' });
   } catch (error) {
+    if (error.message === 'Database connection not found') {
+      return res.status(404).json({ message: 'Database connection not found' });
+    }
     res.status(500).json({ message: 'Error deleting database connection', error: error.message });
   }
 };
@@ -228,11 +220,12 @@ exports.testConnection = async (req, res) => {
     else {
       res.status(400).json({ success: false, message: `Unsupported database engine: ${engine}` });
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Connection test error:', error);
     res.status(500).json({ 
       success: false, 
-      message: `Failed to connect: ${error.message}` 
+      message: error.message || 'Failed to connect to database' 
     });
   }
 }; 

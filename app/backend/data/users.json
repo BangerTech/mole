@@ -2,7 +2,7 @@
   {
     "id": 1,
     "email": "admin@example.com",
-    "password": "$2a$10$dvEVEZVJTQe2mL/YP8XRtuQKnpNl1JyLWUADKe5lhTpYwcLR8bYhy",
+    "password": "$2a$10$ZNaae9CHLvEzbYea6IwZwOFZ/YOmHHyZFM3HLQEAgd9gP7FiDZbQ.",
     "name": "Administrator",
     "role": "admin",
     "createdAt": "2023-01-15T00:00:00.000Z"

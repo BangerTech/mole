@@ -31,7 +31,7 @@ Mole Database Manager ist eine moderne Web-Anwendung zur Verwaltung und Synchron
 
 ### Systemdatenbank
 
-Die Mole-Anwendung verwendet eine interne Systemdatenbank zur Speicherung von Konfigurationen und Verbindungsinformationen.
+Die Mole-Anwendung verwendet eine interne Systemdatenbank zur Speicherung von Konfigurationen und Verbindungsinformationen. Die Daten werden in einer SQLite-Datenbank gespeichert (mole.db), die im Backend-Datenverzeichnis abgelegt ist.
 
 #### Tabelle: database_connections
 
@@ -136,6 +136,98 @@ ALTER TABLE database_connections ADD COLUMN IF NOT EXISTS isSample BOOLEAN DEFAU
 CREATE INDEX IF NOT EXISTS idx_is_sample ON database_connections(isSample);
 ```
 
+### Migration 003 - Umstellung auf SQLite-Datenbank (2024-08-01)
+
+In dieser Migration wurden die Datenbankverbindungen von einer JSON-Datei zu einer SQLite-Datenbank migriert. Folgende Änderungen wurden vorgenommen:
+
+1. Implementierung eines SQLite-Datenbank-Modells in `/app/backend/models/database.js`
+2. Automatische Migration vorhandener Datenbankverbindungen aus `database_connections.json` in die SQLite-Datenbank
+3. Aktualisierung des DatabaseController für SQLite-Operationen
+4. Beibehaltung der Abwärtskompatibilität für ältere API-Endpunkte
+
+Die SQLite-Datenbank bietet folgende Vorteile:
+- Verbesserte Datenintegrität durch ACID-Eigenschaften
+- Bessere Skalierbarkeit für größere Datenmengen
+- Einfachere Abfrage- und Filtermöglichkeiten durch SQL
+- Vorbereitung für zukünftige Erweiterungen wie Benutzerauthentifizierung
+
+Die Migration läuft automatisch ab, wenn das Backend gestartet wird. Vorhandene Verbindungen in der JSON-Datei werden in die SQLite-Datenbank übertragen und die JSON-Datei wird mit der Erweiterung `.migrated` umbenannt.
+
+```sql
+-- SQLite-Tabellendefinitionen, wie in models/database.js implementiert
+CREATE TABLE IF NOT EXISTS database_connections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  engine TEXT NOT NULL,
+  host TEXT,
+  port INTEGER,
+  database TEXT NOT NULL,
+  username TEXT,
+  password TEXT,
+  ssl_enabled BOOLEAN DEFAULT 0,
+  notes TEXT,
+  isSample BOOLEAN DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_connected DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS sync_tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  source_connection_id INTEGER,
+  target_connection_id INTEGER,
+  tables TEXT,
+  schedule TEXT,
+  last_sync DATETIME,
+  enabled BOOLEAN DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (source_connection_id) REFERENCES database_connections(id),
+  FOREIGN KEY (target_connection_id) REFERENCES database_connections(id)
+);
+
+CREATE TABLE IF NOT EXISTS sync_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER,
+  start_time DATETIME,
+  end_time DATETIME,
+  status TEXT,
+  message TEXT,
+  rows_synced INTEGER,
+  FOREIGN KEY (task_id) REFERENCES sync_tasks(id)
+);
+
+-- Index für schnellere Abfragen nach Demo-Datenbanken
+CREATE INDEX IF NOT EXISTS idx_is_sample ON database_connections(isSample);
+```
+
+### Migration 004 - ORM-Integration und Datensicherheit (2024-08-05)
+
+Diese Migration führt Sequelize ORM für verbesserte Datenbankinteraktionen ein und erhöht die Sicherheit des Systems. Die Änderungen umfassen:
+
+1. **Sequelize ORM-Integration**
+   - Verbesserte Datenbankmodellierung mit Typsicherheit und Validierung
+   - Unterstützung für mehrere Datenbanktypen (SQLite, MySQL, PostgreSQL)
+   - Strukturierte Datenmodelle mit klaren Beziehungen
+
+2. **Verbesserte Sicherheit**
+   - AES-256-CBC Verschlüsselung für sensible Verbindungsdaten
+   - Verschlüsselungshilfsprogramme für konsistenten Sicherheitsansatz
+   - Sichere Handhabung von Datenbankpasswörtern
+
+3. **Service-Layer-Architektur**
+   - Klare Trennung von Zuständigkeiten durch Service-Schicht
+   - Verbesserte Wartbarkeit und Testbarkeit
+   - Reduzierung von Geschäftslogik in Controllern
+
+Die Migration erhält die Kompatibilität mit der bestehenden SQLite-Implementierung während der Übergangsphase, sodass ein nahtloser Wechsel zur neuen Architektur möglich ist.
+
+```sql
+-- Erweiterte Tabellenstruktur für ORM-Unterstützung
+ALTER TABLE database_connections ADD COLUMN IF NOT EXISTS updated_at DATETIME;
+ALTER TABLE database_connections ADD COLUMN IF NOT EXISTS encrypted_password TEXT;
+```
+
 ## Frontend-Komponenten
 
 ### Hauptkomponenten
@@ -224,7 +316,35 @@ Der KI-Assistent ermöglicht die natürlichsprachliche Abfrage von Datenbanken u
    - Konvertierung in SQL oder andere datenbankspezifische Abfragen
    - Ausführung der generierten Abfragen und Rückgabe strukturierter Ergebnisse
 
-3. **KI-Konfigurationsschnittstelle**
+3. **Verbesserte NL-zu-SQL Funktionalität** (Version 0.4.2)
+   - Vollständige Unterstützung für verschiedene Datenbanktypen:
+     - Erweiterte Muster-Erkennung für PostgreSQL-Datenbanken
+     - MySQL-spezifische Abfragemusterunterstützung
+     - SQLite-Unterstützung für lokale Datenbanken
+   - Intelligente Analyse der natürlichen Sprache:
+     - Erkennung von Datenbankabfragekontexten mit natürlicher Sprache
+     - Extraktion von Tabellennamen und Spalten aus natürlichersprachlichen Anfragen
+     - Kontextbasierte SQL-Generierung basierend auf der Datenbank-Engine
+   - Sample-Datenbank mit umfangreichen Beispieldaten:
+     - Vordefinierte Abfragen für bekannte Muster
+     - Generierung simulierter Antworten für konsistente Benutzererfahrung
+     - Automatische Fallback-Nutzung bei fehlender Datenbankangabe
+
+4. **Optimierte Datenbankabfrage-Ausführung** (Version 0.4.2)
+   - Engine-spezifische Verbindungslogik:
+     - Optimierte PostgreSQL-Verbindungen mit psycopg2
+     - Verbesserte MySQL-Verbindungen mit error-handling
+     - SQLite-Unterstützung für lokale Datenbanken
+   - Erweiterte Fehlerbehandlung und Logging:
+     - Detaillierte Fehlerprotokolle für Debugging
+     - Benutzerfreundliche Fehlermeldungen
+     - Konsistente Ergebnisformatierung für verschiedene Abfragetypen
+   - Optimierte Ergebnisdarstellung:
+     - Formatierte Ergebnisse für bessere Lesbarkeit
+     - Tabellarische Darstellung für mehrere Ergebniszeilen
+     - Spezielle Formatierung für aggregierte Ergebnisse (COUNT, AVG, MIN, MAX)
+
+5. **KI-Konfigurationsschnittstelle**
    - Teil der Einstellungsseite
    - Auswahl und Konfiguration verschiedener KI-Modelle:
      - **OpenAI** (GPT-3.5, GPT-4) - erfordert API-Schlüssel
@@ -267,6 +387,32 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
 
 ## Änderungsprotokoll
 
+### Version 0.4.3 (in Entwicklung)
+- Behebung eines wichtigen Fehlers bei der Anzeige von Datenbankverbindungen:
+  - Korrektur der Navigation von der Datenbankübersicht zur Detailansicht mit erweitertem Routing-Format (`/database/id/:id`)
+  - Implementierung der Datenbanksuche nach ID in der DatabaseDetails-Komponente
+  - Behebung der Konsistenzprobleme zwischen verschiedenen localStorage-Einträgen
+  - Hinzufügung einer Synchronisierungsfunktion für localStorage-Datenbankinformationen
+  - Sicherstellung der korrekten Anzeige von echten Datenbankverbindungen anstelle von Sample-Daten
+- API-URL-Verbesserungen:
+  - Dynamische Generierung der API-Basis-URL basierend auf dem aktuellen Hostnamen
+  - Verbesserung der Anwendungsportabilität zwischen verschiedenen Umgebungen
+
+### Version 0.4.2 (in Entwicklung)
+- Umfangreiche Verbesserungen am KI-Assistenten:
+  - Vollständige Überarbeitung der natürlichsprachlichen Übersetzungsfunktion (`natural_language_to_sql`)
+  - Optimierte SQL-Abfrageausführung für verschiedene Datenbanktypen
+  - Verbesserte Fehlerbehandlung und Logging
+  - Intelligentere Erkennung von Abfragemustern in natürlicher Sprache
+  - Erweiterte Unterstützung für PostgreSQL, MySQL und SQLite Datenbanken
+  - Neue `get_sample_query_results` Funktion für konsistente Demo-Datenbankergebnisse
+  - Verbesserte Formatierung von KI-Antworten für bessere Lesbarkeit
+- API-Endpunkt-Überarbeitung:
+  - Modernisierte REST-API Struktur für `/api/ai/query`
+  - Verbesserte Parameter-Validierung
+  - Erweiterte Ergebnis-Rückgabestruktur mit formatierter Anzeige und Rohdaten
+  - Konsistente Fehlerbehandlung für Frontend-Integration
+
 ### Version 0.4.1 (in Entwicklung)
 - Implementierung der neuen Datenbankerstellen-Funktionalität
   - Neue DatabaseCreate-Komponente für die Erstellung eigener Datenbanken
@@ -277,6 +423,18 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
   - Neu gestaltete Datenbankstatistik-Karte mit zwei-Button-Design
   - Farbliche Unterscheidung zwischen Verbinden (blau) und Erstellen (grün)
   - Verbesserte visuelle Hierarchie für wichtige Aktionen
+- Umstellung der Datenbankverbindungsspeicherung von JSON auf SQLite:
+  - Implementierung eines SQLite-Datenbankmodells zur Speicherung von Verbindungen
+  - Automatische Migration vorhandener Verbindungen aus JSON
+  - Verbesserte Datenpersistenz und -integrität
+  - Abwärtskompatibilität mit älteren API-Endpunkten
+  - Vorbereitung für erweiterte Abfrage- und Filtermöglichkeiten
+- Modernisierung der Datenbankarchitektur:
+  - Integration von Sequelize ORM für robuste Datenbankinteraktionen
+  - Implementierung eines Service-Layers für bessere Trennung der Zuständigkeiten
+  - Verbesserte Sicherheit durch Verschlüsselung sensibler Verbindungsdaten
+  - Unterstützung für mehrere Datenbanktypen mit einheitlicher API
+  - Verbesserte Fehlerbehandlung und Validierung
 
 ### Version 0.4.0 (aktuell)
 - Integration eines KI-basierten Assistenten für natürlichsprachliche Datenbankabfragen
@@ -409,10 +567,18 @@ mole/
 │   │   │   ├── databaseController.js  # Controller für Datenbankverbindungsverwaltung
 │   │   │   ├── emailController.js     # Controller für E-Mail-Funktionalität
 │   │   │   └── authController.js      # Controller für Authentifizierung
+│   │   ├── models/            # Datenbankmodelle 
+│   │   │   ├── database.js            # SQLite-Datenbankverbindung und Initialisierung
+│   │   │   ├── DatabaseConnection.js  # ORM-Modell für Datenbankverbindungen
+│   │   │   └── Connection.js          # Alternativer Verbindungstyp
 │   │   ├── routes/            # API-Routen
 │   │   │   ├── databaseRoutes.js      # Routen für Datenbankoperationen 
 │   │   │   ├── emailRoutes.js         # Routen für E-Mail-Funktionalität
 │   │   │   └── authRoutes.js          # Routen für Authentifizierung
+│   │   ├── services/          # Backend-Services
+│   │   │   └── databaseService.js     # Service für Datenbankoperationen
+│   │   ├── utils/             # Hilfsfunktionen
+│   │   │   └── encryptionUtil.js      # Ver- und Entschlüsselungsfunktionen
 │   │   └── data/              # Datendateien für die Persistenzschicht
 │   │       └── database_connections.json # Gespeicherte Datenbankverbindungen
 │   ├── themes/                # Theme-Definitionen (Verzeichnis für zukünftige Nutzung)
@@ -435,9 +601,10 @@ mole/
 Diese Struktur zeigt die Organisation des Projekts mit Fokus auf eine klare Trennung der Komponenten:
 
 1. **Frontend (react-ui)**: Enthält die React-basierte Benutzeroberfläche mit Seiten, Komponenten und Layouts.
-2. **Backend (db-sync)**: Enthält den Python-basierten Synchronisierungsdienst mit Konfigurationen und Skripten.
-3. **Datenbank-Hilfsmittel (db-creation)**: Enthält Skripte zur Datenbankerstellung und -verwaltung.
-4. **Konfiguration und Dokumentation**: Enthält Docker-Compose, Dokumentationsdateien und Konfigurationen.
+2. **Backend (Node.js)**: Enthält den Express-basierten API-Server mit Controllern, Modellen und Routen.
+3. **Sync-Service (db-sync)**: Enthält den Python-basierten Synchronisierungsdienst mit Konfigurationen und Skripten.
+4. **Datenbank-Hilfsmittel (db-creation)**: Enthält Skripte zur Datenbankerstellung und -verwaltung.
+5. **Konfiguration und Dokumentation**: Enthält Docker-Compose, Dokumentationsdateien und Konfigurationen.
 
 Die Struktur ermöglicht eine klare Trennung der Verantwortlichkeiten und erleichtert die Wartung und Erweiterung der Anwendung. 
 
@@ -449,35 +616,21 @@ Die Anwendung verwendet mehrere Service-Klassen für die Kommunikation mit dem B
    - Verwaltet die Authentifizierung und Benutzersitzungen
    - Führt Login, Logout und Registrierung durch
    - Speichert Tokens im LocalStorage und fügt sie automatisch zu API-Anfragen hinzu
+   - Verwendet dynamisch generierte API-URLs basierend auf dem aktuellen Hostnamen
 
 2. **EmailService**
    - Verwaltet E-Mail-bezogene Funktionen
    - Konfiguriert SMTP-Einstellungen für E-Mail-Benachrichtigungen
    - Testet SMTP-Verbindungen und sendet Test-E-Mails
+   - Verwendet dynamisch generierte API-URLs basierend auf dem aktuellen Hostnamen
 
 3. **DatabaseService**
    - Kommuniziert mit der Backend-API für Datenbankverbindungen
    - Führt CRUD-Operationen für Datenbankverbindungen durch
    - Bietet Fallback-Funktionalität mit LocalStorage, wenn die API nicht erreichbar ist
    - Test-Verbindungsfunktionalität für Datenbankverbindungen
-
-### Wichtiger Hinweis: API Route Mismatch
-
-Der DatabaseService verwendet in der Frontend-Implementierung folgende API-Endpunkte:
-- `GET /api/databases/connections` - Alle Datenbankverbindungen abrufen
-- `POST /api/databases/connections` - Neue Datenbankverbindung speichern
-- `PUT /api/databases/connections/:id` - Datenbankverbindung aktualisieren
-- `DELETE /api/databases/connections/:id` - Datenbankverbindung löschen
-- `POST /api/databases/test-connection` - Datenbankverbindung testen
-
-Allerdings sind die tatsächlichen Backend-Endpunkte (in server.js und databaseRoutes.js) wie folgt konfiguriert:
-- `GET /api/databases` - Alle Datenbankverbindungen abrufen
-- `POST /api/databases` - Neue Datenbankverbindung speichern
-- `PUT /api/databases/:id` - Datenbankverbindung aktualisieren
-- `DELETE /api/databases/:id` - Datenbankverbindung löschen
-- `POST /api/databases/test` - Datenbankverbindung testen
-
-Diese Diskrepanz führt dazu, dass die Frontend-Anfragen fehlschlagen und auf den localStorage-Fallback zurückgreifen. Ein Update des Frontend-Services oder der Backend-Routen ist erforderlich, um diese Diskrepanz zu beheben.
+   - Verwendet dynamisch generierte API-URLs basierend auf dem aktuellen Hostnamen
+   - Bietet Synchronisierungsfunktion für localStorage-Datenbankeinträge
 
 ## Benutzerprofilsystem
 
@@ -523,21 +676,6 @@ Die Anwendung unterstützt moderne Browser-Funktionen:
 Diese Systeme verbessern die Sicherheit und Benutzerfreundlichkeit der Anwendung, indem sie sichere Authentifizierung und zeitnahe Benachrichtigungen bieten. 
 
 ## Bekannte Probleme und To-Dos
-
-### API Route Mismatch (✓ Behoben)
-Es bestand eine Diskrepanz zwischen den in `DatabaseService.js` verwendeten API-Endpunkten und den tatsächlich im Backend implementierten Routen, die wie folgt gelöst wurde:
-
-Das Backend wurde so konfiguriert, dass es beide Pfadformate unterstützt, wodurch sowohl die alte als auch die neue API-Struktur funktionieren:
-
-| Frontend (DatabaseService.js)             | Backend (databaseRoutes.js)           | Status |
-|------------------------------------------|--------------------------------------|--------|
-| GET /api/databases/connections           | GET /api/databases/connections        | ✓ Behoben |
-| POST /api/databases/connections          | POST /api/databases/connections       | ✓ Behoben |
-| PUT /api/databases/connections/:id       | PUT /api/databases/connections/:id    | ✓ Behoben |
-| DELETE /api/databases/connections/:id    | DELETE /api/databases/connections/:id | ✓ Behoben |
-| POST /api/databases/test-connection      | POST /api/databases/test-connection   | ✓ Behoben |
-
-Die Routenpriorität wurde angepasst, um sicherzustellen, dass spezifische Routen Vorrang vor parametrisierten Routen haben und somit keine Konflikte entstehen.
 
 ### Datenbankspeicherung
 Derzeit werden die Datenbankverbindungen im Backend als JSON-Datei und im Frontend als localStorage-Einträge gespeichert. Für eine robustere Lösung sollte eine relationale Datenbank verwendet werden, wie sie bereits im Datenbankschema definiert ist.
@@ -587,4 +725,16 @@ Die Frontend-Services konnten nicht mit dem Backend kommunizieren, da sie "local
 
 2. In Docker-Compose-Umgebungen können Container über ihre Service-Namen miteinander kommunizieren, was durch das gemeinsame Netzwerk `mole-network` ermöglicht wird.
 
-Diese Änderungen beheben die "Connection Refused"-Fehler, die auftraten, wenn die Frontend-Container versuchten, über "localhost" mit dem Backend zu kommunizieren. 
+Diese Änderungen beheben die "Connection Refused"-Fehler, die auftraten, wenn die Frontend-Container versuchten, über "localhost" mit dem Backend zu kommunizieren.
+
+### Aktualisierte Probleme
+
+#### Datenbankverbindungsanzeige (✓ Behoben)
+Bei Klick auf eine Datenbankverbindung wurde nicht die tatsächliche Datenbank angezeigt, sondern immer die Sample-Datenbank. Folgende Änderungen wurden vorgenommen:
+
+1. Die Navigation von der Datenbankübersicht zur Detailansicht wurde korrigiert, um das richtige Routing-Format zu verwenden (`/database/id/:id`)
+2. Die DatabaseDetails-Komponente wurde aktualisiert, um Datenbanken anhand ihrer ID zu suchen
+3. Eine Synchronisierungsfunktion für localStorage-Datenbankinformationen wurde hinzugefügt
+4. Die Anzeige von echten Datenbankverbindungen wurde sichergestellt
+
+Diese Änderungen ermöglichen die korrekte Anzeige der tatsächlichen Datenbankverbindungen statt der Sample-Datenbank. 

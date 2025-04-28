@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DatabaseService from '../services/DatabaseService';
 import {
   Box,
   Typography,
@@ -114,6 +115,9 @@ export default function DatabasesList() {
         const storedDatabases = localStorage.getItem('mole_real_databases');
         const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
         
+        // Synchronize both localStorage database stores
+        DatabaseService.syncStoredDatabases();
+        
         if (realDatabases.length > 0) {
           setHasRealDatabase(true);
           setDatabases(realDatabases);
@@ -177,7 +181,7 @@ export default function DatabasesList() {
   };
 
   const handleDatabaseClick = (id) => {
-    navigate(`/databases/${id}`);
+    navigate(`/database/id/${id}`);
   };
 
   const handleMenuOpen = (event, database) => {
@@ -204,6 +208,13 @@ export default function DatabasesList() {
   };
 
   const handleDeleteDatabase = () => {
+    // Sicherstellen, dass selectedDatabase nicht null ist
+    if (!selectedDatabase) {
+      console.error('No database selected for deletion');
+      setDeleteDialogOpen(false);
+      return;
+    }
+    
     // If it's a real database, update local storage
     if (!selectedDatabase.isSample) {
       const storedDatabases = localStorage.getItem('mole_real_databases');

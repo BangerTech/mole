@@ -54,6 +54,19 @@ const ProtectedRoute = ({ children }) => {
   return isAuthenticated ? children : null;
 };
 
+// Layout component to wrap all protected routes
+const DashboardLayout = ({ children, mode, sidebarOpen, toggleSidebar }) => {
+  return (
+    <div className={`app-container ${mode}`}>
+      <Sidebar open={sidebarOpen} />
+      <div className={`content ${!sidebarOpen ? 'content-full' : ''}`}>
+        <TopBar toggleSidebar={toggleSidebar} />
+        {children}
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [mode, setMode] = useState('dark');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -228,29 +241,148 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             
-            {/* Protected routes */}
+            {/* Protected routes with layout */}
             <Route path="/" element={
               <ProtectedRoute>
-                <div className={`app-container ${mode}`}>
-                  <Sidebar open={sidebarOpen} />
-                  <div className={`content ${!sidebarOpen ? 'content-full' : ''}`}>
-                    <TopBar toggleSidebar={toggleSidebar} />
-                    <Routes>
-                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                      <Route path="/dashboard" element={<Dashboard />} />
-                      <Route path="/databases" element={<DatabasesList />} />
-                      <Route path="/databases/create" element={<DatabaseForm />} />
-                      <Route path="/databases/new" element={<DatabaseCreate />} />
-                      <Route path="/databases/edit/:id" element={<DatabaseForm />} />
-                      <Route path="/databases/:id" element={<DatabaseDetails />} />
-                      <Route path="/database/:type/:name/tables" element={<DatabasesList />} />
-                      <Route path="/database/:type/:name/table/:table" element={<TableView />} />
-                      <Route path="/query" element={<QueryEditor />} />
-                      <Route path="/settings" element={<Settings />} />
-                      <Route path="/profile" element={<Profile />} />
-                    </Routes>
-                  </div>
-                </div>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <Navigate to="/dashboard" replace />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <Dashboard />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/databases" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <DatabasesList />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/databases/create" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <DatabaseForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/databases/new" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <DatabaseCreate />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/databases/edit/:id" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <DatabaseForm />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/databases/:id" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <DatabaseDetails />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/database/:type/:name/tables" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <DatabasesList />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/database/:type/:name/table/:table" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <TableView />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/query" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <QueryEditor />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <Settings />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <Profile />
+                </DashboardLayout>
               </ProtectedRoute>
             } />
 
