@@ -1,7 +1,7 @@
 # AI Provider Configuration
 
 # Default provider to use (if available)
-default_provider: "openai"
+default_provider: "sqlpal"
 
 # Provider configurations
 providers:
@@ -18,7 +18,7 @@ providers:
     api_key: ""
     
   llama:
-    enabled: true
+    enabled: false
     model_path: "/app/models/llama"
     
   sqlpal:

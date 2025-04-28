@@ -166,15 +166,16 @@ export default function Dashboard() {
   const [aiProvider, setAiProvider] = useState(null);
   const [availableProviders, setAvailableProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
+  const [activeDatabaseId, setActiveDatabaseId] = useState(null);
 
   // Dynamisch die API-Basis-URL basierend auf dem aktuellen Host ermitteln
   const getApiBaseUrl = () => {
     // Wenn die App auf dem gleichen Server wie die API läuft, können wir relative URLs verwenden
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'http://localhost:5000';
+      return 'http://localhost:3001/api';
     } 
-    // Ansonsten verwenden wir den aktuellen Hostname mit Port 5000
-    return `http://${window.location.hostname}:5000`;
+    // Ansonsten verwenden wir den aktuellen Hostname mit Port 3001
+    return `http://${window.location.hostname}:3001/api`;
   };
 
   const handleTabChange = (event, newValue) => {
@@ -216,7 +217,7 @@ export default function Dashboard() {
         const apiBaseUrl = getApiBaseUrl();
         
         // Get system info
-        const sysInfoResponse = await fetch(`${apiBaseUrl}/api/system/info`);
+        const sysInfoResponse = await fetch(`${apiBaseUrl}/system/info`);
         const sysInfoData = await sysInfoResponse.json();
         
         // Überprüfen Sie LocalStorage auf echte Datenbanken
@@ -264,7 +265,7 @@ export default function Dashboard() {
     const intervalId = setInterval(async () => {
       try {
         const apiBaseUrl = getApiBaseUrl();
-        const sysInfoResponse = await fetch(`${apiBaseUrl}/api/system/info`);
+        const sysInfoResponse = await fetch(`${apiBaseUrl}/system/info`);
         const sysInfoData = await sysInfoResponse.json();
         setSystemInfo(sysInfoData);
       } catch (error) {
@@ -490,7 +491,7 @@ export default function Dashboard() {
                           <Button 
                             variant="outlined" 
                             size="small"
-                            onClick={() => navigate(`/databases/${db.name}`)}
+                            onClick={() => navigate(`/database/id/${db.id || db.name}`)}
                           >
                             Connect
                           </Button>

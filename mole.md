@@ -699,6 +699,15 @@ Diese Systeme verbessern die Sicherheit und Benutzerfreundlichkeit der Anwendung
 
 ## Bekannte Probleme und To-Dos
 
+### Dashboard ESLint-Fehler (✓ Behoben)
+Bei der Produktion-Build des Frontend trat ein ESLint-Fehler auf, da die Variable `activeDatabaseId` in Dashboard.js nicht definiert war. Folgende Änderung wurde vorgenommen:
+
+1. Die fehlende State-Variable `activeDatabaseId` wurde zur Dashboard-Komponente hinzugefügt
+2. Initialisierung mit `useState(null)` für konsistente State-Verwaltung
+3. Der Fehler wurde behoben, sodass der Produktion-Build erfolgreich durchläuft
+
+Diese Änderung ermöglicht korrekte AI-Abfragen mit Datenbankkontext und behebt den ESLint-Fehler "activeDatabaseId is not defined".
+
 ### Datenbankspeicherung
 Derzeit werden die Datenbankverbindungen im Backend als JSON-Datei und im Frontend als localStorage-Einträge gespeichert. Für eine robustere Lösung sollte eine relationale Datenbank verwendet werden, wie sie bereits im Datenbankschema definiert ist.
 

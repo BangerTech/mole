@@ -201,7 +201,7 @@ const DatabaseList = () => {
   };
   
   const handleDatabaseClick = (database) => {
-    navigate(`/database/${database.type.toLowerCase()}/${database.name}`);
+    navigate(`/database/id/${database.id || database._id || database.name}`);
   };
   
   // Filtern der Datenbanken anhand des Suchbegriffs
