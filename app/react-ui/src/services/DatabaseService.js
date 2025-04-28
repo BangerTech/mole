@@ -205,10 +205,28 @@ class DatabaseService {
     try {
       // Get databases from both storage locations
       const storedRealDatabases = localStorage.getItem('mole_real_databases');
-      const realDatabases = storedRealDatabases ? JSON.parse(storedRealDatabases) : [];
+      const storedConnections = localStorage.getItem('mole_database_connections');
       
-      // Ensure all real databases are also stored in mole_database_connections
-      localStorage.setItem('mole_database_connections', JSON.stringify(realDatabases));
+      const realDatabases = storedRealDatabases ? JSON.parse(storedRealDatabases) : [];
+      const connections = storedConnections ? JSON.parse(storedConnections) : [];
+      
+      // Merge databases from both sources by ID
+      const mergedDatabases = [...realDatabases];
+      
+      // Add connections that don't exist in realDatabases
+      for (const conn of connections) {
+        if (!mergedDatabases.some(db => db.id.toString() === conn.id.toString())) {
+          mergedDatabases.push(conn);
+        }
+      }
+      
+      // Update both localStorage items with the merged data
+      localStorage.setItem('mole_real_databases', JSON.stringify(mergedDatabases));
+      localStorage.setItem('mole_database_connections', JSON.stringify(mergedDatabases));
+      
+      console.log('Database synchronization complete:', {
+        databaseCount: mergedDatabases.length
+      });
       
       return true;
     } catch (error) {

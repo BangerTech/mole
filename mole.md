@@ -412,10 +412,15 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
 ### Version 0.4.3 (in Entwicklung)
 - Behebung eines wichtigen Fehlers bei der Anzeige von Datenbankverbindungen:
   - Korrektur der Navigation von der Datenbankübersicht zur Detailansicht mit erweitertem Routing-Format (`/database/id/:id`)
-  - Implementierung der Datenbanksuche nach ID in der DatabaseDetails-Komponente
+  - Implementierung einer konsistenten URL-Struktur für Datenbankdetails
+  - Verbesserung der Datenbanksuche nach ID in der DatabaseDetails-Komponente
   - Behebung der Konsistenzprobleme zwischen verschiedenen localStorage-Einträgen
-  - Hinzufügung einer Synchronisierungsfunktion für localStorage-Datenbankinformationen
+  - Hinzufügung einer verbesserten Synchronisierungsfunktion für localStorage-Datenbankinformationen:
+    - Zusammenführung von Daten zwischen `mole_real_databases` und `mole_database_connections`
+    - Automatische Synchronisierung bei App-Initialisierung
+    - Korrektes Speichern von Datenbanken beim Anklicken in der Liste
   - Sicherstellung der korrekten Anzeige von echten Datenbankverbindungen anstelle von Sample-Daten
+  - Verbesserung des String-Vergleichs für Datenbank-IDs mit `toString()`-Konvertierung
 - API-URL-Verbesserungen:
   - Dynamische Generierung der API-Basis-URL basierend auf dem aktuellen Hostnamen
   - Verbesserung der Anwendungsportabilität zwischen verschiedenen Umgebungen

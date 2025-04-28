@@ -16,6 +16,7 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import { UserProvider } from './components/UserContext';
 import AuthService from './services/AuthService';
+import DatabaseService from './services/DatabaseService';
 import './App.css';
 
 // Create a theme context
@@ -70,6 +71,15 @@ const DashboardLayout = ({ children, mode, sidebarOpen, toggleSidebar }) => {
 function App() {
   const [mode, setMode] = useState('dark');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Synchronize databases in localStorage on app initialization
+  useEffect(() => {
+    // Sync database connections between different localStorage keys
+    DatabaseService.syncStoredDatabases();
+    
+    // Log the sync operation
+    console.log('Database storage synchronized on app initialization');
+  }, []);
 
   // Theme mode context value
   const themeMode = useMemo(
@@ -315,6 +325,30 @@ function App() {
             } />
             
             <Route path="/databases/:id" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <DatabaseDetails />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/database/:type/:name" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <DatabaseDetails />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/database/id/:dbName" element={
               <ProtectedRoute>
                 <DashboardLayout 
                   mode={mode} 

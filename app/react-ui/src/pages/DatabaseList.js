@@ -201,7 +201,23 @@ const DatabaseList = () => {
   };
   
   const handleDatabaseClick = (database) => {
-    navigate(`/database/id/${database.id || database._id || database.name}`);
+    navigate(`/database/id/${database.id}`);
+    
+    try {
+      const storedDatabases = localStorage.getItem('mole_real_databases');
+      let realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+      
+      const exists = realDatabases.some(db => db.id === database.id);
+      
+      if (!exists) {
+        realDatabases.push(database);
+        localStorage.setItem('mole_real_databases', JSON.stringify(realDatabases));
+      }
+      
+      localStorage.setItem('mole_database_connections', JSON.stringify(realDatabases));
+    } catch (error) {
+      console.error('Error saving database to localStorage:', error);
+    }
   };
   
   // Filtern der Datenbanken anhand des Suchbegriffs

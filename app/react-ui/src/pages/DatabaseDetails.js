@@ -135,20 +135,28 @@ const DatabaseDetails = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        console.log('Loading database details with params:', { dbType, dbName });
         
-        // Check if we have a database ID in the URL (instead of type/name)
         let databaseInfo = null;
         
+        // Check if we have database info in localStorage
+        const storedDatabases = localStorage.getItem('mole_real_databases');
+        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+        
+        // We're using the /database/id/:id route format, so dbName actually contains the ID
         if (dbName) {
-          // First check if this is an ID-based path
-          if (!isNaN(dbName)) {
-            const storedDatabases = localStorage.getItem('mole_real_databases');
-            const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-            databaseInfo = realDatabases.find(db => db.id === dbName);
-          }
+          // First try to find by exact ID match
+          databaseInfo = realDatabases.find(db => db.id.toString() === dbName.toString());
           
-          // If it's a sample database with ID 1
+          console.log('Database lookup by ID:', { 
+            lookingFor: dbName, 
+            found: !!databaseInfo,
+            availableDatabases: realDatabases
+          });
+          
+          // If it's the sample database with ID 1 and no real database was found
           if (dbName === '1' && !databaseInfo) {
+            console.log('Loading sample database');
             databaseInfo = {
               id: '1',
               name: 'Sample Database',
@@ -170,7 +178,17 @@ const DatabaseDetails = () => {
           }
         }
         
+        // If still no database found and using the old /database/:type/:id format
+        if (!databaseInfo && dbType) {
+          // Try to find by type and name
+          databaseInfo = realDatabases.find(db => 
+            db.type?.toLowerCase() === dbType.toLowerCase() || 
+            db.engine?.toLowerCase() === dbType.toLowerCase()
+          );
+        }
+        
         if (!databaseInfo) {
+          console.log('No database found by ID, using mock data');
           // Fallback to mock data for demonstration
           const typeKey = dbType ? dbType.toLowerCase() : 'postgresql';
           databaseInfo = generateMockDatabaseDetails(typeKey, dbName);
@@ -178,6 +196,7 @@ const DatabaseDetails = () => {
         
         // Use the actual database connection information
         setDatabase(databaseInfo);
+        console.log('Database details loaded:', databaseInfo);
         
         // For tables and structure, we would normally make a separate API call here
         // For now, we'll use mock data
@@ -188,8 +207,8 @@ const DatabaseDetails = () => {
         setStructure(structureData);
         setError(null);
       } catch (err) {
-        setError('Failed to load database details. Please try again.');
         console.error('Error fetching database details:', err);
+        setError('Failed to load database details. Please try again.');
       } finally {
         setLoading(false);
       }

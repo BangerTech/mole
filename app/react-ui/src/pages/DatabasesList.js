@@ -181,7 +181,40 @@ export default function DatabasesList() {
   };
 
   const handleDatabaseClick = (id) => {
-    navigate(`/database/id/${id}`);
+    // Get the database details from the databases array
+    const dbToView = databases.find(db => db.id.toString() === id.toString());
+    
+    if (dbToView) {
+      // Use the /database/id/:id route format for consistency
+      navigate(`/database/id/${id}`);
+      
+      // Store database in localStorage to ensure it's available on the details page
+      const storedDatabases = localStorage.getItem('mole_real_databases');
+      let realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+      
+      // Check if this database already exists in localStorage
+      const exists = realDatabases.some(db => db.id.toString() === id.toString());
+      
+      // If it doesn't exist, add it
+      if (!exists) {
+        realDatabases.push(dbToView);
+        localStorage.setItem('mole_real_databases', JSON.stringify(realDatabases));
+      }
+      
+      // Ensure we have synchronized localStorage entries
+      DatabaseService.syncStoredDatabases();
+      
+      // Debug logging
+      console.log('Navigating to database details:', {
+        id: id,
+        engine: dbToView.engine,
+        url: `/database/id/${id}`
+      });
+    } else {
+      // Fallback in case database is not found
+      navigate(`/database/id/${id}`);
+      console.warn('Database not found in local state, using ID-only navigation');
+    }
   };
 
   const handleMenuOpen = (event, database) => {
