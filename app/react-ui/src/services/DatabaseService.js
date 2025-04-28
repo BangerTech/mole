@@ -26,7 +26,7 @@ class DatabaseService {
   async getDatabaseConnections() {
     try {
       // Try to fetch from API first
-      const response = await axios.get(`${API_URL}/connections`);
+      const response = await axios.get(`${API_URL}`);
       return response.data;
     } catch (error) {
       console.warn('Error fetching from API, using localStorage:', error);
@@ -57,7 +57,7 @@ class DatabaseService {
   async saveConnection(connection) {
     try {
       // Try to save to API
-      const response = await axios.post(`${API_URL}/connections`, connection);
+      const response = await axios.post(`${API_URL}`, connection);
       return response.data;
     } catch (error) {
       console.warn('Error saving to API, using localStorage:', error);
@@ -104,7 +104,7 @@ class DatabaseService {
   async updateConnection(id, connection) {
     try {
       // Try to update via API
-      const response = await axios.put(`${API_URL}/connections/${id}`, connection);
+      const response = await axios.put(`${API_URL}/${id}`, connection);
       return response.data;
     } catch (error) {
       console.warn('Error updating in API, using localStorage:', error);
@@ -147,7 +147,7 @@ class DatabaseService {
   async deleteConnection(id) {
     try {
       // Try to delete via API
-      await axios.delete(`${API_URL}/connections/${id}`);
+      await axios.delete(`${API_URL}/${id}`);
       return { success: true };
     } catch (error) {
       console.warn('Error deleting in API, using localStorage:', error);
@@ -254,8 +254,8 @@ class DatabaseService {
       // Debug connection information
       console.log('Fetching schema for database ID:', id);
       
-      // Fix: Use the correct API path format with /connections/
-      const apiUrl = `${API_URL}/connections/${id}/schema`;
+      // Update to use the standard API format without /connections/
+      const apiUrl = `${API_URL}/${id}/schema`;
       console.log('API URL used:', apiUrl);
       
       // Try to fetch from API
@@ -286,8 +286,8 @@ class DatabaseService {
       // Debug connection information
       console.log('Executing query for database ID:', id);
       
-      // Fix: Use the correct API path format with /connections/
-      const apiUrl = `${API_URL}/connections/${id}/execute`;
+      // Update to use the standard API format without /connections/
+      const apiUrl = `${API_URL}/${id}/execute`;
       console.log('API URL used:', apiUrl);
       
       // Try to execute via API

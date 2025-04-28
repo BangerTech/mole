@@ -426,6 +426,15 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
 - API-URL-Verbesserungen:
   - Dynamische Generierung der API-Basis-URL basierend auf dem aktuellen Hostnamen
   - Verbesserung der Anwendungsportabilität zwischen verschiedenen Umgebungen
+  - Korrektur der API-Endpunkte für Datenbankschema und Abfrageausführung:
+    - Standardisierung der Pfade zu `/api/databases/:id/schema` und `/api/databases/:id/execute`
+    - Beseitigung inkonsistenter URL-Formate mit `/connections/`
+    - Einheitliche API-Struktur für verbesserte Code-Wartbarkeit und Fehlerbehebung
+  - Behebung kritischer Fehler bei Datenbankoperationen:
+    - Korrektur der API-Endpunkte für alle Datenbankaktionen (Speichern, Aktualisieren, Löschen)
+    - Konsistente Verwendung direkter API-Routen ohne `/connections/`-Segment
+    - Fixierung des Problems, dass gelöschte Datenbankverbindungen nach dem Neuladen wieder erscheinen
+    - Sicherstellung einer korrekten Datenpersistenz zwischen Frontend und Backend
 
 ### Version 0.4.2 (in Entwicklung)
 - Umfangreiche Verbesserungen am KI-Assistenten:
