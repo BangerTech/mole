@@ -960,3 +960,64 @@
 2025-04-28 12:40:05,095 [INFO] 172.18.0.6 - - [28/Apr/2025 12:40:05] "GET /api/system/info HTTP/1.1" 200 -
 2025-04-28 12:40:35,098 [INFO] 172.18.0.6 - - [28/Apr/2025 12:40:35] "GET /api/system/info HTTP/1.1" 200 -
 2025-04-28 12:41:05,096 [INFO] 172.18.0.6 - - [28/Apr/2025 12:41:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:46:03 [INFO] Starting database sync service
+2025-04-28 12:46:08,421 [INFO] Initialized AI provider: openai
+2025-04-28 12:46:08,421 [INFO] Initialized AI provider: perplexity
+2025-04-28 12:46:08,422 [INFO] Initialized AI provider: sqlpal
+2025-04-28 12:46:08,429 [INFO] Database Sync Manager initialized
+2025-04-28 12:46:08,434 [INFO] Starting sync manager
+2025-04-28 12:46:08,435 [INFO] Starting API server on port 5000
+2025-04-28 12:46:08,435 [INFO] Sync service is disabled in configuration
+2025-04-28 12:46:08,464 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 12:46:08,465 [INFO]  * Running on http://172.18.0.2:5000/ (Press CTRL+C to quit)
+2025-04-28 12:49:21,107 [INFO] 172.18.0.6 - - [28/Apr/2025 12:49:21] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:49:21,133 [INFO] 172.18.0.6 - - [28/Apr/2025 12:49:21] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 12:49:51,026 [INFO] 172.18.0.6 - - [28/Apr/2025 12:49:51] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:50:21,021 [INFO] 172.18.0.6 - - [28/Apr/2025 12:50:21] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:50:51,023 [INFO] 172.18.0.6 - - [28/Apr/2025 12:50:51] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:51:21,022 [INFO] 172.18.0.6 - - [28/Apr/2025 12:51:21] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:51:51,022 [INFO] 172.18.0.6 - - [28/Apr/2025 12:51:51] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:52:21,022 [INFO] 172.18.0.6 - - [28/Apr/2025 12:52:21] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:52:51,020 [INFO] 172.18.0.6 - - [28/Apr/2025 12:52:51] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:53:21,021 [INFO] 172.18.0.6 - - [28/Apr/2025 12:53:21] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:53:51,021 [INFO] 172.18.0.6 - - [28/Apr/2025 12:53:51] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:54:10,439 [INFO] 172.18.0.6 - - [28/Apr/2025 12:54:10] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:54:10,456 [INFO] 172.18.0.6 - - [28/Apr/2025 12:54:10] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 12:55:39,025 [INFO] 172.18.0.6 - - [28/Apr/2025 12:55:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:55:39,037 [INFO] 172.18.0.6 - - [28/Apr/2025 12:55:39] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 12:55:40,844 [INFO] 172.18.0.6 - - [28/Apr/2025 12:55:40] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:55:40,870 [INFO] 172.18.0.6 - - [28/Apr/2025 12:55:40] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 12:55:57,951 [INFO] 172.18.0.6 - - [28/Apr/2025 12:55:57] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:55:57,962 [INFO] 172.18.0.6 - - [28/Apr/2025 12:55:57] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 12:56:02,542 [INFO] 172.18.0.6 - - [28/Apr/2025 12:56:02] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:56:02,554 [INFO] 172.18.0.6 - - [28/Apr/2025 12:56:02] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 12:56:05,887 [INFO] 172.18.0.6 - - [28/Apr/2025 12:56:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:56:05,894 [INFO] 172.18.0.6 - - [28/Apr/2025 12:56:05] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 12:56:35,885 [INFO] 172.18.0.6 - - [28/Apr/2025 12:56:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:57:05,899 [INFO] 172.18.0.6 - - [28/Apr/2025 12:57:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:57:35,884 [INFO] 172.18.0.6 - - [28/Apr/2025 12:57:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:58:05,884 [INFO] 172.18.0.6 - - [28/Apr/2025 12:58:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:58:35,884 [INFO] 172.18.0.6 - - [28/Apr/2025 12:58:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:59:05,885 [INFO] 172.18.0.6 - - [28/Apr/2025 12:59:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 12:59:35,883 [INFO] 172.18.0.6 - - [28/Apr/2025 12:59:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:00:05,887 [INFO] 172.18.0.6 - - [28/Apr/2025 13:00:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:00:35,884 [INFO] 172.18.0.6 - - [28/Apr/2025 13:00:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:01:05,897 [INFO] 172.18.0.6 - - [28/Apr/2025 13:01:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:01:35,899 [INFO] 172.18.0.6 - - [28/Apr/2025 13:01:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:02:05,893 [INFO] 172.18.0.6 - - [28/Apr/2025 13:02:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:02:35,881 [INFO] 172.18.0.6 - - [28/Apr/2025 13:02:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:03:05,894 [INFO] 172.18.0.6 - - [28/Apr/2025 13:03:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:03:35,895 [INFO] 172.18.0.6 - - [28/Apr/2025 13:03:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:04:05,886 [INFO] 172.18.0.6 - - [28/Apr/2025 13:04:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:04:35,883 [INFO] 172.18.0.6 - - [28/Apr/2025 13:04:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:05:05,899 [INFO] 172.18.0.6 - - [28/Apr/2025 13:05:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:05:35,888 [INFO] 172.18.0.6 - - [28/Apr/2025 13:05:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:06:05,884 [INFO] 172.18.0.6 - - [28/Apr/2025 13:06:05] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:06:35,881 [INFO] 172.18.0.6 - - [28/Apr/2025 13:06:35] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:07:22,349 [INFO] 172.18.0.6 - - [28/Apr/2025 13:07:22] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:07:22,367 [INFO] 172.18.0.6 - - [28/Apr/2025 13:07:22] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:07:24,842 [INFO] 172.18.0.6 - - [28/Apr/2025 13:07:24] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:07:24,885 [INFO] 172.18.0.6 - - [28/Apr/2025 13:07:24] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:07:25,708 [INFO] 172.18.0.6 - - [28/Apr/2025 13:07:25] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:07:25,751 [INFO] 172.18.0.6 - - [28/Apr/2025 13:07:25] "GET /api/ai/providers HTTP/1.1" 200 -

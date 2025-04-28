@@ -240,7 +240,7 @@ export default function DatabasesList() {
     setAnchorEl(null);
   };
 
-  const handleDeleteDatabase = () => {
+  const handleDeleteDatabase = async () => {
     // Sicherstellen, dass selectedDatabase nicht null ist
     if (!selectedDatabase) {
       console.error('No database selected for deletion');
@@ -248,35 +248,36 @@ export default function DatabasesList() {
       return;
     }
     
-    // If it's a real database, update local storage
-    if (!selectedDatabase.isSample) {
-      const storedDatabases = localStorage.getItem('mole_real_databases');
-      if (storedDatabases) {
-        const realDatabases = JSON.parse(storedDatabases);
-        const updatedDatabases = realDatabases.filter(db => db.id !== selectedDatabase.id);
-        localStorage.setItem('mole_real_databases', JSON.stringify(updatedDatabases));
-        
-        // If no more real databases, show sample database again
-        if (updatedDatabases.length === 0) {
-          setHasRealDatabase(false);
-          const sampleDatabase = {
-            id: '1',
-            name: 'Sample Database',
-            engine: 'PostgreSQL',
-            host: 'localhost',
-            port: 5432,
-            database: 'sample_db',
-            lastConnected: '2023-05-20',
-            isSample: true
-          };
-          setDatabases([sampleDatabase]);
-        } else {
-          setDatabases(updatedDatabases);
-        }
+    try {
+      // Use the service to delete the connection - this will handle both API and localStorage
+      await DatabaseService.deleteConnection(selectedDatabase.id);
+      
+      // Update the UI state
+      const updatedDatabases = databases.filter(db => db.id.toString() !== selectedDatabase.id.toString());
+      
+      // If no more real databases, show sample database again
+      if (updatedDatabases.length === 0 || (updatedDatabases.length === 0 && !selectedDatabase.isSample)) {
+        setHasRealDatabase(false);
+        const sampleDatabase = {
+          id: '1',
+          name: 'Sample Database',
+          engine: 'PostgreSQL',
+          host: 'localhost',
+          port: 5432,
+          database: 'sample_db',
+          lastConnected: '2023-05-20',
+          isSample: true
+        };
+        setDatabases([sampleDatabase]);
+      } else {
+        setDatabases(updatedDatabases);
       }
-    } else {
-      // Just remove from state if it's a sample
-      setDatabases(databases.filter(db => db.id !== selectedDatabase.id));
+      
+      // Ensure all localStorage entries are synchronized
+      DatabaseService.syncStoredDatabases();
+      
+    } catch (error) {
+      console.error('Error deleting database connection:', error);
     }
     
     setDeleteDialogOpen(false);

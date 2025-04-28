@@ -146,23 +146,41 @@ const DatabaseDetails = () => {
         
         let databaseInfo = null;
         
+        // First, try to synchronize database connections from both storages
+        // This ensures we have the latest data
+        DatabaseService.syncStoredDatabases();
+        
         // Check if we have database info in localStorage
+        // Try both storage locations
         const storedDatabases = localStorage.getItem('mole_real_databases');
+        const storedConnections = localStorage.getItem('mole_database_connections');
+        
         const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+        const connections = storedConnections ? JSON.parse(storedConnections) : [];
+        
+        // Combine both sources to ensure we find the database
+        const allDatabases = [...realDatabases];
+        
+        // Add any missing connections that might exist only in mole_database_connections
+        connections.forEach(conn => {
+          if (!allDatabases.some(db => db.id.toString() === conn.id.toString())) {
+            allDatabases.push(conn);
+          }
+        });
         
         // We're using the /database/id/:id route format, so dbName actually contains the ID
         if (dbName) {
           // First try to find by exact ID match
-          databaseInfo = realDatabases.find(db => db.id.toString() === dbName.toString());
+          databaseInfo = allDatabases.find(db => db.id.toString() === dbName.toString());
           
           console.log('Database lookup by ID:', { 
             lookingFor: dbName, 
             found: !!databaseInfo,
-            availableDatabases: realDatabases
+            availableDatabases: allDatabases
           });
           
           // If it's the sample database with ID 1 and no real database was found
-          if (dbName === '1' && !databaseInfo) {
+          if ((dbName === '1' || !databaseInfo) && allDatabases.length === 0) {
             console.log('Loading sample database');
             databaseInfo = {
               id: '1',
@@ -188,7 +206,7 @@ const DatabaseDetails = () => {
         // If still no database found and using the old /database/:type/:id format
         if (!databaseInfo && dbType) {
           // Try to find by type and name
-          databaseInfo = realDatabases.find(db => 
+          databaseInfo = allDatabases.find(db => 
             db.type?.toLowerCase() === dbType.toLowerCase() || 
             db.engine?.toLowerCase() === dbType.toLowerCase()
           );
@@ -326,23 +344,31 @@ const DatabaseDetails = () => {
     setOpenDeleteDialog(false);
   };
 
-  const handleDeleteDatabase = () => {
-    // In a real app, this would delete the database via API
-    console.log('Deleting database');
-    
+  const handleDeleteDatabase = async () => {
     // Close dialog first
     setOpenDeleteDialog(false);
     
-    // Show confirmation message with timeout
-    setError({
-      type: 'success',
-      message: 'Database connection deleted successfully.'
-    });
-    
-    // Navigate after a delay
-    setTimeout(() => {
-      navigate('/databases');
-    }, 1500);
+    try {
+      // Use the service to delete the connection
+      await DatabaseService.deleteConnection(dbName);
+      
+      // Show confirmation message
+      setError({
+        type: 'success',
+        message: 'Database connection deleted successfully.'
+      });
+      
+      // Navigate after a delay
+      setTimeout(() => {
+        navigate('/databases');
+      }, 1500);
+    } catch (err) {
+      console.error('Error deleting database:', err);
+      setError({
+        type: 'error',
+        message: 'Failed to delete database connection. Please try again.'
+      });
+    }
   };
 
   const handleTableClick = (table) => {

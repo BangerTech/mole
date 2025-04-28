@@ -140,50 +140,46 @@ class DatabaseService {
   }
 
   /**
-   * Delete a database connection
+   * Delete database connection
    * @param {string|number} id - Connection ID
-   * @returns {Promise} Promise indicating success
+   * @returns {Promise} Promise with delete result
    */
   async deleteConnection(id) {
     try {
-      // Try to delete via API
-      await axios.delete(`${API_URL}/${id}`);
-      return { success: true };
+      // Try API first
+      const response = await axios.delete(`${API_URL}/${id}`);
+      
+      // If successful, also remove from localStorage to ensure consistency
+      const connections = this.getConnectionsFromLocalStorage();
+      const updatedConnections = connections.filter(conn => conn.id.toString() !== id.toString());
+      localStorage.setItem('mole_database_connections', JSON.stringify(updatedConnections));
+      
+      // Also update real_databases storage
+      const realDb = localStorage.getItem('mole_real_databases');
+      if (realDb) {
+        const realDatabases = JSON.parse(realDb);
+        const updatedRealDatabases = realDatabases.filter(db => db.id.toString() !== id.toString());
+        localStorage.setItem('mole_real_databases', JSON.stringify(updatedRealDatabases));
+      }
+      
+      return response.data;
     } catch (error) {
-      console.warn('Error deleting in API, using localStorage:', error);
-      // Fallback to localStorage
-      return this.deleteConnectionFromLocalStorage(id);
-    }
-  }
-
-  /**
-   * Delete connection from localStorage
-   * @param {string|number} id - Connection ID
-   * @returns {Object} Success indicator
-   */
-  deleteConnectionFromLocalStorage(id) {
-    try {
-      // Get connections from both storage locations
-      let connections = this.getConnectionsFromLocalStorage();
+      console.warn('Error deleting from API, removing from localStorage:', error);
       
-      // Get real databases from localStorage
-      const storedRealDatabases = localStorage.getItem('mole_real_databases');
-      let realDatabases = storedRealDatabases ? JSON.parse(storedRealDatabases) : [];
+      // Fallback to localStorage if API is not available
+      const connections = this.getConnectionsFromLocalStorage();
+      const updatedConnections = connections.filter(conn => conn.id.toString() !== id.toString());
+      localStorage.setItem('mole_database_connections', JSON.stringify(updatedConnections));
       
-      // Filter out the connection to delete from both storage locations
-      connections = connections.filter(conn => conn.id.toString() !== id.toString());
-      realDatabases = realDatabases.filter(db => db.id.toString() !== id.toString());
+      // Also update real_databases storage
+      const realDb = localStorage.getItem('mole_real_databases');
+      if (realDb) {
+        const realDatabases = JSON.parse(realDb);
+        const updatedRealDatabases = realDatabases.filter(db => db.id.toString() !== id.toString());
+        localStorage.setItem('mole_real_databases', JSON.stringify(updatedRealDatabases));
+      }
       
-      // Save back to both localStorage keys
-      localStorage.setItem('mole_database_connections', JSON.stringify(connections));
-      localStorage.setItem('mole_real_databases', JSON.stringify(realDatabases));
-      
-      console.log('Database connection deleted successfully from both storage locations');
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error deleting from localStorage:', error);
-      return { success: false, error: error.message };
+      return { success: true, message: 'Connection deleted from local storage' };
     }
   }
 
@@ -254,7 +250,7 @@ class DatabaseService {
       // Debug connection information
       console.log('Fetching schema for database ID:', id);
       
-      // Update to use the standard API format without /connections/
+      // Use the correct API URL format
       const apiUrl = `${API_URL}/${id}/schema`;
       console.log('API URL used:', apiUrl);
       
@@ -286,7 +282,7 @@ class DatabaseService {
       // Debug connection information
       console.log('Executing query for database ID:', id);
       
-      // Update to use the standard API format without /connections/
+      // Use the correct API URL format
       const apiUrl = `${API_URL}/${id}/execute`;
       console.log('API URL used:', apiUrl);
       
@@ -307,4 +303,6 @@ class DatabaseService {
   }
 }
 
-export default new DatabaseService(); 
+// Singleton instance
+const databaseService = new DatabaseService();
+export default databaseService; 
