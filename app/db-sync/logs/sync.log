@@ -1021,3 +1021,225 @@
 2025-04-28 13:07:24,885 [INFO] 172.18.0.6 - - [28/Apr/2025 13:07:24] "GET /api/ai/providers HTTP/1.1" 200 -
 2025-04-28 13:07:25,708 [INFO] 172.18.0.6 - - [28/Apr/2025 13:07:25] "GET /api/system/info HTTP/1.1" 200 -
 2025-04-28 13:07:25,751 [INFO] 172.18.0.6 - - [28/Apr/2025 13:07:25] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:24:40 [INFO] Starting database sync service
+2025-04-28 13:24:44,745 [INFO] Initialized AI provider: openai
+2025-04-28 13:24:44,746 [INFO] Initialized AI provider: perplexity
+2025-04-28 13:24:44,746 [INFO] Initialized AI provider: sqlpal
+2025-04-28 13:24:44,754 [INFO] Database Sync Manager initialized
+2025-04-28 13:24:44,755 [INFO] Starting sync manager
+2025-04-28 13:24:44,755 [INFO] Sync service is disabled in configuration
+2025-04-28 13:24:44,756 [INFO] Starting API server on port 5000
+2025-04-28 13:24:44,780 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 13:24:44,781 [INFO]  * Running on http://172.18.0.3:5000/ (Press CTRL+C to quit)
+2025-04-28 13:26:03,612 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:03] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:26:03,634 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:03] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:26:07,456 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:07] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:26:07,479 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:07] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:26:16,024 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:16] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:26:16,037 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:16] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:26:24,322 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:24] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:26:24,330 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:24] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:26:25,575 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:25] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:26:25,600 [INFO] 172.18.0.6 - - [28/Apr/2025 13:26:25] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:44:16,237 [INFO] 172.18.0.6 - - [28/Apr/2025 13:44:16] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:44:16,249 [INFO] 172.18.0.6 - - [28/Apr/2025 13:44:16] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:44:40,006 [INFO] 172.18.0.6 - - [28/Apr/2025 13:44:40] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:44:40,017 [INFO] 172.18.0.6 - - [28/Apr/2025 13:44:40] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 13:45:39,527 [INFO] 172.18.0.6 - - [28/Apr/2025 13:45:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 13:45:39,542 [INFO] 172.18.0.6 - - [28/Apr/2025 13:45:39] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:02:37 [INFO] Starting database sync service
+2025-04-28 18:02:41,304 [INFO] Initialized AI provider: openai
+2025-04-28 18:02:41,305 [INFO] Initialized AI provider: perplexity
+2025-04-28 18:02:41,305 [INFO] Initialized AI provider: sqlpal
+2025-04-28 18:02:41,313 [INFO] Database Sync Manager initialized
+2025-04-28 18:02:41,314 [INFO] Starting sync manager
+2025-04-28 18:02:41,315 [INFO] Starting API server on port 5000
+2025-04-28 18:02:41,315 [INFO] Sync service is disabled in configuration
+2025-04-28 18:02:41,345 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 18:02:41,345 [INFO]  * Running on http://172.18.0.4:5000/ (Press CTRL+C to quit)
+2025-04-28 18:02:44,689 [INFO] 172.18.0.6 - - [28/Apr/2025 18:02:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:02:44,709 [INFO] 172.18.0.6 - - [28/Apr/2025 18:02:44] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:05:04,392 [INFO] 172.18.0.6 - - [28/Apr/2025 18:05:04] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:05:04,406 [INFO] 172.18.0.6 - - [28/Apr/2025 18:05:04] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:06:38,637 [INFO] 172.18.0.6 - - [28/Apr/2025 18:06:38] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:06:38,640 [INFO] 172.18.0.6 - - [28/Apr/2025 18:06:38] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:06:40,708 [INFO] 172.18.0.6 - - [28/Apr/2025 18:06:40] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:06:40,727 [INFO] 172.18.0.6 - - [28/Apr/2025 18:06:40] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:06:45,533 [INFO] 172.18.0.6 - - [28/Apr/2025 18:06:45] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:06:45,543 [INFO] 172.18.0.6 - - [28/Apr/2025 18:06:45] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:10:55 [INFO] Starting database sync service
+2025-04-28 18:11:00,183 [INFO] Initialized AI provider: openai
+2025-04-28 18:11:00,184 [INFO] Initialized AI provider: perplexity
+2025-04-28 18:11:00,184 [INFO] Initialized AI provider: sqlpal
+2025-04-28 18:11:00,189 [INFO] Database Sync Manager initialized
+2025-04-28 18:11:00,190 [INFO] Starting sync manager
+2025-04-28 18:11:00,191 [INFO] Sync service is disabled in configuration
+2025-04-28 18:11:00,191 [INFO] Starting API server on port 5000
+2025-04-28 18:11:00,212 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 18:11:00,212 [INFO]  * Running on http://172.18.0.2:5000/ (Press CTRL+C to quit)
+2025-04-28 18:11:00,661 [INFO] 172.18.0.6 - - [28/Apr/2025 18:11:00] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:11:00,684 [INFO] 172.18.0.6 - - [28/Apr/2025 18:11:00] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:11:43,938 [INFO] 172.18.0.6 - - [28/Apr/2025 18:11:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:11:43,953 [INFO] 172.18.0.6 - - [28/Apr/2025 18:11:43] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:11:50,877 [INFO] 172.18.0.6 - - [28/Apr/2025 18:11:50] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:11:50,899 [INFO] 172.18.0.6 - - [28/Apr/2025 18:11:50] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:11:52,586 [INFO] 172.18.0.6 - - [28/Apr/2025 18:11:52] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:11:52,626 [INFO] 172.18.0.6 - - [28/Apr/2025 18:11:52] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:18:59 [INFO] Starting database sync service
+2025-04-28 18:19:03,414 [INFO] Initialized AI provider: openai
+2025-04-28 18:19:03,414 [INFO] Initialized AI provider: perplexity
+2025-04-28 18:19:03,415 [INFO] Initialized AI provider: sqlpal
+2025-04-28 18:19:03,420 [INFO] Database Sync Manager initialized
+2025-04-28 18:19:03,424 [INFO] Starting sync manager
+2025-04-28 18:19:03,424 [INFO] Starting API server on port 5000
+2025-04-28 18:19:03,425 [INFO] Sync service is disabled in configuration
+2025-04-28 18:19:03,457 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 18:19:03,458 [INFO]  * Running on http://172.18.0.5:5000/ (Press CTRL+C to quit)
+2025-04-28 18:19:04,991 [INFO] 172.18.0.6 - - [28/Apr/2025 18:19:04] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:19:05,013 [INFO] 172.18.0.6 - - [28/Apr/2025 18:19:05] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:21:15,744 [INFO] 172.18.0.6 - - [28/Apr/2025 18:21:15] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:21:15,761 [INFO] 172.18.0.6 - - [28/Apr/2025 18:21:15] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:21:45,739 [INFO] 172.18.0.6 - - [28/Apr/2025 18:21:45] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:22:15,739 [INFO] 172.18.0.6 - - [28/Apr/2025 18:22:15] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:22:45,734 [INFO] 172.18.0.6 - - [28/Apr/2025 18:22:45] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:23:15,753 [INFO] 172.18.0.6 - - [28/Apr/2025 18:23:15] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:31:08 [INFO] Starting database sync service
+2025-04-28 18:31:13,109 [INFO] Initialized AI provider: openai
+2025-04-28 18:31:13,110 [INFO] Initialized AI provider: perplexity
+2025-04-28 18:31:13,110 [INFO] Initialized AI provider: sqlpal
+2025-04-28 18:31:13,116 [INFO] Database Sync Manager initialized
+2025-04-28 18:31:13,117 [INFO] Starting sync manager
+2025-04-28 18:31:13,117 [INFO] Sync service is disabled in configuration
+2025-04-28 18:31:13,117 [INFO] Starting API server on port 5000
+2025-04-28 18:31:13,138 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 18:31:13,138 [INFO]  * Running on http://172.18.0.5:5000/ (Press CTRL+C to quit)
+2025-04-28 18:36:47 [INFO] Starting database sync service
+2025-04-28 18:36:51,757 [INFO] Initialized AI provider: openai
+2025-04-28 18:36:51,757 [INFO] Initialized AI provider: perplexity
+2025-04-28 18:36:51,758 [INFO] Initialized AI provider: sqlpal
+2025-04-28 18:36:51,763 [INFO] Database Sync Manager initialized
+2025-04-28 18:36:51,763 [INFO] Starting sync manager
+2025-04-28 18:36:51,764 [INFO] Starting API server on port 5000
+2025-04-28 18:36:51,765 [INFO] Sync service is disabled in configuration
+2025-04-28 18:36:51,794 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 18:36:51,796 [INFO]  * Running on http://172.18.0.4:5000/ (Press CTRL+C to quit)
+2025-04-28 18:36:56,823 [INFO] 172.18.0.6 - - [28/Apr/2025 18:36:56] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:36:56,845 [INFO] 172.18.0.6 - - [28/Apr/2025 18:36:56] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:39:42,028 [INFO] 172.18.0.6 - - [28/Apr/2025 18:39:42] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:39:42,037 [INFO] 172.18.0.6 - - [28/Apr/2025 18:39:42] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:40:12,021 [INFO] 172.18.0.6 - - [28/Apr/2025 18:40:12] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:40:39,660 [INFO] 172.18.0.6 - - [28/Apr/2025 18:40:39] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:40:39,667 [INFO] 172.18.0.6 - - [28/Apr/2025 18:40:39] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:41:26,693 [INFO] 172.18.0.6 - - [28/Apr/2025 18:41:26] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:41:26,702 [INFO] 172.18.0.6 - - [28/Apr/2025 18:41:26] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:41:56,695 [INFO] 172.18.0.6 - - [28/Apr/2025 18:41:56] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:42:26,690 [INFO] 172.18.0.6 - - [28/Apr/2025 18:42:26] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:42:56,690 [INFO] 172.18.0.6 - - [28/Apr/2025 18:42:56] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:43:58 [INFO] Starting database sync service
+2025-04-28 18:44:02,318 [INFO] Initialized AI provider: openai
+2025-04-28 18:44:02,318 [INFO] Initialized AI provider: perplexity
+2025-04-28 18:44:02,319 [INFO] Initialized AI provider: sqlpal
+2025-04-28 18:44:02,324 [INFO] Database Sync Manager initialized
+2025-04-28 18:44:02,325 [INFO] Starting sync manager
+2025-04-28 18:44:02,325 [INFO] Sync service is disabled in configuration
+2025-04-28 18:44:02,326 [INFO] Starting API server on port 5000
+2025-04-28 18:44:02,348 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 18:44:02,349 [INFO]  * Running on http://172.18.0.2:5000/ (Press CTRL+C to quit)
+2025-04-28 18:44:04,044 [INFO] 172.18.0.6 - - [28/Apr/2025 18:44:04] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:44:04,064 [INFO] 172.18.0.6 - - [28/Apr/2025 18:44:04] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:44:15,603 [INFO] 172.18.0.6 - - [28/Apr/2025 18:44:15] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:44:15,618 [INFO] 172.18.0.6 - - [28/Apr/2025 18:44:15] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:46:43,381 [INFO] 172.18.0.6 - - [28/Apr/2025 18:46:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:46:43,395 [INFO] 172.18.0.6 - - [28/Apr/2025 18:46:43] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:47:13,378 [INFO] 172.18.0.6 - - [28/Apr/2025 18:47:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:47:43,378 [INFO] 172.18.0.6 - - [28/Apr/2025 18:47:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:48:13,378 [INFO] 172.18.0.6 - - [28/Apr/2025 18:48:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:48:43,377 [INFO] 172.18.0.6 - - [28/Apr/2025 18:48:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:49:13,376 [INFO] 172.18.0.6 - - [28/Apr/2025 18:49:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:49:43,376 [INFO] 172.18.0.6 - - [28/Apr/2025 18:49:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:50:13,379 [INFO] 172.18.0.6 - - [28/Apr/2025 18:50:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:50:43,376 [INFO] 172.18.0.6 - - [28/Apr/2025 18:50:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:51:13,377 [INFO] 172.18.0.6 - - [28/Apr/2025 18:51:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:51:43,376 [INFO] 172.18.0.6 - - [28/Apr/2025 18:51:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:52:13,377 [INFO] 172.18.0.6 - - [28/Apr/2025 18:52:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:52:43,375 [INFO] 172.18.0.6 - - [28/Apr/2025 18:52:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:53:13,375 [INFO] 172.18.0.6 - - [28/Apr/2025 18:53:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:53:43,374 [INFO] 172.18.0.6 - - [28/Apr/2025 18:53:43] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:58:14 [INFO] Starting database sync service
+2025-04-28 18:58:19,440 [INFO] Initialized AI provider: openai
+2025-04-28 18:58:19,441 [INFO] Initialized AI provider: perplexity
+2025-04-28 18:58:19,441 [INFO] Initialized AI provider: sqlpal
+2025-04-28 18:58:19,449 [INFO] Database Sync Manager initialized
+2025-04-28 18:58:19,450 [INFO] Starting sync manager
+2025-04-28 18:58:19,450 [INFO] Starting API server on port 5000
+2025-04-28 18:58:19,451 [INFO] Sync service is disabled in configuration
+2025-04-28 18:58:19,472 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 18:58:19,478 [INFO]  * Running on http://172.18.0.4:5000/ (Press CTRL+C to quit)
+2025-04-28 18:58:20,226 [INFO] 172.18.0.6 - - [28/Apr/2025 18:58:20] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:58:20,247 [INFO] 172.18.0.6 - - [28/Apr/2025 18:58:20] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:58:38,316 [INFO] 172.18.0.6 - - [28/Apr/2025 18:58:38] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 18:58:38,345 [INFO] 172.18.0.6 - - [28/Apr/2025 18:58:38] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 18:59:08,308 [INFO] 172.18.0.6 - - [28/Apr/2025 18:59:08] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:01:19,861 [INFO] 172.18.0.6 - - [28/Apr/2025 19:01:19] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:01:19,876 [INFO] 172.18.0.6 - - [28/Apr/2025 19:01:19] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 19:01:49,861 [INFO] 172.18.0.6 - - [28/Apr/2025 19:01:49] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:02:19,861 [INFO] 172.18.0.6 - - [28/Apr/2025 19:02:19] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:02:49,859 [INFO] 172.18.0.6 - - [28/Apr/2025 19:02:49] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:03:19,859 [INFO] 172.18.0.6 - - [28/Apr/2025 19:03:19] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:12:51 [INFO] Starting database sync service
+2025-04-28 19:12:55,831 [INFO] Initialized AI provider: openai
+2025-04-28 19:12:55,832 [INFO] Initialized AI provider: perplexity
+2025-04-28 19:12:55,832 [INFO] Initialized AI provider: sqlpal
+2025-04-28 19:12:55,839 [INFO] Database Sync Manager initialized
+2025-04-28 19:12:55,841 [INFO] Starting sync manager
+2025-04-28 19:12:55,841 [INFO] Starting API server on port 5000
+2025-04-28 19:12:55,842 [INFO] Sync service is disabled in configuration
+2025-04-28 19:12:55,879 [WARNING]  * Running on all addresses.
+   WARNING: This is a development server. Do not use it in a production deployment.
+2025-04-28 19:12:55,879 [INFO]  * Running on http://172.18.0.3:5000/ (Press CTRL+C to quit)
+2025-04-28 19:17:14,603 [INFO] 172.18.0.6 - - [28/Apr/2025 19:17:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:17:14,625 [INFO] 172.18.0.6 - - [28/Apr/2025 19:17:14] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 19:17:44,533 [INFO] 172.18.0.6 - - [28/Apr/2025 19:17:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:18:14,532 [INFO] 172.18.0.6 - - [28/Apr/2025 19:18:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:18:44,531 [INFO] 172.18.0.6 - - [28/Apr/2025 19:18:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:19:14,529 [INFO] 172.18.0.6 - - [28/Apr/2025 19:19:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:19:44,530 [INFO] 172.18.0.6 - - [28/Apr/2025 19:19:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:20:14,530 [INFO] 172.18.0.6 - - [28/Apr/2025 19:20:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:20:44,530 [INFO] 172.18.0.6 - - [28/Apr/2025 19:20:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:21:14,530 [INFO] 172.18.0.6 - - [28/Apr/2025 19:21:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:21:44,529 [INFO] 172.18.0.6 - - [28/Apr/2025 19:21:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:22:14,529 [INFO] 172.18.0.6 - - [28/Apr/2025 19:22:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:22:44,528 [INFO] 172.18.0.6 - - [28/Apr/2025 19:22:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:23:14,528 [INFO] 172.18.0.6 - - [28/Apr/2025 19:23:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:23:44,528 [INFO] 172.18.0.6 - - [28/Apr/2025 19:23:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:24:14,527 [INFO] 172.18.0.6 - - [28/Apr/2025 19:24:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:24:44,527 [INFO] 172.18.0.6 - - [28/Apr/2025 19:24:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:25:14,528 [INFO] 172.18.0.6 - - [28/Apr/2025 19:25:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:25:44,528 [INFO] 172.18.0.6 - - [28/Apr/2025 19:25:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:26:14,528 [INFO] 172.18.0.6 - - [28/Apr/2025 19:26:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:26:44,528 [INFO] 172.18.0.6 - - [28/Apr/2025 19:26:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:27:14,527 [INFO] 172.18.0.6 - - [28/Apr/2025 19:27:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:27:44,526 [INFO] 172.18.0.6 - - [28/Apr/2025 19:27:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:28:14,529 [INFO] 172.18.0.6 - - [28/Apr/2025 19:28:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:28:44,527 [INFO] 172.18.0.6 - - [28/Apr/2025 19:28:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:29:14,527 [INFO] 172.18.0.6 - - [28/Apr/2025 19:29:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:29:44,528 [INFO] 172.18.0.6 - - [28/Apr/2025 19:29:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:30:14,525 [INFO] 172.18.0.6 - - [28/Apr/2025 19:30:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:30:44,525 [INFO] 172.18.0.6 - - [28/Apr/2025 19:30:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:31:14,524 [INFO] 172.18.0.6 - - [28/Apr/2025 19:31:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:31:44,525 [INFO] 172.18.0.6 - - [28/Apr/2025 19:31:44] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:32:14,526 [INFO] 172.18.0.6 - - [28/Apr/2025 19:32:14] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:34:18,777 [INFO] 172.18.0.6 - - [28/Apr/2025 19:34:18] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:34:18,788 [INFO] 172.18.0.6 - - [28/Apr/2025 19:34:18] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 19:34:48,780 [INFO] 172.18.0.6 - - [28/Apr/2025 19:34:48] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:35:13,221 [INFO] 172.18.0.6 - - [28/Apr/2025 19:35:13] "GET /api/system/info HTTP/1.1" 200 -
+2025-04-28 19:35:13,230 [INFO] 172.18.0.6 - - [28/Apr/2025 19:35:13] "GET /api/ai/providers HTTP/1.1" 200 -
+2025-04-28 19:35:43,217 [INFO] 172.18.0.6 - - [28/Apr/2025 19:35:43] "GET /api/system/info HTTP/1.1" 200 -

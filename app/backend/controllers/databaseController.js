@@ -204,11 +204,18 @@ exports.testConnection = async (req, res) => {
         connectionTimeoutMillis: 10000 // 10 seconds timeout
       });
       
-      const client = await pool.connect();
-      client.release();
-      await pool.end();
-      
-      res.status(200).json({ success: true, message: 'PostgreSQL connection successful' });
+      let client;
+      try {
+        client = await pool.connect();
+        // Connection successful, send response immediately
+        res.status(200).json({ success: true, message: 'PostgreSQL connection successful' });
+      } finally {
+        // Ensure client is released and pool is ended regardless of response sending
+        if (client) {
+          client.release();
+        }
+        await pool.end(); 
+      }
     }
     else if (engine.toLowerCase() === 'sqlite') {
       // For SQLite, we just check if the file exists
@@ -358,13 +365,12 @@ exports.getDatabaseSchema = async (req, res) => {
             table_name
         `;
         
-        const tablesResult = await client.query(tablesQuery, [database === 'public' ? 'public' : database]);
+        const tablesResult = await client.query(tablesQuery, ['public']);
         
         // Get size and row counts - Verbesserte Abfrage für pg_class
         const sizeQuery = `
           SELECT
             c.relname AS name,
-            n_live_tup AS row_count,
             pg_size_pretty(pg_total_relation_size(c.oid)) AS size
           FROM
             pg_class c
@@ -377,13 +383,13 @@ exports.getDatabaseSchema = async (req, res) => {
             c.relname
         `;
         
-        const sizeResult = await client.query(sizeQuery, [database === 'public' ? 'public' : database]);
+        const sizeResult = await client.query(sizeQuery, ['public']);
         
         // Combine the results
         const sizeMap = {};
         sizeResult.rows.forEach(row => {
           sizeMap[row.name] = {
-            rows: row.row_count || 0,
+            rows: 0, // Default to 0 since n_live_tup is removed
             size: row.size || '0 KB'
           };
         });
@@ -447,7 +453,7 @@ exports.getDatabaseSchema = async (req, res) => {
             c.table_name, c.ordinal_position
         `;
         
-        const columnsResult = await client.query(columnsQuery, [database === 'public' ? 'public' : database]);
+        const columnsResult = await client.query(columnsQuery, ['public']);
         
         // Group columns by table
         const tableColumns = {};
@@ -511,7 +517,7 @@ exports.getDatabaseSchema = async (req, res) => {
             WHERE table_schema = $1
           `;
           
-          const fallbackResult = await fallbackClient.query(simplifiedTablesQuery, [database === 'public' ? 'public' : database]);
+          const fallbackResult = await fallbackClient.query(simplifiedTablesQuery, ['public']);
           
           // Erstelle vereinfachte Tabellenliste
           const simpleTables = fallbackResult.rows.map(row => ({
@@ -567,6 +573,124 @@ exports.getDatabaseSchema = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Failed to retrieve database schema' 
+    });
+  }
+};
+
+/**
+ * Get health status for a specific database connection
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getDatabaseHealth = async (req, res) => {
+  try {
+    const connectionId = req.params.id;
+    const connection = await databaseService.getConnectionById(connectionId);
+
+    if (!connection) {
+      return res.status(404).json({ message: 'Database connection not found' });
+    }
+
+    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
+    let password = null;
+    if (encrypted_password) {
+      try {
+        password = decrypt(encrypted_password);
+      } catch (decryptError) {
+        console.error(`Decryption failed for connection ${connectionId}:`, decryptError);
+        return res.status(200).json({ 
+          status: 'Error', 
+          message: 'Failed to decrypt stored password.' 
+        });
+      }
+    } else {
+      // Handle cases where password might not be encrypted (legacy or test data)
+      password = connection.password; 
+    }
+
+    if (!engine || !database) {
+      return res.status(400).json({ 
+        status: 'Error',
+        message: 'Incomplete connection parameters in database.' 
+      });
+    }
+
+    let healthStatus = { status: 'Unknown', message: 'Health check not implemented for this engine.' };
+
+    // Engine-specific connection logic
+    if (engine.toLowerCase() === 'mysql') {
+      let mysqlConnection;
+      try {
+        mysqlConnection = await mysql.createConnection({
+          host: host || 'localhost',
+          port: port || 3306,
+          database,
+          user: username,
+          password: password, // Use decrypted password
+          ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectTimeout: 5000 // 5 seconds timeout for health check
+        });
+        // Ping the server to confirm connectivity
+        await mysqlConnection.ping(); 
+        healthStatus = { status: 'OK', message: 'Connection successful.' };
+      } catch (error) {
+        console.warn(`MySQL health check failed for ${connectionId}:`, error.message);
+        healthStatus = { status: 'Error', message: `Connection failed: ${error.message}` };
+      } finally {
+        if (mysqlConnection) await mysqlConnection.end();
+      }
+    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+      const pool = new Pool({
+        host: host || 'localhost',
+        port: port || 5432,
+        database,
+        user: username,
+        password: password, // Use decrypted password
+        ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+        connectionTimeoutMillis: 5000, // 5 seconds timeout
+        // Prevent pool from keeping idle connections after check
+        idleTimeoutMillis: 1000, 
+        max: 1 // Use only one connection for the check
+      });
+      let client;
+      try {
+        client = await pool.connect();
+        // Simple query to confirm connectivity
+        await client.query('SELECT 1'); 
+        healthStatus = { status: 'OK', message: 'Connection successful.' };
+      } catch (error) {
+        console.warn(`PostgreSQL health check failed for ${connectionId}:`, error.message);
+        healthStatus = { status: 'Error', message: `Connection failed: ${error.message}` };
+      } finally {
+        if (client) client.release();
+        // Ensure pool drains and closes connections
+        await pool.end(); 
+      }
+    } else if (engine.toLowerCase() === 'sqlite') {
+      try {
+        if (fs.existsSync(database)) {
+          // Basic check: does the file exist?
+          // Could be expanded to try opening the DB if needed.
+          healthStatus = { status: 'OK', message: 'SQLite file exists.' };
+        } else {
+          healthStatus = { status: 'Error', message: 'SQLite file not found.' };
+        }
+      } catch (error) {
+          console.warn(`SQLite health check failed for ${connectionId}:`, error.message);
+          healthStatus = { status: 'Error', message: `File check failed: ${error.message}` };
+      }
+    } else {
+       healthStatus = { status: 'Unknown', message: `Unsupported engine: ${engine}` };
+    }
+    
+    // Return 200 OK with the status payload
+    res.status(200).json(healthStatus);
+
+  } catch (error) {
+    console.error(`Unexpected error during health check for ${req.params.id}:`, error);
+    res.status(500).json({ 
+      status: 'Error', 
+      message: 'Internal server error during health check.' 
     });
   }
 };
@@ -704,6 +828,167 @@ exports.executeQuery = async (req, res) => {
       success: false, 
       message: error.message || 'Failed to execute query',
       error: error.message
+    });
+  }
+};
+
+/**
+ * Get paginated and sorted data for a specific table
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getTableData = async (req, res) => {
+  const { id: connectionId, tableName } = req.params;
+  const { page = 1, limit = 25, sortBy = null, sortOrder = 'asc' } = req.query;
+
+  // Validate and sanitize input
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  const sortOrderClean = sortOrder?.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+  // Basic validation for sortBy to prevent injection (allow only alphanumeric and underscore)
+  const sortByClean = sortBy && /^[a-zA-Z0-9_]+$/.test(sortBy) ? sortBy : null;
+  
+  if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+      return res.status(400).json({ success: false, message: 'Invalid pagination parameters.' });
+  }
+
+  const offset = (pageNum - 1) * limitNum;
+
+  try {
+    const connection = await databaseService.getConnectionById(connectionId);
+    if (!connection) {
+      return res.status(404).json({ success: false, message: 'Database connection not found' });
+    }
+
+    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
+    let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
+
+    let client; // General client/connection variable
+    let rows = [];
+    let columns = [];
+    let totalRowCount = 0;
+
+    // Sanitize table name - simple quote escaping, adjust based on engine if needed
+    // A more robust solution might involve checking information_schema first
+    const safeTableName = tableName.replace(/\"/g, '\\"'); // Basic defense
+
+    if (engine.toLowerCase() === 'mysql') {
+      const mysqlConnection = await mysql.createConnection({
+        host: host || 'localhost',
+        port: port || 3306,
+        database,
+        user: username,
+        password,
+        ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+        connectTimeout: 10000
+      });
+      client = mysqlConnection; // Assign to general client
+
+      try {
+        // Construct ORDER BY clause
+        const orderByClause = sortByClean ? `ORDER BY \`${sortByClean}\` ${sortOrderClean}` : ''; // Use backticks for MySQL
+        
+        // Data Query
+        const dataQuery = `SELECT * FROM \`${safeTableName}\` ${orderByClause} LIMIT ? OFFSET ?`;
+        console.log('MySQL Data Query:', dataQuery, [limitNum, offset]);
+        const [dataResult] = await client.query(dataQuery, [limitNum, offset]);
+        rows = dataResult;
+
+        // Columns (extract from result fields if rows were returned)
+        if (dataResult.length > 0 && dataResult.fields) {
+            columns = dataResult.fields.map(field => field.name);
+        } else if (rows.length > 0) {
+            // Fallback if fields aren't available but rows are
+            columns = Object.keys(rows[0]);
+        } else {
+             // If no rows, try getting columns from schema (less efficient)
+             const [colsInfo] = await client.query(`DESCRIBE \`${safeTableName}\``);
+             columns = colsInfo.map(c => c.Field);
+        }
+
+        // Count Query
+        const countQuery = `SELECT COUNT(*) as count FROM \`${safeTableName}\``;
+        console.log('MySQL Count Query:', countQuery);
+        const [countResult] = await client.query(countQuery);
+        totalRowCount = countResult[0].count;
+
+      } finally {
+        await client.end();
+      }
+    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+      const pool = new Pool({
+        host: host || 'localhost',
+        port: port || 5432,
+        database,
+        user: username,
+        password,
+        ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+        connectionTimeoutMillis: 10000
+      });
+      client = await pool.connect(); // Assign to general client
+
+      try {
+        // Construct ORDER BY clause - Use double quotes for PostgreSQL identifiers
+        const orderByClause = sortByClean ? `ORDER BY \"${sortByClean}\" ${sortOrderClean}` : '';
+        
+        // Data Query
+        const dataQuery = `SELECT * FROM \"${safeTableName}\" ${orderByClause} LIMIT $1 OFFSET $2`;
+        console.log('PostgreSQL Data Query:', dataQuery, [limitNum, offset]);
+        const dataResult = await client.query(dataQuery, [limitNum, offset]);
+        rows = dataResult.rows;
+
+        // Columns (extract from result fields)
+        if (dataResult.fields) {
+            columns = dataResult.fields.map(field => field.name);
+        } else if (rows.length > 0) {
+             columns = Object.keys(rows[0]);
+        } else {
+            // If no rows, try getting columns from schema (less efficient)
+            const colsInfo = await client.query(`
+              SELECT column_name 
+              FROM information_schema.columns 
+              WHERE table_schema = 'public' AND table_name = $1 
+              ORDER BY ordinal_position;`, [safeTableName]);
+            columns = colsInfo.rows.map(r => r.column_name);
+        }
+
+        // Count Query
+        const countQuery = `SELECT COUNT(*) as count FROM \"${safeTableName}\"`;
+        console.log('PostgreSQL Count Query:', countQuery);
+        const countResult = await client.query(countQuery);
+        totalRowCount = parseInt(countResult.rows[0].count, 10);
+
+      } finally {
+        client.release();
+        await pool.end();
+      }
+    } else {
+      return res.status(400).json({ success: false, message: `Unsupported database engine for table data: ${engine}` });
+    }
+
+    res.status(200).json({
+      success: true,
+      rows,
+      columns, // Send column names along with data
+      totalRowCount
+    });
+
+  } catch (error) {
+    console.error(`Error fetching data for table ${tableName}:`, error);
+    // Provide more specific error if possible (e.g., table not found)
+    let errorMessage = 'Internal server error fetching table data.';
+    if (error.message.includes('relation') && error.message.includes('does not exist')) {
+        errorMessage = `Table "${tableName}" not found.`;
+    } else if (error.code === 'ER_NO_SUCH_TABLE') { // MySQL specific
+         errorMessage = `Table "${tableName}" not found.`;
+    } else if (error.code === '42703' || error.code === 'ER_BAD_FIELD_ERROR') { // Column not found (e.g., in ORDER BY)
+         errorMessage = `Sort column "${sortBy}" not found in table "${tableName}".`;
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      message: errorMessage,
+      error: error.message // Include original error for debugging 
     });
   }
 }; 

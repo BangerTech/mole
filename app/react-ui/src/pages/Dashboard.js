@@ -47,6 +47,7 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 import SendIcon from '@mui/icons-material/Send';
 import { useNavigate } from 'react-router-dom';
 import AIService from '../services/AIService';
+import DatabaseService from '../services/DatabaseService';
 
 // Styled components
 const RootStyle = styled('div')({
@@ -213,46 +214,75 @@ export default function Dashboard() {
   useEffect(() => {
     // Fetch real system data and databases
     const fetchData = async () => {
+      setLoading(true);
       try {
         const apiBaseUrl = getApiBaseUrl();
         
         // Get system info
         const sysInfoResponse = await fetch(`${apiBaseUrl}/system/info`);
+        if (!sysInfoResponse.ok) throw new Error('Failed to fetch system info');
         const sysInfoData = await sysInfoResponse.json();
+        setSystemInfo(sysInfoData);
+
+        // Get database connections from API
+        const connections = await DatabaseService.getDatabaseConnections();
+        let fetchedDatabases = [];
+        let healthPromises = []; // Initialize health promises array
         
-        // Überprüfen Sie LocalStorage auf echte Datenbanken
-        const storedDatabases = localStorage.getItem('mole_real_databases');
-        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-        
-        if (realDatabases.length > 0) {
-          setDatabases(realDatabases);
+        if (connections && connections.length > 0) {
+          // Fetch schema for each connection to get table count
+          const enrichedConnections = await Promise.all(
+            connections.map(async (conn) => {
+              let tableCount = 'N/A';
+              let size = 'N/A'; // Keep size as N/A for now
+              if (conn.id && !conn.isSample) { // Only fetch schema for real connections with ID
+                try {
+                  const schemaInfo = await DatabaseService.getDatabaseSchema(conn.id);
+                  if (schemaInfo.success && schemaInfo.tableColumns) {
+                    tableCount = Object.keys(schemaInfo.tableColumns).length; 
+                  } else {
+                     console.warn(`Could not fetch schema for DB ID ${conn.id}:`, schemaInfo.message);
+                  }
+                  // Prepare health check promise here
+                  healthPromises.push(
+                     DatabaseService.getDatabaseHealth(conn.id).then(status => ({ id: conn.id, ...status }))
+                  );
+                } catch (schemaError) {
+                  console.error(`Error fetching schema for DB ID ${conn.id}:`, schemaError);
+                }
+              }
+              return { 
+                ...conn, 
+                size, // Keep size placeholder
+                tables: tableCount // Use actual count or 'N/A'
+              };
+            })
+          );
+          setDatabases(enrichedConnections);
+          fetchedDatabases = enrichedConnections; // Use enriched data
         } else {
-          // Nur eine Demo-Datenbank anzeigen, wenn keine echten Datenbanken vorhanden sind
+          // Only show mock Sample DB if API returns empty
           setDatabases(mockDatabases);
+          fetchedDatabases = []; // No real DBs to check health
         }
         
-        setSystemInfo(sysInfoData);
+        // Fetch health status using promises collected earlier
+        const healthResults = await Promise.all(healthPromises);
+        const newHealthData = {};
+        healthResults.forEach(result => {
+          newHealthData[result.id] = { status: result.status, message: result.message };
+        });
+        setHealthData(newHealthData);
         
-        // In a real implementation, we would fetch these from the API too
-        setHealthData(mockHealthData);
-        setPerformanceData(mockPerformanceData);
+        // Fetch real performance data here if available, otherwise use mock
+        setPerformanceData(mockPerformanceData); // Keep using mock for now
+
       } catch (error) {
         console.error("Failed to fetch data:", error);
         // Fallback to mock data if API fails
-        
-        // Überprüfen Sie LocalStorage auf echte Datenbanken
-        const storedDatabases = localStorage.getItem('mole_real_databases');
-        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-        
-        if (realDatabases.length > 0) {
-          setDatabases(realDatabases);
-        } else {
-          // Nur eine Demo-Datenbank anzeigen, wenn keine echten Datenbanken vorhanden sind
-          setDatabases(mockDatabases);
-        }
-        
+        setDatabases(mockDatabases); // Show sample on error
         setSystemInfo(mockSystemInfo);
-        setHealthData(mockHealthData);
+        setHealthData({}); // Clear health data on error
         setPerformanceData(mockPerformanceData);
       } finally {
         setLoading(false);
@@ -406,7 +436,10 @@ export default function Dashboard() {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
                     <Box>
                       <Typography variant="h4" sx={{ mb: 0.5 }}>
-                        {databases.reduce((sum, db) => sum + db.tables, 0)}
+                        {/* Safely calculate total tables, display N/A if any connection lacks count */}
+                        {databases.some(db => typeof db.tables !== 'number') 
+                          ? 'N/A' 
+                          : databases.reduce((sum, db) => sum + (db.tables || 0), 0)}
                       </Typography>
                       <Typography variant="subtitle2" color="text.secondary">
                         Total Tables
@@ -477,7 +510,7 @@ export default function Dashboard() {
                   </Box>
                   
                   {databases.map((db, index) => (
-                    <React.Fragment key={db.name}>
+                    <React.Fragment key={db.id || db.name}>
                       <Box sx={{ py: 2 }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
                           <Box>
@@ -486,12 +519,15 @@ export default function Dashboard() {
                           </Box>
                           <Box>
                             <Typography variant="body2">{db.size}</Typography>
-                            <Typography variant="body2" color="text.secondary">{db.tables} tables</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {typeof db.tables === 'number' ? `${db.tables} tables` : 'N/A'}
+                            </Typography>
                           </Box>
                           <Button 
                             variant="outlined" 
                             size="small"
-                            onClick={() => navigate(`/database/id/${db.id || db.name}`)}
+                            onClick={() => navigate(`/databases/${db.id}`)}
+                            disabled={!db.id}
                           >
                             Connect
                           </Button>
@@ -623,72 +659,65 @@ export default function Dashboard() {
 
       {activeTab === 1 && (
         <Grid container spacing={3}>
-          {databases.map((db) => (
-            <Grid item xs={12} md={4} key={db.name}>
-              <HealthCard score={healthData[db.name]?.score || 0}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6">{db.name}</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <HealthAndSafetyIcon sx={{ mr: 1 }} />
-                      <Typography variant="h4">{healthData[db.name]?.score || 'N/A'}</Typography>
-                    </Box>
-                  </Box>
-                  
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="body2" fontWeight="medium">Health Score</Typography>
-                    <ProgressContainer>
-                      <ProgressBar 
-                        sx={{ 
-                          width: `${healthData[db.name]?.score || 0}%`,
-                          bgcolor: (theme) => {
-                            const score = healthData[db.name]?.score || 0;
-                            if (score >= 90) return theme.palette.success.main;
-                            if (score >= 70) return theme.palette.warning.main;
-                            return theme.palette.error.main;
-                          }
-                        }} 
-                      />
-                    </ProgressContainer>
-                  </Box>
-                  
-                  {(healthData[db.name]?.issues || []).length > 0 && (
-                    <Alert 
-                      severity="error" 
-                      icon={<WarningIcon />}
-                      sx={{ mb: 2 }}
-                    >
-                      <Typography variant="subtitle2">Issues Found</Typography>
-                      <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
-                        {(healthData[db.name]?.issues || []).map((issue, i) => (
-                          <li key={i}>{issue}</li>
-                        ))}
-                      </ul>
-                    </Alert>
-                  )}
-                  
-                  {(healthData[db.name]?.warnings || []).length > 0 && (
-                    <Alert 
-                      severity="warning"
-                      icon={<InfoIcon />}
-                    >
-                      <Typography variant="subtitle2">Warnings</Typography>
-                      <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>
-                        {(healthData[db.name]?.warnings || []).map((warning, i) => (
-                          <li key={i}>{warning}</li>
-                        ))}
-                      </ul>
-                    </Alert>
-                  )}
-                  
-                  {(healthData[db.name]?.issues || []).length === 0 && 
-                   (healthData[db.name]?.warnings || []).length === 0 && 
-                    <Alert severity="success">All systems operational!</Alert>
-                  }
-                </CardContent>
-              </HealthCard>
-            </Grid>
-          ))}
+          {databases.map((db) => {
+            // Get health status for this specific DB ID
+            const currentHealth = healthData[db.id] || { status: 'Unknown', message: 'Checking...' };
+            // Determine card style based on health status
+            let cardStyle = {};
+            let statusColor = 'text.secondary';
+            if (currentHealth.status === 'OK') {
+              cardStyle = { borderLeft: '4px solid #52c41a', backgroundColor: 'rgba(82, 196, 26, 0.05)' };
+              statusColor = 'success.main';
+            } else if (currentHealth.status === 'Error') {
+              cardStyle = { borderLeft: '4px solid #f5222d', backgroundColor: 'rgba(245, 34, 45, 0.05)' };
+              statusColor = 'error.main';
+            } else if (currentHealth.status === 'Unknown' && db.id) { // Only show 'Checking' for real DBs
+                cardStyle = { borderLeft: '4px solid #faad14', backgroundColor: 'rgba(250, 173, 20, 0.05)' }; 
+                statusColor = 'warning.main';
+            }
+            // Skip rendering health card for mock Sample DB if needed, or show basic info
+            if (!db.id && db.isSample) {
+                 return (
+                    <Grid item xs={12} md={4} key={db.name}>
+                        <RegularCard sx={{ ...cardStyle }}>
+                            <CardContent>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                    <Typography variant="h6">{db.name}</Typography>
+                                    <HealthAndSafetyIcon color="disabled" />
+                                </Box>
+                                <Typography variant="body2" color="text.secondary">Health check not applicable.</Typography>
+                            </CardContent>
+                        </RegularCard>
+                    </Grid>
+                );
+            }
+
+            return (
+                <Grid item xs={12} md={4} key={db.id}>
+                  {/* Use RegularCard with dynamic style instead of HealthCard */}
+                  <RegularCard sx={{ ...cardStyle }}> 
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="h6">{db.name}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <HealthAndSafetyIcon sx={{ mr: 1, color: statusColor }} />
+                          <Typography variant="subtitle1" sx={{ color: statusColor }}>
+                            {currentHealth.status}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      
+                      <Typography variant="body2" color="text.secondary">
+                        {currentHealth.message}
+                      </Typography>
+                      
+                      {/* Remove old score/issues/warnings rendering */}
+                      
+                    </CardContent>
+                  </RegularCard>
+                </Grid>
+            );
+          })}
 
           <Grid item xs={12}>
             <RegularCard>

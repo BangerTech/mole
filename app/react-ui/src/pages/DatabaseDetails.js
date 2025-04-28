@@ -119,164 +119,148 @@ const generateMockStructure = () => [
 const DatabaseDetails = () => {
   const theme = useTheme();
   const navigate = useNavigate();
-  const { dbType, dbName } = useParams();
+  // dbName from the route /database/id/:dbName actually contains the ID
+  const { dbName: databaseId } = useParams(); 
   
-  console.log('DatabaseDetails params:', { dbType, dbName });
+  console.log('DatabaseDetails ID from params:', databaseId);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [database, setDatabase] = useState(null);
+  const [database, setDatabase] = useState(null); // Stores connection details
   const [tables, setTables] = useState([]);
   const [structure, setStructure] = useState([]);
   const [tableColumns, setTableColumns] = useState({});
   const [selectedTable, setSelectedTable] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
-  const [sqlQuery, setSqlQuery] = useState('SELECT * FROM users LIMIT 10;');
+  const [sqlQuery, setSqlQuery] = useState('');
   const [queryResult, setQueryResult] = useState(null);
   const [queryLoading, setQueryLoading] = useState(false);
   const [queryError, setQueryError] = useState(null);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
 
-  // Fetch database details
+  // Fetch database details and schema
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      setDatabase(null);
+      setTables([]);
+      setStructure([]);
+      setTableColumns({});
+
+      let databaseInfo = null;
+      const isSampleId = databaseId === '1'; // Assuming '1' is the designated sample ID
+
       try {
-        setLoading(true);
-        console.log('Loading database details with params:', { dbType, dbName });
+        console.log(`Fetching details for database ID: ${databaseId}`);
         
-        let databaseInfo = null;
-        
-        // First, try to synchronize database connections from both storages
-        // This ensures we have the latest data
-        DatabaseService.syncStoredDatabases();
-        
-        // Check if we have database info in localStorage
-        // Try both storage locations
-        const storedDatabases = localStorage.getItem('mole_real_databases');
-        const storedConnections = localStorage.getItem('mole_database_connections');
-        
-        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-        const connections = storedConnections ? JSON.parse(storedConnections) : [];
-        
-        // Combine both sources to ensure we find the database
-        const allDatabases = [...realDatabases];
-        
-        // Add any missing connections that might exist only in mole_database_connections
-        connections.forEach(conn => {
-          if (!allDatabases.some(db => db.id.toString() === conn.id.toString())) {
-            allDatabases.push(conn);
-          }
-        });
-        
-        // We're using the /database/id/:id route format, so dbName actually contains the ID
-        if (dbName) {
-          // First try to find by exact ID match
-          databaseInfo = allDatabases.find(db => db.id.toString() === dbName.toString());
-          
-          console.log('Database lookup by ID:', { 
-            lookingFor: dbName, 
-            found: !!databaseInfo,
-            availableDatabases: allDatabases
-          });
-          
-          // If it's the sample database with ID 1 and no real database was found
-          if ((dbName === '1' || !databaseInfo) && allDatabases.length === 0) {
-            console.log('Loading sample database');
-            databaseInfo = {
-              id: '1',
-              name: 'Sample Database',
-              engine: 'PostgreSQL',
-              host: 'localhost',
-              port: 5432,
-              database: 'sample_db',
-              version: '13.4',
-              connectionLimit: 20,
-              user: 'admin',
-              size: '128.9 MB',
-              tables: 25,
-              views: 5,
-              created: '2023-02-22',
-              lastBackup: '2023-05-12',
-              lastConnected: '2023-05-20',
-              isSample: true
-            };
-          }
+        // Attempt to fetch connection details from API
+        databaseInfo = await DatabaseService.getConnectionById(databaseId);
+        console.log('Fetched database details from API:', databaseInfo);
+
+      } catch (fetchError) {
+        console.warn(`API fetch error for ID ${databaseId}:`, fetchError);
+        // If the ID was the sample ID and API fetch failed (e.g., 404), load sample data
+        if (isSampleId) {
+          console.log('ID is for sample database and API fetch failed. Loading sample data.');
+          databaseInfo = {
+            id: '1',
+            name: 'Sample Database',
+            engine: 'PostgreSQL',
+            host: 'localhost',
+            port: 5432,
+            database: 'sample_db',
+            version: '13.4', // Example field
+            size: '128.9 MB', // Example field
+            tables: 25, // Example field
+            views: 5, // Example field
+            created: '2023-02-22', // Example field
+            lastBackup: '2023-05-12', // Example field
+            lastConnected: '2023-05-20',
+            isSample: true
+          };
+        } else {
+          // If it wasn't the sample ID and API fetch failed, set an error
+          setError(`Failed to load database connection: ${fetchError.response?.data?.message || fetchError.message}`);
+          setLoading(false);
+          return; // Stop further execution
         }
-        
-        // If still no database found and using the old /database/:type/:id format
-        if (!databaseInfo && dbType) {
-          // Try to find by type and name
-          databaseInfo = allDatabases.find(db => 
-            db.type?.toLowerCase() === dbType.toLowerCase() || 
-            db.engine?.toLowerCase() === dbType.toLowerCase()
-          );
-        }
-        
-        if (!databaseInfo) {
-          console.log('No database found by ID, using mock data');
-          // Fallback to mock data for demonstration
-          const typeKey = dbType ? dbType.toLowerCase() : 'postgresql';
-          databaseInfo = generateMockDatabaseDetails(typeKey, dbName);
-        }
-        
-        // Use the actual database connection information
+      }
+
+      // If we have databaseInfo (either from API or sample fallback)
+      if (databaseInfo) {
         setDatabase(databaseInfo);
-        console.log('Database details loaded:', databaseInfo);
-        
-        // For real (non-sample) databases, try to fetch actual schema information
-        if (databaseInfo && !databaseInfo.isSample) {
+        console.log('Using database details:', databaseInfo);
+
+        // For real (non-sample) databases, fetch actual schema information
+        if (!databaseInfo.isSample) {
           try {
             console.log('Fetching real database schema for:', databaseInfo.name);
             const schemaInfo = await DatabaseService.getDatabaseSchema(databaseInfo.id);
             
             if (schemaInfo.success) {
               console.log('Real database schema loaded:', schemaInfo);
-              // Use real tables data
-              setTables(schemaInfo.tables);
+              setTables(schemaInfo.tables || []);
+              setTableColumns(schemaInfo.tableColumns || {});
               
-              // Extract structure for the first table (if available) to show in the Structure tab
-              const firstTableName = schemaInfo.tables[0]?.name;
-              if (firstTableName && schemaInfo.tableColumns[firstTableName]) {
+              // Select first table's structure if available
+              const firstTableName = schemaInfo.tables?.[0]?.name;
+              if (firstTableName && schemaInfo.tableColumns?.[firstTableName]) {
                 setStructure(schemaInfo.tableColumns[firstTableName]);
-                setTableColumns(schemaInfo.tableColumns);
                 setSelectedTable(firstTableName);
               } else {
-                // Fallback to mock structure data if no tables or columns available
-                setStructure(generateMockStructure());
+                setStructure([]); // No structure to show
+                setSelectedTable(null);
               }
             } else {
-              console.warn('Failed to load real schema, using mock data:', schemaInfo.message);
-              // Fallback to mock data if schema fetch fails
-              setTables(generateMockTables());
-              setStructure(generateMockStructure());
+              console.warn('Failed to load real schema, using empty data:', schemaInfo.message);
+              setError(`Failed to load schema: ${schemaInfo.message}`); // Show schema error
+              setTables([]);
+              setStructure([]);
+              setTableColumns({});
             }
-          } catch (err) {
-            console.error('Error fetching schema:', err);
-            // Fallback to mock data
-            setTables(generateMockTables());
-            setStructure(generateMockStructure());
+          } catch (schemaError) {
+            console.error('Error fetching schema:', schemaError);
+            setError(`Error fetching schema: ${schemaError.message}`);
+            setTables([]);
+            setStructure([]);
+             setTableColumns({});
           }
         } else {
-          // For sample database just use mock data
-          console.log('Using mock data for sample database');
-          const tablesList = generateMockTables();
-          const structureData = generateMockStructure();
-          
-          setTables(tablesList);
-          setStructure(structureData);
+          // For sample database, use mock data for tables/structure
+          console.log('Using mock data for sample database schema');
+          const mockTables = generateMockTables(); // Assuming these helpers exist
+          const mockStructure = generateMockStructure(); // Assuming these helpers exist
+          setTables(mockTables);
+          setStructure(mockStructure);
+          setSelectedTable(mockTables[0]?.name || null);
+          // For mock data, generate simple tableColumns map
+          const mockTableColumns = {};
+          if (mockTables.length > 0 && mockStructure.length > 0) {
+            mockTableColumns[mockTables[0].name] = mockStructure;
+          }
+          setTableColumns(mockTableColumns); 
         }
-        
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching database details:', err);
-        setError('Failed to load database details. Please try again.');
-      } finally {
-        setLoading(false);
+      } else if (!error) { 
+        // Should not happen if error handling above is correct, but as a fallback
+        setError('Could not load database information.');
       }
+
+      setLoading(false);
     };
     
-    fetchData();
-  }, [dbType, dbName]);
+    if (databaseId) { // Only fetch if an ID is present in the URL
+      fetchData();
+    } else {
+      setError('No database ID provided in URL.');
+      setLoading(false);
+    }
+
+    // Cleanup function (optional)
+    return () => {
+      // Cancel any pending requests if needed
+    };
+  }, [databaseId]); // Re-run effect if the database ID changes
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
@@ -345,46 +329,57 @@ const DatabaseDetails = () => {
   };
 
   const handleDeleteDatabase = async () => {
-    // Close dialog first
-    setOpenDeleteDialog(false);
+    // Check if database object exists and has an ID, and is not sample
+    if (!database || !database.id || database.isSample) {
+      console.error('Cannot delete: No valid database selected or it is a sample.');
+      setError('Cannot delete this connection.'); // Provide feedback
+      setOpenDeleteDialog(false);
+      return;
+    }
+    
+    const idToDelete = database.id;
+    setOpenDeleteDialog(false); // Close dialog
+    setLoading(true); // Show loading indicator
     
     try {
-      // Use the service to delete the connection
-      await DatabaseService.deleteConnection(dbName);
+      await DatabaseService.deleteConnection(idToDelete);
       
-      // Show confirmation message
       setError({
         type: 'success',
         message: 'Database connection deleted successfully.'
       });
       
-      // Navigate after a delay
+      // Navigate back to the list after deletion
       setTimeout(() => {
         navigate('/databases');
       }, 1500);
     } catch (err) {
       console.error('Error deleting database:', err);
+      const deleteError = err.response?.data?.message || err.message || 'Failed to delete database connection.';
       setError({
         type: 'error',
-        message: 'Failed to delete database connection. Please try again.'
+        message: deleteError
       });
+      setLoading(false); // Turn off loading on error
     }
+    // No finally setLoading(false) here, as successful navigation leaves the page
   };
 
   const handleTableClick = (table) => {
-    // Set the selected table for the structure view
-    setSelectedTable(table.name);
-    
-    // Update structure if we have columns for this table
-    if (tableColumns && tableColumns[table.name]) {
-      setStructure(tableColumns[table.name]);
+    if (!database || !database.id) {
+      console.error('Cannot navigate to table view: database ID is missing.');
+      return;
     }
-    
-    // Switch to structure tab
-    setActiveTab(1);
-    
-    // Alternatively, navigate to table view
-    // navigate(`/database/${dbType}/${dbName}/table/${table.name}`);
+    console.log(`Navigating to table view for: ${table.name}`);
+    // Navigate to the dedicated TableView component
+    navigate(`/databases/${database.id}/tables/${encodeURIComponent(table.name)}`);
+
+    // We no longer set structure or change tabs here
+    // setSelectedTable(table.name);
+    // if (tableColumns && tableColumns[table.name]) {
+    //   setStructure(tableColumns[table.name]);
+    // }
+    // setActiveTab(1);
   };
 
   // Loading state
@@ -444,14 +439,14 @@ const DatabaseDetails = () => {
         </MuiLink>
         <Typography sx={{ display: 'flex', alignItems: 'center' }} color="text.primary">
           <DatabaseIcon sx={{ mr: 0.5 }} fontSize="inherit" />
-          {database && database.name ? database.name : dbName}
+          {database && database.name ? database.name : databaseId}
         </Typography>
       </Breadcrumbs>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" fontWeight={600} gutterBottom>
-            {database && database.name ? database.name : dbName}
+            {database && database.name ? database.name : databaseId}
             <Chip
               label={database && database.engine ? database.engine : "Unknown"}
               size="small"
@@ -654,12 +649,11 @@ const DatabaseDetails = () => {
                 
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" color="textSecondary">Size</Typography>
-                  <Typography variant="body1">{database.size}</Typography>
+                  <Typography variant="body1">{database.size || 'N/A'}</Typography>
                 </Box>
               </Grid>
             </Grid>
             
-            {/* Table Selection for Structure View */}
             {tables.length > 0 && (
               <Box sx={{ mb: 3 }}>
                 <Typography variant="h6" gutterBottom>Table Structure</Typography>
@@ -671,13 +665,11 @@ const DatabaseDetails = () => {
                     onChange={(e) => {
                       const tableName = e.target.value;
                       setSelectedTable(tableName);
-                      
-                      // Find the columns for this table if available
+                      // Update structure only
                       if (tableColumns && tableColumns[tableName]) {
                         setStructure(tableColumns[tableName]);
                       } else {
-                        // Fallback to default structure
-                        setStructure(generateMockStructure());
+                        setStructure([]);
                       }
                     }}
                     label="Select Table"
@@ -691,52 +683,64 @@ const DatabaseDetails = () => {
                 </FormControl>
               </Box>
             )}
-            
-            <TableContainer sx={{ mb: 3 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Nullable</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Default</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Key</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Extra</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {structure.map((column, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{column.name}</TableCell>
-                      <TableCell>{column.type}</TableCell>
-                      <TableCell>{column.nullable ? 'YES' : 'NO'}</TableCell>
-                      <TableCell>{column.default || 'NULL'}</TableCell>
-                      <TableCell>
-                        {column.key && (
-                          <Chip
-                            label={column.key}
-                            size="small"
-                            sx={{ 
-                              height: 20,
-                              fontSize: '0.7rem',
-                              borderRadius: 1,
-                              bgcolor: column.key === 'PRI' ? 
-                                theme.palette.primary.main + '20' : 
-                                theme.palette.secondary.main + '20',
-                              color: column.key === 'PRI' ? 
-                                theme.palette.primary.main : 
-                                theme.palette.secondary.main,
-                              fontWeight: 'bold'
-                            }}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>{column.extra}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+
+            {/* Display Table Structure */} 
+            {selectedTable && structure.length > 0 && (
+              <>
+                <Typography variant="subtitle1" gutterBottom>Structure for: {selectedTable}</Typography>
+                <TableContainer sx={{ mb: 3, maxHeight: '300px', overflowY: 'auto' }}> {/* Limit height */}
+                  <Table size="small" stickyHeader> {/* Add stickyHeader */}
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Nullable</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Default</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Key</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Extra</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {structure.map((column, index) => (
+                        <TableRow key={`${selectedTable}-col-${index}`}> {/* Add unique key */}
+                          <TableCell>{column.name}</TableCell>
+                          <TableCell>{column.type}</TableCell>
+                          <TableCell>{column.nullable ? 'YES' : 'NO'}</TableCell>
+                          <TableCell>{column.default || 'NULL'}</TableCell>
+                          <TableCell>
+                            {column.key && (
+                              <Chip
+                                label={column.key}
+                                size="small"
+                                sx={{ 
+                                  height: 20,
+                                  fontSize: '0.7rem',
+                                  borderRadius: 1,
+                                  bgcolor: column.key === 'PRI' ? 
+                                    theme.palette.primary.main + '20' : 
+                                    theme.palette.secondary.main + '20',
+                                  color: column.key === 'PRI' ? 
+                                    theme.palette.primary.main : 
+                                    theme.palette.secondary.main,
+                                  fontWeight: 'bold'
+                                }}
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell>{column.extra}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
+
+            {!selectedTable && (
+              <Typography sx={{ mt: 2, fontStyle: 'italic' }} color="textSecondary">
+                Select a table from the 'Tables' tab or the dropdown above to view its structure.
+              </Typography>
+            )}
           </Box>
         )}
         
@@ -835,7 +839,7 @@ const DatabaseDetails = () => {
         <DialogTitle>Delete Database Connection</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to delete the connection to "{dbName}"? This action will only remove the connection from your list, it will not delete the actual database.
+            Are you sure you want to delete the connection to "{databaseId}"? This action will only remove the connection from your list, it will not delete the actual database.
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>

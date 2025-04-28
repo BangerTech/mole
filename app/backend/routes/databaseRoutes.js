@@ -25,6 +25,12 @@ router.post('/connections', databaseController.createConnection);
 router.get('/:id/schema', databaseController.getDatabaseSchema);
 router.get('/connections/:id/schema', databaseController.getDatabaseSchema);
 
+// Get database health status
+router.get('/:id/health', databaseController.getDatabaseHealth);
+
+// Get paginated/sorted data for a specific table
+router.get('/:id/tables/:tableName/data', databaseController.getTableData);
+
 // Execute SQL query
 router.post('/:id/execute', databaseController.executeQuery);
 router.post('/connections/:id/execute', databaseController.executeQuery);

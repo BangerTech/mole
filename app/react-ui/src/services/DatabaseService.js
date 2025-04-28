@@ -12,256 +12,125 @@ const API_URL = getApiBaseUrl();
 
 /**
  * Service for database connection management
- * 
- * Note: The backend has been updated to support both /api/databases and 
- * /api/databases/connections endpoints to maintain compatibility
- * with this service implementation. The localStorage fallback
- * will be used if the API is unavailable.
+ * Relies solely on the backend API.
  */
 class DatabaseService {
   /**
-   * Get all database connections
+   * Get all database connections from the API
    * @returns {Promise} Promise with all database connections
    */
   async getDatabaseConnections() {
     try {
-      // Try to fetch from API first
       const response = await axios.get(`${API_URL}`);
       return response.data;
     } catch (error) {
-      console.warn('Error fetching from API, using localStorage:', error);
-      // Fallback to localStorage if API is not available
-      return this.getConnectionsFromLocalStorage();
+      console.error('Error fetching connections from API:', error);
+      throw error; // Let the caller handle the error
     }
   }
 
   /**
-   * Get database connections from localStorage
-   * @returns {Array} Array of database connections
+   * Get a single database connection by ID from the API
+   * @param {string|number} id - Connection ID
+   * @returns {Promise} Promise with the database connection object
    */
-  getConnectionsFromLocalStorage() {
+  async getConnectionById(id) {
     try {
-      const stored = localStorage.getItem('mole_database_connections');
-      return stored ? JSON.parse(stored) : [];
+      const response = await axios.get(`${API_URL}/${id}`);
+      return response.data;
     } catch (error) {
-      console.error('Error reading from localStorage:', error);
-      return [];
+      console.error(`Error fetching connection ${id} from API:`, error);
+      throw error; // Let the caller handle the error
     }
   }
 
   /**
-   * Save a database connection
+   * Save a database connection via the API
    * @param {Object} connection - Database connection details
-   * @returns {Promise} Promise with the saved connection
+   * @returns {Promise} Promise with the saved connection object from the API
    */
   async saveConnection(connection) {
     try {
-      // Try to save to API
       const response = await axios.post(`${API_URL}`, connection);
       return response.data;
     } catch (error) {
-      console.warn('Error saving to API, using localStorage:', error);
-      // Fallback to localStorage
-      return this.saveConnectionToLocalStorage(connection);
+      console.error('Error saving connection to API:', error);
+      throw error; // Let the caller handle the error
     }
   }
 
   /**
-   * Save connection to localStorage
-   * @param {Object} connection - Database connection details
-   * @returns {Object} Saved connection with generated ID
-   */
-  saveConnectionToLocalStorage(connection) {
-    try {
-      const connections = this.getConnectionsFromLocalStorage();
-      
-      // Generate an ID if not provided
-      const newConnection = { 
-        ...connection,
-        id: connection.id || Date.now(),
-        created_at: connection.created_at || new Date().toISOString()
-      };
-      
-      // Add to the list
-      connections.push(newConnection);
-      
-      // Save back to localStorage
-      localStorage.setItem('mole_database_connections', JSON.stringify(connections));
-      
-      return newConnection;
-    } catch (error) {
-      console.error('Error saving to localStorage:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update a database connection
+   * Update a database connection via the API
    * @param {string|number} id - Connection ID
    * @param {Object} connection - Updated connection details
-   * @returns {Promise} Promise with the updated connection
+   * @returns {Promise} Promise with the updated connection object from the API
    */
   async updateConnection(id, connection) {
     try {
-      // Try to update via API
       const response = await axios.put(`${API_URL}/${id}`, connection);
       return response.data;
     } catch (error) {
-      console.warn('Error updating in API, using localStorage:', error);
-      // Fallback to localStorage
-      return this.updateConnectionInLocalStorage(id, connection);
+      console.error(`Error updating connection ${id} in API:`, error);
+      throw error; // Let the caller handle the error
     }
   }
 
   /**
-   * Update connection in localStorage
+   * Delete database connection via the API
    * @param {string|number} id - Connection ID
-   * @param {Object} connection - Updated connection details
-   * @returns {Object} Updated connection
-   */
-  updateConnectionInLocalStorage(id, connection) {
-    try {
-      let connections = this.getConnectionsFromLocalStorage();
-      
-      // Find and update the connection
-      connections = connections.map(conn => 
-        conn.id.toString() === id.toString() ? { ...conn, ...connection } : conn
-      );
-      
-      // Save back to localStorage
-      localStorage.setItem('mole_database_connections', JSON.stringify(connections));
-      
-      // Return the updated connection
-      return connections.find(conn => conn.id.toString() === id.toString());
-    } catch (error) {
-      console.error('Error updating in localStorage:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Delete database connection
-   * @param {string|number} id - Connection ID
-   * @returns {Promise} Promise with delete result
+   * @returns {Promise} Promise with delete result from the API
    */
   async deleteConnection(id) {
     try {
-      // Try API first
       const response = await axios.delete(`${API_URL}/${id}`);
-      
-      // If successful, also remove from localStorage to ensure consistency
-      const connections = this.getConnectionsFromLocalStorage();
-      const updatedConnections = connections.filter(conn => conn.id.toString() !== id.toString());
-      localStorage.setItem('mole_database_connections', JSON.stringify(updatedConnections));
-      
-      // Also update real_databases storage
-      const realDb = localStorage.getItem('mole_real_databases');
-      if (realDb) {
-        const realDatabases = JSON.parse(realDb);
-        const updatedRealDatabases = realDatabases.filter(db => db.id.toString() !== id.toString());
-        localStorage.setItem('mole_real_databases', JSON.stringify(updatedRealDatabases));
-      }
-      
       return response.data;
     } catch (error) {
-      console.warn('Error deleting from API, removing from localStorage:', error);
-      
-      // Fallback to localStorage if API is not available
-      const connections = this.getConnectionsFromLocalStorage();
-      const updatedConnections = connections.filter(conn => conn.id.toString() !== id.toString());
-      localStorage.setItem('mole_database_connections', JSON.stringify(updatedConnections));
-      
-      // Also update real_databases storage
-      const realDb = localStorage.getItem('mole_real_databases');
-      if (realDb) {
-        const realDatabases = JSON.parse(realDb);
-        const updatedRealDatabases = realDatabases.filter(db => db.id.toString() !== id.toString());
-        localStorage.setItem('mole_real_databases', JSON.stringify(updatedRealDatabases));
-      }
-      
-      return { success: true, message: 'Connection deleted from local storage' };
+      console.error(`Error deleting connection ${id} from API:`, error);
+      throw error; // Let the caller handle the error
     }
   }
 
   /**
-   * Test a database connection
-   * @param {Object} connectionDetails - Connection details to test
-   * @returns {Promise} Promise with test result
+   * Test a database connection via the API
+   * @param {Object} connectionData - Connection details (engine, host, port, database, username, password, ssl_enabled)
+   * @returns {Promise} Promise with the test result { success: boolean, message: string }
    */
-  async testConnection(connectionDetails) {
+  async testConnection(connectionData) {
     try {
-      // Try to test via API
-      const response = await axios.post(`${API_URL}/test-connection`, connectionDetails);
+      console.log('Testing connection with data:', connectionData);
+      const testApiUrl = `${API_URL.replace('/databases', '')}/databases/test`; 
+      console.log('Test API URL:', testApiUrl);
+      const response = await axios.post(testApiUrl, connectionData);
+      console.log('Test connection response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error testing connection:', error);
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to test connection'
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to test connection due to an unknown error.';
+      // Return error details in the expected format for the form handler
+      return {
+        success: false,
+        message: errorMessage
       };
     }
   }
 
   /**
-   * Synchronize between mole_real_databases and mole_database_connections
-   * This ensures that both localStorage items are kept in sync
-   */
-  syncStoredDatabases() {
-    try {
-      // Get databases from both storage locations
-      const storedRealDatabases = localStorage.getItem('mole_real_databases');
-      const storedConnections = localStorage.getItem('mole_database_connections');
-      
-      const realDatabases = storedRealDatabases ? JSON.parse(storedRealDatabases) : [];
-      const connections = storedConnections ? JSON.parse(storedConnections) : [];
-      
-      // Merge databases from both sources by ID
-      const mergedDatabases = [...realDatabases];
-      
-      // Add connections that don't exist in realDatabases
-      for (const conn of connections) {
-        if (!mergedDatabases.some(db => db.id.toString() === conn.id.toString())) {
-          mergedDatabases.push(conn);
-        }
-      }
-      
-      // Update both localStorage items with the merged data
-      localStorage.setItem('mole_real_databases', JSON.stringify(mergedDatabases));
-      localStorage.setItem('mole_database_connections', JSON.stringify(mergedDatabases));
-      
-      console.log('Database synchronization complete:', {
-        databaseCount: mergedDatabases.length
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Error synchronizing databases:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Get database schema (tables, columns, etc.) for a specific connection
+   * Get database schema (tables, columns, etc.) for a specific connection via the API
    * @param {string|number} id - Connection ID
    * @returns {Promise} Promise with database schema information
    */
   async getDatabaseSchema(id) {
     try {
-      // Debug connection information
       console.log('Fetching schema for database ID:', id);
-      
-      // Use the correct API URL format
       const apiUrl = `${API_URL}/${id}/schema`;
       console.log('API URL used:', apiUrl);
-      
-      // Try to fetch from API
       const response = await axios.get(apiUrl);
       console.log('Schema response:', response.data);
-      return response.data;
+      // Ensure success field is present for compatibility, default to true if API returns data
+      return { success: true, ...response.data };
     } catch (error) {
       console.error('Error fetching database schema:', error);
-      
-      // Return a fallback with empty data
+      // Return a standardized error format
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to fetch database schema',
@@ -272,32 +141,87 @@ class DatabaseService {
   }
 
   /**
-   * Execute a SQL query on a database
+   * Execute a SQL query on a database via the API
    * @param {string|number} id - Connection ID
    * @param {string} query - SQL query to execute
    * @returns {Promise} Promise with query results
    */
   async executeQuery(id, query) {
     try {
-      // Debug connection information
       console.log('Executing query for database ID:', id);
-      
-      // Use the correct API URL format
       const apiUrl = `${API_URL}/${id}/execute`;
       console.log('API URL used:', apiUrl);
-      
-      // Try to execute via API
       const response = await axios.post(apiUrl, { query });
       console.log('Query execution response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error executing query:', error);
-      
-      // Return error details
+      // Return a standardized error format
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to execute query',
         error: error.response?.data?.error || error.message
+      };
+    }
+  }
+
+  /**
+   * Fetches the health status for a specific database connection.
+   * @param {string} id The ID of the database connection.
+   * @returns {Promise<Object>} A promise that resolves to the health status object.
+   */
+  async getDatabaseHealth(id) {
+    // Use the API_URL constant, adjusting the path as needed
+    const healthApiUrl = `${API_URL}/${id}/health`; 
+    console.log(`Fetching health for database ID: ${id}`);
+    console.log(`API URL used: ${healthApiUrl}`);
+    try {
+      // Use axios for consistency with other methods
+      const response = await axios.get(healthApiUrl);
+      console.log('Health check response:', response.data);
+      // Return the data directly assuming backend sends { status, message }
+      return response.data; 
+    } catch (error) {
+      console.error('Error fetching database health:', error);
+      // Extract error message from axios error response if available
+      const message = error.response?.data?.message || error.message || 'Network or API error during health check.';
+      // Return a generic error status for the frontend to handle
+      return { status: 'Error', message: message };
+    }
+  }
+
+  /**
+   * Fetches paginated and sorted data for a specific table.
+   * @param {string|number} id - Connection ID.
+   * @param {string} tableName - Name of the table.
+   * @param {object} params - Parameters for pagination and sorting.
+   * @param {number} params.page - Page number (1-based).
+   * @param {number} params.limit - Rows per page.
+   * @param {string|null} params.sortBy - Column to sort by.
+   * @param {'asc'|'desc'|null} params.sortOrder - Sort direction.
+   * @returns {Promise<Object>} Promise resolving to { success: boolean, rows: array, columns: array, totalRowCount: number, message?: string }.
+   */
+  async getTableData(id, tableName, params) {
+    // Encode table name in case it has special characters
+    const encodedTableName = encodeURIComponent(tableName);
+    const apiUrl = `${API_URL}/${id}/tables/${encodedTableName}/data`;
+    console.log(`Fetching data for table: ${tableName}`, params);
+    console.log(`API URL used: ${apiUrl}`);
+    try {
+      // Pass params as query parameters
+      const response = await axios.get(apiUrl, { params });
+      console.log('Get table data response:', response.data);
+      // Assume backend returns { success: true, rows: [], columns: [], totalRowCount: 0 }
+      return response.data; 
+    } catch (error) {
+      console.error(`Error fetching data for table ${tableName}:`, error);
+      const message = error.response?.data?.message || error.message || 'Network or API error fetching table data.';
+      return { 
+        success: false, 
+        message: message, 
+        rows: [], 
+        columns: [], // Include empty columns array on error
+        totalRowCount: 0 
       };
     }
   }

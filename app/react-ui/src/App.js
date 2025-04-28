@@ -72,15 +72,6 @@ function App() {
   const [mode, setMode] = useState('dark');
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Synchronize databases in localStorage on app initialization
-  useEffect(() => {
-    // Sync database connections between different localStorage keys
-    DatabaseService.syncStoredDatabases();
-    
-    // Log the sync operation
-    console.log('Database storage synchronized on app initialization');
-  }, []);
-
   // Theme mode context value
   const themeMode = useMemo(
     () => ({
@@ -380,6 +371,18 @@ function App() {
                   toggleSidebar={toggleSidebar}
                 >
                   <TableView />
+                </DashboardLayout>
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/databases/:id/tables/:tableName" element={
+              <ProtectedRoute>
+                <DashboardLayout 
+                  mode={mode} 
+                  sidebarOpen={sidebarOpen} 
+                  toggleSidebar={toggleSidebar}
+                >
+                  <TableView /> 
                 </DashboardLayout>
               </ProtectedRoute>
             } />

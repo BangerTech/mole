@@ -230,6 +230,141 @@ Für die Implementierung wurden die bestehenden Backend-Controller und Frontend-
 -- direkt auf den konfigurierten Datenbanken arbeitet und keine lokale Speicherung erfordert
 ```
 
+### Migration 005 - Backend als Single Source of Truth (2025-04-29)
+
+In dieser Migration wurde die Abhängigkeit von localStorage im Frontend entfernt und das Backend als einzige Quelle der Wahrheit (Single Source of Truth) etabliert. Folgende Änderungen wurden vorgenommen:
+
+1. **Frontend-Refactoring:**
+   - Entfernung aller localStorage-basierten Speicher- und Abrufroutinen für Datenbankverbindungen
+   - Entfernung der syncStoredDatabases-Funktion und aller diesbezüglichen Aufrufe
+   - Umstellung aller Komponenten zur ausschließlichen Verwendung von API-Aufrufen
+   - Vereinfachung der Fehlerbehandlung durch konsistente Propagierung von API-Fehlern
+
+2. **Verbesserte Zuverlässigkeit:**
+   - Beseitigung von Inkonsistenzen zwischen lokaler Speicherung und Backend-Datenbank
+   - Zuverlässigeres Verhalten bei der Anzeige, Bearbeitung und Löschung von Verbindungen
+   - Klare Trennung zwischen Frontend-Darstellung und Backend-Datenhaltung
+   - Verbesserter Umgang mit der Sample-Datenbank (wird nur angezeigt, wenn keine echten Verbindungen vorhanden sind)
+
+3. **Architekturelle Vorteile:**
+   - Bessere Skalierbarkeit für zukünftige Mehrbenutzerszenarien
+   - Vereinfachte Code-Wartung durch Entfernung von Fallback-Logik
+   - Höhere Datenkonsistenz durch Eliminierung mehrerer Wahrheitsquellen
+
+Betroffene Komponenten:
+- `DatabaseService.js`: Entfernung von localStorage-Fallbacks und Synchronisierungsfunktionen
+- `DatabasesList.js`: Direkte API-Aufrufe statt localStorage-Lesezugriffe
+- `DatabaseForm.js`: API-basierte Datenabfrage und -speicherung
+- `DatabaseDetails.js`: Direkte API-Aufrufe zum Abrufen von Verbindungsdetails und Schema
+
+Die Migration erfolgte ohne Änderungen am Datenbankschema, da ausschließlich die Frontend-Datenzugriffslogik modifiziert wurde. Die bestehende SQLite-Datenbank im Backend bleibt unverändert.
+
+### Migration 006 - Health-Status Monitoring (2025-04-29)
+
+In dieser Migration wurde die Echtzeitüberwachung des Gesundheitszustands für Datenbankverbindungen implementiert. Folgende Änderungen wurden vorgenommen:
+
+1. **Backend-API-Erweiterungen:**
+   - Neuer Endpunkt `/api/databases/:id/health` zur Echtzeitprüfung des Verbindungsstatus
+   - Motorspezifische Gesundheitschecks:
+     - PostgreSQL: Verbindungstest und einfache Query-Ausführung
+     - MySQL: Verbindungstest mit Ping-Funktion
+     - SQLite: Überprüfung der Dateiexistenz
+   - Standardisierte Antwortstruktur: `{ status: 'OK'|'Error'|'Unknown', message: '...' }`
+
+2. **Frontend-Erweiterungen:**
+   - Neue `getDatabaseHealth()`-Methode im `DatabaseService`
+   - Dynamische Abfrage des Gesundheitsstatus für alle konfigurierten Datenbanken
+   - Visuelle Anzeige des Verbindungsstatus im Health-Tab des Dashboards:
+     - Grüne Färbung für erfolgreiche Verbindungen
+     - Rote Färbung für fehlgeschlagene Verbindungen
+     - Gelbe Färbung während der Statusprüfung
+
+3. **Architekturelle Vorteile:**
+   - Kontinuierliche Überwachung des Verbindungsstatus in Echtzeit
+   - Klare visuelle Rückmeldung über den aktuellen Zustand der Datenbankverbindungen
+   - Verbesserte Benutzeroberfläche zur schnellen Fehlererkennung
+   - Grundlage für zukünftige erweiterte Metriken (z.B. Abfragegeschwindigkeit, Cache-Nutzung)
+
+Diese Erweiterung ermöglicht dem Benutzer schnelles Feedback über den Status jeder konfigurierten Datenbankverbindung direkt im Dashboard. Die API wurde so gestaltet, dass sie in Zukunft leicht um zusätzliche Metriken erweitert werden kann. Für die Sample-Datenbank wird ein Hinweis angezeigt, dass der Health-Check nicht anwendbar ist.
+
+Die Migration erfolgte ohne Änderungen am Datenbankschema, da die Funktionalität vollständig durch neue API-Endpunkte und Frontend-Komponenten implementiert wurde.
+
+### Migration 007 - Table View with Server-Side Pagination and Sorting (2025-05-21)
+
+In dieser Migration wurde eine spezialisierte Tabellenansicht mit Server-seitiger Paginierung und Sortierung implementiert. Diese Funktionalität ermöglicht eine effiziente Anzeige und Navigation auch in großen Datentabellen. Folgende Änderungen wurden vorgenommen:
+
+1. **Backend-API-Erweiterungen:**
+   - Neuer Endpunkt `/api/databases/:id/tables/:tableName/data` zum Abrufen von paginierten Tabellendaten
+   - Implementierung von Server-seitigem Paging mit parametrisierten Abfragen (`page`, `limit`)
+   - Unterstützung für dynamische Sortierung (`sortBy`, `sortOrder`)
+   - Rückgabe formatierter Daten mit spaltenspezifischen Metadaten und Gesamtzeilenanzahl
+
+2. **Frontend-Erweiterungen:**
+   - Neue `TableView.js` Komponente mit Material UI DataGrid für optimierte Tabellenanzeige
+   - Integration des `@mui/x-data-grid` für erweiterte Tabellenfunktionalität:
+     - Intelligentes Rendering großer Datensätze
+     - Dynamische Spaltenformatierung basierend auf Datentypen
+     - Tooltips mit Spaltenmetadaten (Datentyp, Nullable, Default-Werte)
+     - Voll funktionsfähige Toolbar mit Filterung, Export und Dichteeinstellungen
+   - Implementierung von Server-seitiger Paginierung:
+     - Dynamische Seitenwechsel ohne Neuladen der gesamten Tabelle
+     - Konfigurierbare Einträge pro Seite (10, 25, 50, 100)
+     - Aktualisierung des Datenmodells bei Paginierungsänderungen
+   - Unterstützung für Server-seitige Sortierung:
+     - Spaltensortierung durch Klick auf Spaltenüberschriften
+     - Automatische API-Anfragen bei Sortierungsänderungen
+     - Beibehaltung von Sortier- und Filtereinstellungen bei Navigation
+
+3. **Architekturelle Verbesserungen:**
+   - Erweiterung des `DatabaseService` um eine neue `getTableData`-Methode für paginierte Tabellenanzeige
+   - Intelligente Fehlerbehandlung mit spezifischen Fehlermeldungen für verschiedene Datenbankengines
+   - Optimierte Datenbankabfragen für bessere Performance bei großen Tabellen
+   - Neue Routing-Integration in `App.js` für die dedizierte Tabellenansicht
+   - Verbesserte Breadcrumb-Navigation für eindeutige Orientierung
+
+Diese Erweiterung bietet eine professionelle, leistungsfähige Tabellenansicht mit folgenden Vorteilen:
+- Effiziente Anzeige sehr großer Datentabellen ohne Performance-Einbußen
+- Intuitive Benutzeroberfläche mit modernen Datentabellen-Features
+- Konsistente Darstellung verschiedener Datentypen
+- Nahtlose Integration in die bestehende Datenbankdetailansicht
+- Zuverlässige Funktionalität selbst bei langsamen Netzwerkverbindungen
+
+Die neue Tabellenansicht wird automatisch aktiviert, wenn ein Benutzer auf einen Tabellennamen in der Datenbankdetailansicht klickt, wodurch eine spezialisierte Seite für die ausgewählte Tabelle geladen wird.
+
+### Migration 008 - Removal of localStorage for Database Connections (2025-05-22)
+
+Diese Migration entfernte die Abhängigkeit von localStorage für die Verwaltung von Datenbankverbindungen und verbesserte damit die Architektur der Anwendung. Folgende Änderungen wurden implementiert:
+
+1. **Architekturelle Verbesserungen:**
+   - Vollständige Entfernung der localStorage-Fallback-Logik für Datenbankverbindungen
+   - Konsequente Nutzung der Backend-API als einzige Datenquelle für Verbindungsdetails
+   - Vereinfachung des Datenmodells und der Datenverwaltung
+   - Verbesserte Fehlererkennung und -behandlung im Frontend
+
+2. **Frontend-Änderungen:**
+   - Refactoring des `DatabaseService.js`:
+     - Entfernung aller localStorage-bezogenen Funktionen
+     - Direktes Weiterleiten von API-Fehlern an die aufrufenden Komponenten
+     - Implementierung einer neuen `getConnectionById`-Methode für einzelne Verbindungsdetails
+   - Aktualisierung aller abhängigen Komponenten:
+     - `DatabasesList.js`: Verwendet jetzt ausschließlich API-Aufrufe für Verbindungslisten
+     - `DatabaseForm.js`: Lädt Verbindungsdetails im Edit-Modus direkt von der API
+     - `DatabaseDetails.js`: Entfernt localStorage-Lookups und synchronisiert nicht mehr mit lokalem Speicher
+
+3. **Beibehaltene Funktionalität:**
+   - Sample Database bleibt verfügbar, wenn keine echten Verbindungen existieren
+   - Die Sample Database wird jetzt korrekt über API-Fehlerbehandlung implementiert
+   - Alle bestehenden Funktionen (Erstellen, Bearbeiten, Testen und Löschen von Verbindungen) bleiben erhalten
+
+Diese Migration verbesserte die Anwendung durch:
+- Vereinfachung des Codes und Verbesserung der Wartbarkeit
+- Beseitigung von potenziellen Synchronisierungsproblemen zwischen localStorage und Backend
+- Konsistentere Datenverwaltung, da Verbindungsdaten nur an einer Stelle gespeichert werden
+- Verbesserte Sicherheit durch Verringerung der im Browser gespeicherten sensiblen Daten
+- Klare Trennung von Verantwortlichkeiten im Code (Frontend vs. Backend)
+
+Für Endbenutzer bleibt die Funktionalität identisch, während die Anwendung intern robuster und wartungsfreundlicher wird.
+
 ## Frontend-Komponenten
 
 ### Hauptkomponenten
@@ -244,7 +379,7 @@ Für die Implementierung wurden die bestehenden Backend-Controller und Frontend-
    - Sortieroptionen nach Namen, Engine oder letztem Verbindungszeitpunkt
    - Kontextmenü mit Optionen zum Bearbeiten und Löschen von Verbindungen
    - Button zum Hinzufügen neuer Datenbankverbindungen
-   - Persistiert echte Datenbankverbindungen im LocalStorage des Browsers
+   - Holt Datenbankverbindungen direkt vom Backend-API
 2. **DatabaseDetails**: Zeigt Details einer ausgewählten Datenbank (Tabellen, Struktur, usw.)
    - Anzeige von Grundinformationen zur Datenbank (Engine, Host, Port, Benutzer)
    - Tabellenansicht mit Übersicht aller Tabellen und Views
@@ -279,6 +414,15 @@ Für die Implementierung wurden die bestehenden Backend-Controller und Frontend-
    - Synchronisierungseinstellungen für DB-Sync-Service
    - Sicherheitseinstellungen (Passwort, Sitzungsverwaltung)
    - Informationsbereich zur Anwendung
+7. **TableView**: Spezialisierte Ansicht für Tabellendaten mit erweiterten Funktionen
+   - Implementiert mit `@mui/x-data-grid` für eine moderne, leistungsfähige Tabellenansicht
+   - Server-seitige Paginierung für effiziente Anzeige großer Datensätze
+   - Dynamische Sortierung durch Klick auf Spaltenüberschriften
+   - Automatische Datentyperkennung für korrekte Spaltenformatierung
+   - Responsive Benutzeroberfläche mit Material UI
+   - Umfassende Toolbar mit Filterung, CSV-Export und Anzeigeoptionen
+   - Detaillierte Spalteninformationen als Tooltips (Datentyp, Nullable, etc.)
+   - Optimierte Datenabfragen durch parametrisierte API-Anfragen
 
 ### Dashboard Komponente
 
@@ -809,3 +953,23 @@ Die Real-Datenbank-Funktionalität konnte Tabellen und Spalten nicht korrekt anz
    - SQLite-Basisunterstützung (eingeschränkt)
 
 Diese Änderungen ermöglichen die vollständige Interaktion mit echten Datenbanken, einschließlich Schemaanzeige und Abfrageausführung. Die Sample-Datenbank wird jetzt nur noch angezeigt, wenn keine echten Datenbankverbindungen vorhanden sind. 
+
+### DatabaseService
+
+Der DatabaseService stellt die zentrale Schnittstelle für alle API-Aufrufe bezüglich Datenbankverbindungen dar. Dieser Service:
+- Verwaltet Datenbankverbindungen über die Backend-API
+- Führt CRUD-Operationen für Verbindungen durch
+- Testet Verbindungen und ruft Datenbankschemata ab
+- Führt Abfragen gegen verbundene Datenbanken aus
+- Bietet spezialisierte Methoden für Tabellenansichten und Datenfilterung
+
+Die Hauptmethoden umfassen:
+- `getDatabaseConnections()`: Lädt alle verfügbaren Datenbankverbindungen
+- `getConnectionById(id)`: Lädt eine spezifische Datenbankverbindung anhand ihrer ID
+- `saveConnection(connection)`: Speichert eine neue Datenbankverbindung
+- `updateConnection(id, connection)`: Aktualisiert eine bestehende Verbindung
+- `deleteConnection(id)`: Löscht eine Verbindung
+- `testConnection(connection)`: Testet die Verbindung zu einer Datenbank
+- `getDatabaseSchema(id)`: Ruft das Schema einer verbundenen Datenbank ab
+- `executeQuery(id, query)`: Führt eine SQL-Abfrage gegen eine verbundene Datenbank aus
+- `getTableData(id, tableName, params)`: Lädt paginierte Tabellendaten mit Sortierung

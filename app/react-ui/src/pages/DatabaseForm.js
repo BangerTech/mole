@@ -68,36 +68,39 @@ export default function DatabaseForm() {
   // Form validation
   const [formErrors, setFormErrors] = useState({});
 
-  // Load database if in edit mode
+  // Load database details if in edit mode
   useEffect(() => {
-    if (isEditMode) {
-      const fetchDatabase = async () => {
+    if (isEditMode && id) {
+      const fetchDatabaseDetails = async () => {
         setLoading(true);
+        setError(null);
         try {
-          // Hol die Daten aus dem localStorage
-          const storedDatabases = localStorage.getItem('mole_real_databases');
-          const databases = storedDatabases ? JSON.parse(storedDatabases) : [];
+          // Fetch the connection details from the API
+          const connectionDetails = await DatabaseService.getConnectionById(id);
           
-          // Finde die Datenbank mit der passenden ID
-          const foundDatabase = databases.find(db => db.id === id);
-          
-          if (foundDatabase) {
-            setFormValues(foundDatabase);
-            setError(null);
+          if (connectionDetails) {
+            // Set form values, ensuring password isn't overwritten if not provided by API
+            setFormValues({
+              ...connectionDetails,
+              password: connectionDetails.password || '' // Use existing or empty string
+            }); 
           } else {
-            setError('Database connection not found.');
+            // This case might occur if the ID is invalid or API fails expectedly
+            setError(`Database connection with ID ${id} not found.`);
           }
         } catch (err) {
-          setError('Failed to load database details. Please try again.');
-          console.error(err);
+          // Handle API errors (e.g., 404 Not Found, 500 Server Error)
+          console.error('Failed to load database details for editing:', err);
+          setError(err.response?.data?.message || err.message || 'Failed to load database details. Please try again.');
         } finally {
           setLoading(false);
         }
       };
       
-      fetchDatabase();
+      fetchDatabaseDetails();
     }
-  }, [id, isEditMode]);
+    // No dependency on isEditMode needed if id is the primary trigger
+  }, [id]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -143,23 +146,27 @@ export default function DatabaseForm() {
     if (!validateForm()) return;
     
     setTestingConnection(true);
-    setTestResult(null);
+    setTestResult(null); // Clear previous results
+    setError(null); // Clear previous form errors
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Call the actual service method
+      const result = await DatabaseService.testConnection(formValues);
+      setTestResult(result); // Store the { success, message } object
       
-      // In einer Demo-Umgebung immer eine erfolgreiche Verbindung melden
-      setTestResult({ 
-        success: true, 
-        message: 'Connection successful! Database is accessible.' 
-      });
+      // Optionally clear form error if connection is successful
+      if (result.success) {
+         // Maybe clear specific errors related to connection params if needed
+      }
+
     } catch (err) {
+      // Service method should catch axios errors and return a formatted object,
+      // but catch any unexpected errors here.
+      console.error('Unexpected error during testConnection call:', err);
       setTestResult({ 
         success: false, 
-        message: 'An error occurred while testing the connection.' 
+        message: 'An unexpected client-side error occurred while testing the connection.' 
       });
-      console.error(err);
     } finally {
       setTestingConnection(false);
     }
@@ -171,36 +178,24 @@ export default function DatabaseForm() {
     if (!validateForm()) return;
     
     setSaving(true);
+    setTestResult(null); // Clear previous test results
+    setError(null); // Clear previous errors
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Create database object
-      const newDatabase = {
-        ...formValues,
-        id: isEditMode ? id : String(Date.now()),
-        lastConnected: new Date().toISOString().split('T')[0]
-      };
-      
-      // Save to localStorage
-      const storedDatabases = localStorage.getItem('mole_real_databases');
-      const existingDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-      
+      // Use the correct service methods (API only now)
+      let savedConnection;
       if (isEditMode) {
-        // Update existing database
-        const updatedDatabases = existingDatabases.map(db => 
-          db.id === id ? newDatabase : db
-        );
-        localStorage.setItem('mole_real_databases', JSON.stringify(updatedDatabases));
+        savedConnection = await DatabaseService.updateConnection(id, formValues);
       } else {
-        // Add new database
-        existingDatabases.push(newDatabase);
-        localStorage.setItem('mole_real_databases', JSON.stringify(existingDatabases));
+        savedConnection = await DatabaseService.saveConnection(formValues);
       }
       
-      // Synchronize both localStorage database stores
-      DatabaseService.syncStoredDatabases();
+      // Basic check if save/update returned something expected
+      if (!savedConnection || !savedConnection.id) {
+         throw new Error('Failed to save connection. Backend might be unavailable or did not return expected data.');
+      }
+      
+      // No need for syncStoredDatabases anymore
       
       setSnackbar({
         open: true,
@@ -215,12 +210,15 @@ export default function DatabaseForm() {
         navigate('/databases');
       }, 1500);
     } catch (err) {
+      console.error('Error saving database connection:', err);
+      // Display specific error from backend if available
+      const displayError = err.response?.data?.message || err.message || 'An error occurred while saving the connection.';
+      setError(displayError);
       setSnackbar({
         open: true,
-        message: 'An error occurred. Please try again.',
+        message: displayError,
         severity: 'error',
       });
-      console.error(err);
     } finally {
       setSaving(false);
     }

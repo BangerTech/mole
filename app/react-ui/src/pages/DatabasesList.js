@@ -100,125 +100,67 @@ export default function DatabasesList() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sortOption, setSortOption] = useState('name');
   const [sortAnchorEl, setSortAnchorEl] = useState(null);
-  const [hasRealDatabase, setHasRealDatabase] = useState(false);
 
   // Fetch database connections
-  useEffect(() => {
-    const fetchDatabases = async () => {
-      setLoading(true);
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Check local storage or make API call to see if real databases exist
-        // This is just a placeholder - in a real implementation, this would be an API call
-        const storedDatabases = localStorage.getItem('mole_real_databases');
-        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-        
-        // Synchronize both localStorage database stores
-        DatabaseService.syncStoredDatabases();
-        
-        if (realDatabases.length > 0) {
-          setHasRealDatabase(true);
-          setDatabases(realDatabases);
-        } else {
-          // Only show one sample database if no real databases exist
-          const sampleDatabase = {
-            id: '1',
-            name: 'Sample Database',
-            engine: 'PostgreSQL',
-            host: 'localhost',
-            port: 5432,
-            database: 'sample_db',
-            lastConnected: '2023-05-20',
-            isSample: true // Mark this as a sample database
-          };
-          
-          setDatabases([sampleDatabase]);
-        }
-        
-        setError(null);
-      } catch (err) {
-        setError('Failed to load database connections. Please try again.');
-        console.error(err);
-      } finally {
-        setLoading(false);
+  const fetchDatabases = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch connections using the service (API)
+      const connections = await DatabaseService.getDatabaseConnections();
+      
+      // If API returns an empty array, show the sample database
+      if (connections && connections.length > 0) {
+         setDatabases(connections); // Assuming API only returns real connections
+      } else {
+        // API returned no connections, show sample database
+        const sampleDatabase = {
+          id: '1', // Use a distinct ID for the sample
+          name: 'Sample Database',
+          engine: 'PostgreSQL',
+          host: 'localhost',
+          port: 5432,
+          database: 'sample_db',
+          lastConnected: '2023-05-20',
+          isSample: true 
+        };
+        setDatabases([sampleDatabase]);
       }
-    };
-    
+      
+    } catch (err) {
+      // Handle potential errors during fetching
+      setError('Failed to load database connections. Please check API connectivity.');
+      console.error('Error fetching databases:', err);
+      setDatabases([]); // Clear databases on error
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  useEffect(() => {
     fetchDatabases();
-  }, []);
+  }, []); // Fetch only on mount
 
   const handleCreateDatabase = () => {
     navigate('/databases/create');
   };
 
-  // Function to add a new database
-  const addDatabase = (newDatabase) => {
-    // Get existing real databases
-    const storedDatabases = localStorage.getItem('mole_real_databases');
-    let realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-    
-    // Add the new database
-    const databaseWithId = {
-      ...newDatabase,
-      id: String(Date.now()), // Generate a unique ID
-      lastConnected: new Date().toISOString().split('T')[0]
-    };
-    
-    realDatabases.push(databaseWithId);
-    
-    // Save to local storage
-    localStorage.setItem('mole_real_databases', JSON.stringify(realDatabases));
-    
-    // Remove sample database if this is the first real database
-    if (!hasRealDatabase) {
-      setHasRealDatabase(true);
-      setDatabases(realDatabases);
-    } else {
-      setDatabases([...databases.filter(db => !db.isSample), databaseWithId]);
-    }
-  };
-
   const handleDatabaseClick = (id) => {
-    // Get the database details from the databases array
-    const dbToView = databases.find(db => db.id.toString() === id.toString());
-    
-    if (dbToView) {
-      // Use the /database/id/:id route format for consistency
-      navigate(`/database/id/${id}`);
-      
-      // Store database in localStorage to ensure it's available on the details page
-      const storedDatabases = localStorage.getItem('mole_real_databases');
-      let realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-      
-      // Check if this database already exists in localStorage
-      const exists = realDatabases.some(db => db.id.toString() === id.toString());
-      
-      // If it doesn't exist, add it
-      if (!exists) {
-        realDatabases.push(dbToView);
-        localStorage.setItem('mole_real_databases', JSON.stringify(realDatabases));
-      }
-      
-      // Ensure we have synchronized localStorage entries
-      DatabaseService.syncStoredDatabases();
-      
-      // Debug logging
-      console.log('Navigating to database details:', {
-        id: id,
-        engine: dbToView.engine,
-        url: `/database/id/${id}`
-      });
+    // Navigate to details page - no localStorage interaction needed here anymore
+    // The DatabaseDetails component will fetch the data itself using the ID.
+    // Check if it's the sample database ID
+    if (id === '1') { 
+      // Navigate to a potentially specific route or handle sample display in DatabaseDetails
+      navigate(`/database/id/${id}`); 
     } else {
-      // Fallback in case database is not found
       navigate(`/database/id/${id}`);
-      console.warn('Database not found in local state, using ID-only navigation');
     }
   };
 
   const handleMenuOpen = (event, database) => {
     event.stopPropagation();
+    // Don't allow menu actions on the sample database
+    if (database.isSample) return; 
     setAnchorEl(event.currentTarget);
     setSelectedDatabase(database);
   };
@@ -230,57 +172,42 @@ export default function DatabasesList() {
 
   const handleEditDatabase = (event) => {
     event.stopPropagation();
+    if (!selectedDatabase || selectedDatabase.isSample) return;
     navigate(`/databases/edit/${selectedDatabase.id}`);
     handleMenuClose();
   };
 
   const handleDeleteConfirmOpen = (event) => {
     event.stopPropagation();
+    if (!selectedDatabase || selectedDatabase.isSample) return;
     setDeleteDialogOpen(true);
     setAnchorEl(null);
   };
 
   const handleDeleteDatabase = async () => {
-    // Sicherstellen, dass selectedDatabase nicht null ist
-    if (!selectedDatabase) {
-      console.error('No database selected for deletion');
+    if (!selectedDatabase || selectedDatabase.isSample) {
+      console.error('No real database selected for deletion');
       setDeleteDialogOpen(false);
       return;
     }
     
+    const idToDelete = selectedDatabase.id;
+    setLoading(true); // Indicate loading state during deletion
+    setDeleteDialogOpen(false); // Close dialog immediately
+    
     try {
-      // Use the service to delete the connection - this will handle both API and localStorage
-      await DatabaseService.deleteConnection(selectedDatabase.id);
+      // Use the service to delete the connection via API
+      await DatabaseService.deleteConnection(idToDelete);
       
-      // Update the UI state
-      const updatedDatabases = databases.filter(db => db.id.toString() !== selectedDatabase.id.toString());
-      
-      // If no more real databases, show sample database again
-      if (updatedDatabases.length === 0 || (updatedDatabases.length === 0 && !selectedDatabase.isSample)) {
-        setHasRealDatabase(false);
-        const sampleDatabase = {
-          id: '1',
-          name: 'Sample Database',
-          engine: 'PostgreSQL',
-          host: 'localhost',
-          port: 5432,
-          database: 'sample_db',
-          lastConnected: '2023-05-20',
-          isSample: true
-        };
-        setDatabases([sampleDatabase]);
-      } else {
-        setDatabases(updatedDatabases);
-      }
-      
-      // Ensure all localStorage entries are synchronized
-      DatabaseService.syncStoredDatabases();
+      // Refetch the list to show the updated state
+      await fetchDatabases(); 
       
     } catch (error) {
       console.error('Error deleting database connection:', error);
+      setError(error.message || 'Failed to delete connection. Please try again.');
+      setLoading(false); // Stop loading indicator on error
     }
-    
-    setDeleteDialogOpen(false);
+    // setLoading(false) is handled by fetchDatabases finally block
   };
 
   const handleSortMenuOpen = (event) => {
@@ -297,30 +224,35 @@ export default function DatabasesList() {
   };
 
   const handleRefresh = () => {
-    setLoading(true);
-    // Simulate API refresh
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
+    // Refetch the database list from the API
+    fetchDatabases();
   };
 
   // Filter databases based on search query
   const filteredDatabases = databases.filter(db => 
-    db.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (!db.isSample || searchQuery === '') && // Show sample only if no search query
+    (db.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     db.engine.toLowerCase().includes(searchQuery.toLowerCase()) ||
     db.host?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    db.database.toLowerCase().includes(searchQuery.toLowerCase())
+    db.database.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   // Sort databases based on selected option
   const sortedDatabases = [...filteredDatabases].sort((a, b) => {
+    // Keep sample database always at the end if present
+    if (a.isSample) return 1;
+    if (b.isSample) return -1;
+
     switch (sortOption) {
       case 'name':
         return a.name.localeCompare(b.name);
       case 'engine':
         return a.engine.localeCompare(b.engine);
       case 'lastConnected':
-        return new Date(b.lastConnected) - new Date(a.lastConnected);
+        // Handle potentially null/undefined dates
+        const dateA = a.lastConnected ? new Date(a.lastConnected) : 0;
+        const dateB = b.lastConnected ? new Date(b.lastConnected) : 0;
+        return dateB - dateA;
       default:
         return 0;
     }
@@ -399,18 +331,20 @@ export default function DatabasesList() {
             </Typography>
           </Box>
         </DatabaseCardContent>
-        <CardActions>
-          <Button 
-            size="small" 
-            startIcon={<OpenInNewIcon />}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDatabaseClick(db.id);
-            }}
-          >
-            Connect
-          </Button>
-        </CardActions>
+        {!db.isSample && (
+          <CardActions>
+            <Button 
+              size="small" 
+              startIcon={<OpenInNewIcon />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDatabaseClick(db.id);
+              }}
+            >
+              Connect
+            </Button>
+          </CardActions>
+        )}
       </DatabaseCard>
     </Grid>
   );
