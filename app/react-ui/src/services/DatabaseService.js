@@ -163,13 +163,22 @@ class DatabaseService {
    */
   deleteConnectionFromLocalStorage(id) {
     try {
+      // Get connections from both storage locations
       let connections = this.getConnectionsFromLocalStorage();
       
-      // Filter out the connection to delete
-      connections = connections.filter(conn => conn.id.toString() !== id.toString());
+      // Get real databases from localStorage
+      const storedRealDatabases = localStorage.getItem('mole_real_databases');
+      let realDatabases = storedRealDatabases ? JSON.parse(storedRealDatabases) : [];
       
-      // Save back to localStorage
+      // Filter out the connection to delete from both storage locations
+      connections = connections.filter(conn => conn.id.toString() !== id.toString());
+      realDatabases = realDatabases.filter(db => db.id.toString() !== id.toString());
+      
+      // Save back to both localStorage keys
       localStorage.setItem('mole_database_connections', JSON.stringify(connections));
+      localStorage.setItem('mole_real_databases', JSON.stringify(realDatabases));
+      
+      console.log('Database connection deleted successfully from both storage locations');
       
       return { success: true };
     } catch (error) {
@@ -244,10 +253,13 @@ class DatabaseService {
     try {
       // Debug connection information
       console.log('Fetching schema for database ID:', id);
-      console.log('API URL used:', `${API_URL}/${id}/schema`);
+      
+      // Fix: Use the correct API path format with /connections/
+      const apiUrl = `${API_URL}/connections/${id}/schema`;
+      console.log('API URL used:', apiUrl);
       
       // Try to fetch from API
-      const response = await axios.get(`${API_URL}/${id}/schema`);
+      const response = await axios.get(apiUrl);
       console.log('Schema response:', response.data);
       return response.data;
     } catch (error) {
@@ -273,10 +285,13 @@ class DatabaseService {
     try {
       // Debug connection information
       console.log('Executing query for database ID:', id);
-      console.log('API URL used:', `${API_URL}/${id}/execute`);
+      
+      // Fix: Use the correct API path format with /connections/
+      const apiUrl = `${API_URL}/connections/${id}/execute`;
+      console.log('API URL used:', apiUrl);
       
       // Try to execute via API
-      const response = await axios.post(`${API_URL}/${id}/execute`, { query });
+      const response = await axios.post(apiUrl, { query });
       console.log('Query execution response:', response.data);
       return response.data;
     } catch (error) {

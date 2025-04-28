@@ -522,6 +522,10 @@ Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite
 - Entfernung der nicht implementierten Login-Komponente aus dem Routing
 - Behebung von Docker-Volumes-Problemen für zuverlässigere Datenbank-Container
 - Hinzufügung von client-seitiger Routing-Konfiguration für bessere Navigation
+- Verbesserte PostgreSQL-Unterstützung:
+  - Korrekte Verarbeitung von Tabellen- und Spaltennamen mit Bindestrichen
+  - Automatische Umschließung von Bezeichnern mit doppelten Anführungszeichen
+  - Robustes Fehlerhandling für komplexe Datenbankstrukturen
 
 ### Version 0.2.0
 - Umstellung von Adminer auf moderne React-basierte Benutzeroberfläche
