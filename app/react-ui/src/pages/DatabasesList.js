@@ -102,41 +102,41 @@ export default function DatabasesList() {
   const [sortAnchorEl, setSortAnchorEl] = useState(null);
 
   // Fetch database connections
-  const fetchDatabases = async () => {
-    setLoading(true);
+    const fetchDatabases = async () => {
+      setLoading(true);
     setError(null);
-    try {
+      try {
       // Fetch connections using the service (API)
       const connections = await DatabaseService.getDatabaseConnections();
       
       // If API returns an empty array, show the sample database
       if (connections && connections.length > 0) {
          setDatabases(connections); // Assuming API only returns real connections
-      } else {
+        } else {
         // API returned no connections, show sample database
-        const sampleDatabase = {
+          const sampleDatabase = {
           id: '1', // Use a distinct ID for the sample
-          name: 'Sample Database',
-          engine: 'PostgreSQL',
-          host: 'localhost',
-          port: 5432,
-          database: 'sample_db',
-          lastConnected: '2023-05-20',
+            name: 'Sample Database',
+            engine: 'PostgreSQL',
+            host: 'localhost',
+            port: 5432,
+            database: 'sample_db',
+            lastConnected: '2023-05-20',
           isSample: true 
-        };
-        setDatabases([sampleDatabase]);
-      }
-      
-    } catch (err) {
+          };
+          setDatabases([sampleDatabase]);
+        }
+        
+      } catch (err) {
       // Handle potential errors during fetching
       setError('Failed to load database connections. Please check API connectivity.');
       console.error('Error fetching databases:', err);
       setDatabases([]); // Clear databases on error
-    } finally {
-      setLoading(false);
-    }
-  };
-  
+      } finally {
+        setLoading(false);
+      }
+    };
+    
   useEffect(() => {
     fetchDatabases();
   }, []); // Fetch only on mount
@@ -151,7 +151,7 @@ export default function DatabasesList() {
     // Check if it's the sample database ID
     if (id === '1') { 
       // Navigate to a potentially specific route or handle sample display in DatabaseDetails
-      navigate(`/database/id/${id}`); 
+      navigate(`/database/id/${id}`);
     } else {
       navigate(`/database/id/${id}`);
     }
@@ -332,18 +332,18 @@ export default function DatabasesList() {
           </Box>
         </DatabaseCardContent>
         {!db.isSample && (
-          <CardActions>
-            <Button 
-              size="small" 
-              startIcon={<OpenInNewIcon />}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDatabaseClick(db.id);
-              }}
-            >
-              Connect
-            </Button>
-          </CardActions>
+        <CardActions>
+          <Button 
+            size="small" 
+            startIcon={<OpenInNewIcon />}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDatabaseClick(db.id);
+            }}
+          >
+            Connect
+          </Button>
+        </CardActions>
         )}
       </DatabaseCard>
     </Grid>

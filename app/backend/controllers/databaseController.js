@@ -482,13 +482,41 @@ exports.getDatabaseSchema = async (req, res) => {
           lastUpdated: new Date().toISOString().split('T')[0] // Use today's date
         }));
         
+        // Calculate total size (approximation from fetched tables/views)
+        let totalSizeRaw = 0;
+        sizeResult.rows.forEach(row => {
+          // Convert human-readable size back to bytes (approximate)
+          const sizeMatch = row.size?.match(/([\d.]+)\s*(KB|MB|GB|TB)/i);
+          if (sizeMatch) {
+            const value = parseFloat(sizeMatch[1]);
+            const unit = sizeMatch[2].toUpperCase();
+            switch (unit) {
+              case 'KB': totalSizeRaw += value * 1024; break;
+              case 'MB': totalSizeRaw += value * 1024 * 1024; break;
+              case 'GB': totalSizeRaw += value * 1024 * 1024 * 1024; break;
+              case 'TB': totalSizeRaw += value * 1024 * 1024 * 1024 * 1024; break;
+            }
+          }
+        });
+        // Convert total bytes back to human-readable format
+        const formatBytes = (bytes, decimals = 2) => {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+        const totalSizeFormatted = formatBytes(totalSizeRaw);
+
         client.release();
         await pool.end();
         
         res.status(200).json({
           tables,
           tableColumns,
-          success: true
+          success: true,
+          totalSize: totalSizeFormatted // Add total size to response
         });
       } catch (error) {
         client.release();
@@ -532,12 +560,13 @@ exports.getDatabaseSchema = async (req, res) => {
           fallbackClient.release();
           await fallbackPool.end();
           
-          // Rückgabe der vereinfachten Daten ohne Spaltendetails
+          // Rückgabe der vereinfachten Daten ohne Spaltendetails (und ohne Gesamtgröße)
           res.status(200).json({
             tables: simpleTables,
             tableColumns: {},
             success: true,
-            message: 'Simplified schema returned due to error with detailed query'
+            message: 'Simplified schema returned due to error with detailed query',
+            totalSize: 'N/A' // Indicate size couldn't be calculated
           });
           
         } catch (fallbackError) {
@@ -546,7 +575,8 @@ exports.getDatabaseSchema = async (req, res) => {
             tables: [],
             tableColumns: {},
             success: true,
-            message: 'Failed to retrieve schema details: ' + error.message
+            message: 'Failed to retrieve schema details: ' + error.message,
+            totalSize: 'N/A' // Indicate size couldn't be calculated
           });
         }
       }
@@ -990,5 +1020,180 @@ exports.getTableData = async (req, res) => {
       message: errorMessage,
       error: error.message // Include original error for debugging 
     });
+  }
+};
+
+/**
+ * Create a new table in a specific database connection
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.createTable = async (req, res) => {
+  const { id: connectionId } = req.params;
+  const { tableName, columns } = req.body;
+
+  // --- Basic Input Validation --- 
+  if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
+    return res.status(400).json({ success: false, message: 'Invalid table name. Use only letters, numbers, and underscores.' });
+  }
+  if (!columns || !Array.isArray(columns) || columns.length === 0) {
+    return res.status(400).json({ success: false, message: 'Invalid or empty columns definition.' });
+  }
+  // Basic validation for column names and types (add more as needed)
+  for (const col of columns) {
+     if (!col.name || !/^[a-zA-Z0-9_]+$/.test(col.name)) {
+         return res.status(400).json({ success: false, message: `Invalid column name: ${col.name}` });
+     }
+     // Whitelist allowed types or add more robust validation
+     const allowedTypes = ['INT', 'VARCHAR(255)', 'TEXT', 'DATE', 'TIMESTAMP', 'BOOLEAN', 'DECIMAL(10,2)'];
+     if (!col.type || !allowedTypes.includes(col.type.toUpperCase())) {
+          return res.status(400).json({ success: false, message: `Invalid or unsupported column type: ${col.type}` });
+     }
+  }
+
+  try {
+    const connection = await databaseService.getConnectionById(connectionId);
+    if (!connection) {
+      return res.status(404).json({ success: false, message: 'Database connection not found' });
+    }
+
+    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
+    let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
+    
+    let createTableSql = '';
+    let client; // Pool client or MySQL connection
+
+    // --- Construct Engine-Specific CREATE TABLE SQL --- 
+    if (engine.toLowerCase() === 'mysql') {
+        const columnDefs = columns.map(col => {
+            let def = `\\\`${col.name}\\\` ${col.type}`;
+            def += col.nullable ? ' NULL' : ' NOT NULL';
+            if (col.default) def += ` DEFAULT ${mysql.escape(col.default)}`; // Escape default value
+            if (col.isPrimary) def += ' PRIMARY KEY';
+            if (col.autoIncrement && col.type.toUpperCase() === 'INT') def += ' AUTO_INCREMENT';
+            return def;
+        }).join(',\\n  ');
+        createTableSql = `CREATE TABLE \\\`${tableName}\\\` (\\n  ${columnDefs}\\n);`;
+        
+        client = await mysql.createConnection({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectTimeout: 10000 });
+
+    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+        const columnDefs = columns.map(col => {
+            // Use SERIAL for INT PRIMARY KEY AUTOINCREMENT
+            let type = col.type;
+            if (col.isPrimary && col.autoIncrement && col.type.toUpperCase() === 'INT') {
+                type = 'SERIAL';
+            } 
+            let def = `\\\"${col.name}\\\" ${type}`;
+            if (col.isPrimary && type !== 'SERIAL') def += ' PRIMARY KEY'; // Add PK only if not SERIAL
+            def += col.nullable ? ' NULL' : ' NOT NULL';
+            if (col.default) def += ` DEFAULT ${client.escapeLiteral(col.default)}`; // Use client.escapeLiteral if available
+            // PostgreSQL doesn't have AUTO_INCREMENT keyword like MySQL, handled by SERIAL
+            return def;
+        }).join(',\\n  ');
+         createTableSql = `CREATE TABLE public.\\\"${tableName}\\\" (\\n  ${columnDefs}\\n);`; // Assume public schema
+
+         const pool = new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 });
+         client = await pool.connect();
+
+    } else {
+        return res.status(400).json({ success: false, message: `CREATE TABLE not supported for engine: ${engine}` });
+    }
+
+    // --- Execute CREATE TABLE --- 
+    console.log(`Executing Create Table (${engine}):`, createTableSql);
+    try {
+      if (engine.toLowerCase() === 'mysql') {
+         await client.query(createTableSql);
+      } else {
+         await client.query(createTableSql);
+      }
+      res.status(201).json({ success: true, message: `Table \"${tableName}\" created successfully.` });
+    } catch (execError) {
+        console.error('Error executing CREATE TABLE:', execError);
+        // Provide more specific error message if possible
+        let userMessage = `Failed to create table \"${tableName}\".`;
+        if (execError.message.includes('already exists') || execError.code === 'ER_TABLE_EXISTS_ERROR') {
+            userMessage = `Table \"${tableName}\" already exists.`;
+        }
+        res.status(409).json({ success: false, message: userMessage, error: execError.message }); // 409 Conflict
+    } finally {
+         // --- Close Connection --- 
+        if (client) {
+            if (engine.toLowerCase() === 'mysql') await client.end();
+            else client.release(); // Release PG client back to pool
+            // We might not need pool.end() here if we reuse the pool
+        }
+    }
+
+  } catch (error) {
+    console.error(`Error creating table ${tableName}:`, error);
+    res.status(500).json({ success: false, message: 'Internal server error creating table.', error: error.message });
+  }
+};
+
+/**
+ * Delete a specific table from a database connection
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.deleteTable = async (req, res) => {
+  const { id: connectionId, tableName } = req.params;
+
+  // Basic validation for table name
+  if (!tableName) {
+     return res.status(400).json({ success: false, message: 'Table name is required.' });
+  }
+  // Basic defense against unintended targets - adjust whitelist/blacklist as needed
+  if (!/^[a-zA-Z0-9_\-]+$/.test(tableName)) { // Allow hyphen
+     return res.status(400).json({ success: false, message: 'Invalid table name format.' });
+  }
+
+  try {
+    const connection = await databaseService.getConnectionById(connectionId);
+    if (!connection) {
+      return res.status(404).json({ success: false, message: 'Database connection not found' });
+    }
+
+    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
+    let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
+    
+    let dropTableSql = '';
+    let client;
+
+    // Construct engine-specific DROP TABLE SQL (with proper quoting)
+    if (engine.toLowerCase() === 'mysql') {
+       dropTableSql = `DROP TABLE IF EXISTS \\\`${tableName}\\\``; 
+       client = await mysql.createConnection({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectTimeout: 10000 });
+    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+       dropTableSql = `DROP TABLE IF EXISTS public.\\\"${tableName}\\\"`; // Assume public schema
+       const pool = new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 });
+       client = await pool.connect();
+    } else {
+        return res.status(400).json({ success: false, message: `DROP TABLE not supported for engine: ${engine}` });
+    }
+
+    // Execute DROP TABLE
+    console.log(`Executing Drop Table (${engine}):`, dropTableSql);
+    try {
+      if (engine.toLowerCase() === 'mysql') {
+         await client.query(dropTableSql);
+      } else {
+         await client.query(dropTableSql);
+      }
+      res.status(200).json({ success: true, message: `Table \"${tableName}\" deleted successfully.` });
+    } catch (execError) {
+       console.error('Error executing DROP TABLE:', execError);
+       res.status(500).json({ success: false, message: `Failed to delete table \"${tableName}\".`, error: execError.message });
+    } finally {
+        if (client) {
+            if (engine.toLowerCase() === 'mysql') await client.end();
+            else client.release();
+        }
+    }
+
+  } catch (error) {
+    console.error(`Error deleting table ${tableName}:`, error);
+    res.status(500).json({ success: false, message: 'Internal server error deleting table.', error: error.message });
   }
 }; 

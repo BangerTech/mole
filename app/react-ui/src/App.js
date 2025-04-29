@@ -382,7 +382,7 @@ function App() {
                   sidebarOpen={sidebarOpen} 
                   toggleSidebar={toggleSidebar}
                 >
-                  <TableView /> 
+                  <TableView />
                 </DashboardLayout>
               </ProtectedRoute>
             } />

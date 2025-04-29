@@ -49,6 +49,7 @@ import {
   PlayArrow as RunIcon
 } from '@mui/icons-material';
 import DatabaseService from '../services/DatabaseService';
+import { generateMockTables, generateMockStructure } from '../utils/mockData'; // Import mock data functions
 
 // Styled components
 const RootStyle = (theme) => ({
@@ -61,60 +62,6 @@ const ContentCard = (theme) => ({
   overflow: 'hidden',
   height: '100%'
 });
-
-// Mock database details for demonstration
-const generateMockDatabaseDetails = (dbType, dbName) => {
-  const typeDetails = {
-    mysql: {
-      engine: 'MySQL',
-      version: '8.0.23',
-      connectionLimit: 10,
-      host: 'mysql-server',
-      port: 3306,
-      user: 'admin',
-      size: '54.2 MB',
-      tables: 18,
-      views: 3,
-      created: '2023-01-15',
-      lastBackup: '2023-05-10'
-    },
-    postgresql: {
-      engine: 'PostgreSQL',
-      version: '13.4',
-      connectionLimit: 20,
-      host: 'postgres-server',
-      port: 5432,
-      user: 'admin',
-      size: '128.9 MB',
-      tables: 25,
-      views: 5,
-      created: '2023-02-22',
-      lastBackup: '2023-05-12'
-    }
-  };
-
-  return typeDetails[dbType] || typeDetails.mysql;
-};
-
-// Mock database tables for demonstration
-const generateMockTables = () => [
-  { name: 'users', type: 'TABLE', rows: 234, size: '5.2 MB', columns: 12, lastUpdated: '2023-05-15' },
-  { name: 'products', type: 'TABLE', rows: 1245, size: '12.6 MB', columns: 18, lastUpdated: '2023-05-12' },
-  { name: 'orders', type: 'TABLE', rows: 4892, size: '28.9 MB', columns: 15, lastUpdated: '2023-05-16' },
-  { name: 'categories', type: 'TABLE', rows: 28, size: '0.4 MB', columns: 7, lastUpdated: '2023-05-01' },
-  { name: 'order_details', type: 'VIEW', columns: 8, lastUpdated: '2023-05-05' },
-  { name: 'active_users', type: 'VIEW', columns: 5, lastUpdated: '2023-05-10' }
-];
-
-// Database structure for demonstration
-const generateMockStructure = () => [
-  { name: 'id', type: 'INT', nullable: false, default: 'AUTO_INCREMENT', key: 'PRI', extra: 'auto_increment' },
-  { name: 'name', type: 'VARCHAR(255)', nullable: false, default: null, key: '', extra: '' },
-  { name: 'email', type: 'VARCHAR(255)', nullable: true, default: null, key: 'UNI', extra: '' },
-  { name: 'created_at', type: 'TIMESTAMP', nullable: false, default: 'CURRENT_TIMESTAMP', key: '', extra: '' },
-  { name: 'updated_at', type: 'TIMESTAMP', nullable: false, default: 'CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP', key: '', extra: '' },
-  { name: 'status', type: 'TINYINT(1)', nullable: false, default: '1', key: '', extra: '' }
-];
 
 const DatabaseDetails = () => {
   const theme = useTheme();
@@ -203,6 +150,11 @@ const DatabaseDetails = () => {
               setTables(schemaInfo.tables || []);
               setTableColumns(schemaInfo.tableColumns || {});
               
+              // Update the database state with the fetched size
+              if (schemaInfo.totalSize) {
+                  setDatabase(prevDb => ({ ...prevDb, size: schemaInfo.totalSize }));
+              }
+
               // Select first table's structure if available
               const firstTableName = schemaInfo.tables?.[0]?.name;
               if (firstTableName && schemaInfo.tableColumns?.[firstTableName]) {

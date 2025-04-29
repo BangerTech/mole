@@ -28,7 +28,11 @@ import {
   TableCell,
   List,
   ListItem,
-  ListItemText
+  ListItemText,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import StorageIcon from '@mui/icons-material/Storage';
@@ -331,6 +335,28 @@ export default function Dashboard() {
     loadAISettings();
   }, []);
 
+  // Set initial activeDatabaseId when databases load or change
+  useEffect(() => {
+    if (!activeDatabaseId && databases && databases.length > 0) {
+      // Find the first non-sample database
+      const firstRealDb = databases.find(db => db.id && !db.isSample);
+      if (firstRealDb) {
+        setActiveDatabaseId(firstRealDb.id);
+      } else if (databases[0]?.id) { // Fallback to the first one if only sample exists
+        setActiveDatabaseId(databases[0].id);
+      }
+    }
+    // If the currently active ID is no longer in the list, reset it
+    else if (activeDatabaseId && !databases.some(db => db.id === activeDatabaseId)) {
+         const firstRealDb = databases.find(db => db.id && !db.isSample);
+         setActiveDatabaseId(firstRealDb ? firstRealDb.id : (databases[0]?.id || null));
+    }
+  }, [databases, activeDatabaseId]); // Rerun when databases list changes
+
+  const handleActiveDatabaseChange = (event) => {
+      setActiveDatabaseId(event.target.value);
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
@@ -526,8 +552,8 @@ export default function Dashboard() {
                           <Button 
                             variant="outlined" 
                             size="small"
-                            onClick={() => navigate(`/databases/${db.id}`)}
-                            disabled={!db.id}
+                            onClick={() => navigate(`/database/id/${db.id}`)}
+                            disabled={!db.id && !db.isSample}
                           >
                             Connect
                           </Button>
@@ -994,6 +1020,29 @@ export default function Dashboard() {
             </Typography>
             
             <Box sx={{ mb: 2 }}>
+              {/* Database Selection Dropdown */} 
+              {databases && databases.filter(db => db.id && !db.isSample).length > 0 && ( // Show only if real DBs exist
+                 <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
+                   <InputLabel>Target Database (Optional)</InputLabel>
+                   <Select
+                      value={activeDatabaseId || ''} // Use activeDatabaseId state
+                      onChange={handleActiveDatabaseChange} // Update state on change
+                      label="Target Database (Optional)"
+                   >
+                     {/* Option to select no specific database */}
+                     <MenuItem value="">
+                       <em>None (General Query)</em>
+                     </MenuItem>
+                     {/* Filter out sample DB from options */} 
+                     {databases.filter(db => db.id && !db.isSample).map((db) => (
+                       <MenuItem key={db.id} value={db.id}>
+                         {db.name} ({db.engine})
+                       </MenuItem>
+                     ))}
+                   </Select>
+                 </FormControl>
+              )}
+
               <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
                 Ask questions about your data in natural language
               </Typography>

@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
 import DatabaseService from '../services/DatabaseService';
+import { generateMockStructure, generateMockDataRows } from '../utils/mockData'; // Import mock helpers
 
 const TableView = () => {
   const navigate = useNavigate();
@@ -45,6 +46,44 @@ const TableView = () => {
       if (!databaseId || !tableName) return;
       setLoading(true);
       setError(null);
+      
+      // --- Handle Sample Database --- 
+      if (databaseId === '1') {
+        console.log(`Loading mock schema for Sample DB table: ${tableName}`);
+        // Pass tableName to the mock function
+        const mockStructure = generateMockStructure(tableName); 
+        const gridColumns = mockStructure.map(col => ({
+            field: col.name, 
+            headerName: col.name,
+            type: col.type.toLowerCase().includes('int') ? 'number' 
+                  : col.type.toLowerCase().includes('time') ? 'dateTime' // Treat TIMESTAMP as dateTime
+                  : col.type.toLowerCase().includes('bool') ? 'boolean' 
+                  : 'string', 
+            width: col.type.toLowerCase().includes('time') ? 180 : 150, 
+            sortable: true,
+            valueGetter: (col.type.toLowerCase().includes('time')) 
+                         ? (value) => { // Add valueGetter for dateTime
+                             if (value == null) return null;
+                             const date = new Date(value);
+                             return isNaN(date.getTime()) ? null : date;
+                           }
+                         : undefined, 
+             valueFormatter: (col.type.toLowerCase().includes('time'))
+                         ? (value) => { // Add formatter for dateTime
+                              if (value instanceof Date && !isNaN(value)) {
+                                return value.toLocaleString(); 
+                              }
+                              return ''; 
+                           }
+                         : undefined,
+            description: `${col.type}${col.nullable ? ' (nullable)' : ''}${col.default ? ` [default: ${col.default}]` : ''}${col.key ? ` (${col.key})` : ''}`
+          }));
+        setColumns(gridColumns);
+        setLoading(false); // Schema loading done for mock
+        return; // Don't proceed to API call
+      }
+
+      // --- Handle Real Databases --- 
       try {
         const schemaInfo = await DatabaseService.getDatabaseSchema(databaseId);
         if (schemaInfo.success && schemaInfo.tableColumns && schemaInfo.tableColumns[tableName]) {
@@ -52,32 +91,41 @@ const TableView = () => {
           const gridColumns = schemaInfo.tableColumns[tableName].map(col => {
             const columnType = col.type.toLowerCase();
             let gridType = 'string'; // Default type
-            let valueGetter; // Initialize valueGetter
+            let valueGetter;
+            let valueFormatter;
 
-            if (columnType.includes('int') || columnType.includes('serial') || columnType.includes('float') || columnType.includes('double') || columnType.includes('decimal')) {
+            // Specific handling for known columns like uptime/raw_uptime
+            if (col.name === 'uptime' || col.name === 'raw_uptime') {
+               gridType = 'number'; // Treat uptime as a number (e.g., seconds)
+            } 
+            // General type detection
+            else if (columnType.includes('int') || columnType.includes('serial') || columnType.includes('float') || columnType.includes('double') || columnType.includes('decimal')) {
               gridType = 'number';
             } else if (columnType.includes('date') || columnType.includes('time')) {
               gridType = 'dateTime';
-              // Add valueGetter to parse the date/time string into a Date object
               valueGetter = (value) => {
-                if (value == null) { // Check for null or undefined
-                  return null; // Or return undefined, based on preference
-                }
-                const date = new Date(value);
-                // Check if the date is valid
-                return isNaN(date.getTime()) ? null : date; 
+                if (value == null) return null;
+                const date = new Date(value); 
+                return isNaN(date.getTime()) ? null : date;
+              };
+              valueFormatter = (value) => {
+                 if (value instanceof Date && !isNaN(value)) {
+                   return value.toLocaleString(); 
+                 } 
+                 return ''; 
               };
             } else if (columnType.includes('bool')) {
               gridType = 'boolean';
             }
 
             return {
-              field: col.name, // Use column name as field ID
+              field: col.name,
               headerName: col.name,
               type: gridType,
-              width: gridType === 'dateTime' ? 180 : (gridType === 'boolean' ? 80 : 150), // Adjust width based on type
+              width: gridType === 'dateTime' ? 180 : (gridType === 'boolean' ? 80 : (gridType === 'number' ? 100 : 150)), // Adjust width
               sortable: true,
-              valueGetter: valueGetter, // Assign the valueGetter if defined
+              valueGetter: valueGetter,
+              valueFormatter: valueFormatter, // Add formatter
               description: `${col.type}${col.nullable ? ' (nullable)' : ''}${col.default ? ` [default: ${col.default}]` : ''}${col.key ? ` (${col.key})` : ''}`
             };
           });
@@ -91,15 +139,30 @@ const TableView = () => {
         setError('Failed to load table schema.');
         setColumns([]);
       } 
-      // Don't set loading false here, let data fetch handle it
+      // Data fetch useEffect will handle the final loading state
     };
     fetchSchema();
   }, [databaseId, tableName]);
 
-  // Fetch data when pagination or sorting changes
+  // Fetch data when pagination or sorting changes OR when columns are loaded for Sample DB
   const fetchData = useCallback(async () => {
+    // --- Handle Sample Database --- 
+    if (databaseId === '1') {
+      console.log(`Loading mock data for Sample DB table: ${tableName}`);
+      setLoading(true);
+      setError(null);
+      await new Promise(resolve => setTimeout(resolve, 100)); 
+      // Pass tableName to the mock function
+      const mockRows = generateMockDataRows(tableName); 
+      const mockRowCount = mockRows.length;
+      setRows(mockRows);
+      setRowCount(mockRowCount);
+      setLoading(false);
+      return; // Don't proceed to API call
+    }
+
+    // --- Handle Real Databases --- 
     if (!databaseId || !tableName || columns.length === 0) {
-       // Don't fetch data if we don't have columns yet or IDs are missing
        return;
     }
 
@@ -202,7 +265,7 @@ const TableView = () => {
            <Button
             variant="outlined"
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate(`/databases/${databaseId}`)} // Navigate back to DB details
+            onClick={() => navigate(`/database/id/${databaseId}`)} // Corrected navigation path
             sx={{ 
               borderRadius: 20,
               py: 1,

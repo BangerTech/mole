@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -40,7 +40,8 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  ListItemButton
+  ListItemButton,
+  Snackbar
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -62,6 +63,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import KeyIcon from '@mui/icons-material/Key';
 import WarningIcon from '@mui/icons-material/Warning';
+import DatabaseService from '../services/DatabaseService'; // Import DatabaseService
 
 // Styled components
 const RootStyle = styled('div')(({ theme }) => ({
@@ -98,80 +100,21 @@ const StyledTabPanel = styled(Box)(({ theme }) => ({
   height: '100%'
 }));
 
-// Mock function to execute query (would be replaced by actual API call)
-const executeQuery = async (query, database) => {
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  // Mock results - in a real app, this would come from the API
-  if (query.toLowerCase().includes('select') || query.toLowerCase().includes('show')) {
-    return {
-      success: true,
-      columns: ['id', 'name', 'email', 'created_at'],
-      rows: [
-        { id: 1, name: 'John Doe', email: 'john@example.com', created_at: '2023-01-01' },
-        { id: 2, name: 'Jane Smith', email: 'jane@example.com', created_at: '2023-01-02' },
-        { id: 3, name: 'Bob Johnson', email: 'bob@example.com', created_at: '2023-01-03' },
-        { id: 4, name: 'Alice Brown', email: 'alice@example.com', created_at: '2023-01-04' },
-        { id: 5, name: 'Charlie Davis', email: 'charlie@example.com', created_at: '2023-01-05' },
-      ],
-      message: 'Query executed successfully.',
-      affectedRows: 5
-    };
-  } else {
-    return {
-      success: true,
-      message: 'Query executed successfully.',
-      affectedRows: Math.floor(Math.random() * 10) + 1
-    };
-  }
-};
-
-// Mock function to get database tables
-const getDatabaseTables = async (database) => {
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // Mock tables
-  return [
-    { name: 'users', rows: 156, size: '1.2 MB', created: '2023-01-01' },
-    { name: 'products', rows: 89, size: '0.8 MB', created: '2023-01-02' },
-    { name: 'orders', rows: 243, size: '2.3 MB', created: '2023-01-03' },
-    { name: 'categories', rows: 12, size: '0.1 MB', created: '2023-01-04' },
-    { name: 'customers', rows: 78, size: '0.6 MB', created: '2023-01-05' },
-  ];
-};
-
-// Mock function to get table structure
-const getTableStructure = async (database, table) => {
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  // Mock table structure
-  return [
-    { column: 'id', type: 'INT', nullable: false, key: 'PRI', default: null, extra: 'auto_increment' },
-    { column: 'name', type: 'VARCHAR(255)', nullable: false, key: '', default: null, extra: '' },
-    { column: 'email', type: 'VARCHAR(255)', nullable: false, key: 'UNI', default: null, extra: '' },
-    { column: 'password', type: 'VARCHAR(255)', nullable: false, key: '', default: null, extra: '' },
-    { column: 'created_at', type: 'TIMESTAMP', nullable: true, key: '', default: 'CURRENT_TIMESTAMP', extra: '' },
-    { column: 'updated_at', type: 'TIMESTAMP', nullable: true, key: '', default: null, extra: '' },
-  ];
-};
-
 export default function QueryEditor() {
   const navigate = useNavigate();
-  const { id } = useParams(); // Database ID from URL
-  const [editorMode, setEditorMode] = useState('simple'); // 'simple' or 'expert'
+  const { id: urlDatabaseId } = useParams(); // Database ID from URL, renamed to avoid conflict
+  const [editorMode, setEditorMode] = useState('simple'); // Default back to simple mode
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [database, setDatabase] = useState(null);
-  const [tables, setTables] = useState([]);
-  const [selectedTable, setSelectedTable] = useState(null);
+  const [database, setDatabase] = useState(null); // Currently selected database connection object
+  const [databases, setDatabases] = useState([]); // List of available connections
+  const [tables, setTables] = useState([]); // Tables for the selected database
+  const [selectedTable, setSelectedTable] = useState(null); // For simple mode (can be removed if simple mode gone)
+  // Add back state for Simple Mode structure view
   const [tableStructure, setTableStructure] = useState([]);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // Add back state for Dialogs (logic disabled for now)
   const [openCreateTableDialog, setOpenCreateTableDialog] = useState(false);
   const [openDeleteTableDialog, setOpenDeleteTableDialog] = useState(false);
   const [newTableName, setNewTableName] = useState('');
@@ -180,68 +123,132 @@ export default function QueryEditor() {
     { name: 'name', type: 'VARCHAR(255)', nullable: false, isPrimary: false, autoIncrement: false }
   ]);
   
-  // Fetch database details and tables
+  // State for expert mode results pagination
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Add state for simple mode data preview
+  const [simpleModeTableData, setSimpleModeTableData] = useState([]);
+  const [simpleModeTableColumns, setSimpleModeTableColumns] = useState([]);
+  const [simpleModeLoading, setSimpleModeLoading] = useState(false);
+  const [simpleModeError, setSimpleModeError] = useState(null);
+
+  // Snackbar state
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+
+  // Fetch available database connections and set default
   useEffect(() => {
-    const fetchDatabase = async () => {
+    const fetchConnections = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // Überprüfen Sie LocalStorage auf echte Datenbanken
-        const storedDatabases = localStorage.getItem('mole_real_databases');
-        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
+        const connections = await DatabaseService.getDatabaseConnections();
+        const availableConnections = connections || [];
+        setDatabases(availableConnections); 
         
-        let db;
+        let defaultDb = null;
+        if (urlDatabaseId) { // If an ID is provided in the URL, try to find that connection
+           defaultDb = availableConnections.find(db => String(db.id) === String(urlDatabaseId));
+        }
         
-        if (realDatabases.length > 0) {
-          // Wenn echte Datenbanken vorhanden sind, verwenden wir die angegebene oder die erste
-          db = id ? realDatabases.find(db => db.id === id) : realDatabases[0];
-        } else {
-          // Wenn keine echten Datenbanken vorhanden sind, verwenden wir die Demo-Datenbank
-          db = {
-            id: '1',
+        // If no ID from URL or not found, use the first connection from the list
+        if (!defaultDb && availableConnections.length > 0) {
+          defaultDb = availableConnections[0];
+        }
+        
+        // If still no DB (API failed or returned empty), use Sample DB as fallback
+        if (!defaultDb) {
+          console.log('No real connections found or specified, using Sample DB for Query Editor.');
+          defaultDb = {
+            id: '1', // Use sample ID
             name: 'Sample Database',
             engine: 'PostgreSQL',
-            host: 'localhost',
             database: 'sample_db',
             isSample: true
           };
+          // Add sample to the list if it's the only option
+          if (availableConnections.length === 0) {
+              setDatabases([defaultDb]);
+          }
         }
         
-        setDatabase(db);
+        console.log("Setting default DB:", defaultDb);
+        setDatabase(defaultDb); // Set the selected database state
         
-        const tablesData = await getDatabaseTables();
-        setTables(tablesData);
-        
-        setError(null);
       } catch (err) {
-        setError('Failed to load database details. Please try again.');
-        console.error(err);
+        console.error('Failed to load connections for Query Editor:', err);
+        setError('Failed to load database connections.');
+        // Fallback to Sample DB on error
+        const sampleDb = {
+           id: '1', name: 'Sample Database', engine: 'PostgreSQL', database: 'sample_db', isSample: true
+        };
+        setDatabases([sampleDb]);
+        setDatabase(sampleDb);
       } finally {
-        setLoading(false);
+        // Loading state is primarily managed by subsequent table fetch
       }
     };
     
-    fetchDatabase();
-  }, [id]);
+    fetchConnections();
+  }, [urlDatabaseId]); // Re-run if the ID from the URL changes
 
-  // Fetch table structure when a table is selected
+  // Fetch tables AND structure when the selected database changes
   useEffect(() => {
-    const fetchTableStructure = async () => {
-      if (!selectedTable) return;
+    const fetchSchemaData = async () => {
+      setTables([]);
+      setSelectedTable(null);
+      setTableStructure([]); // Reset structure
+      setQuery(''); 
+      setResults(null);
+      setError(null);
+
+      if (!database || !database.id || database.isSample) { 
+        setLoading(false); 
+        if (database?.isSample) {
+           setQuery('SELECT * FROM users LIMIT 10;'); 
+        }
+        return; 
+      }
       
       setLoading(true);
       try {
-        const structure = await getTableStructure(database, selectedTable);
-        setTableStructure(structure);
+        const schemaInfo = await DatabaseService.getDatabaseSchema(database.id);
+        if (schemaInfo.success) {
+          setTables(schemaInfo.tables || []);
+          // Select the first table and fetch its structure for Simple Mode
+          if (schemaInfo.tables && schemaInfo.tables.length > 0) {
+             const firstTable = schemaInfo.tables[0].name;
+             setSelectedTable(firstTable);
+             if (schemaInfo.tableColumns && schemaInfo.tableColumns[firstTable]) {
+                setTableStructure(schemaInfo.tableColumns[firstTable]);
+             } else {
+                // Attempt to fetch structure separately if not included initially (shouldn't happen with current backend)
+                console.warn(`Structure for table ${firstTable} not found in initial schema load.`);
+             }
+             // Set default query for expert mode
+             const safeTableName = firstTable.includes('-') || firstTable.includes(' ') ? `"${firstTable}"` : firstTable;
+             setQuery(`SELECT * FROM ${safeTableName} LIMIT 10;`);
+          } else {
+             setQuery('-- No tables found in this database');
+          }
+        } else {
+          console.warn(`Failed to get schema for ${database.name}:`, schemaInfo.message);
+          setError(`Failed to load schema for ${database.name}.`);
+          setTables([]);
+           setQuery('-- Could not load tables');
+        }
       } catch (err) {
-        setError(`Failed to load structure for table "${selectedTable}".`);
+        setError(`Error loading schema for ${database.name}.`);
         console.error(err);
+        setTables([]);
+        setQuery('-- Error loading tables');
       } finally {
         setLoading(false);
       }
     };
     
-    fetchTableStructure();
-  }, [selectedTable, database]);
+    fetchSchemaData();
+  }, [database]);
 
   const handleBack = () => {
     navigate(-1);
@@ -252,21 +259,34 @@ export default function QueryEditor() {
   };
 
   const handleModeChange = (event, newMode) => {
-    setEditorMode(newMode);
+    // Allow switching modes again
+    if (newMode !== null) { // Ensure a mode is selected
+       setEditorMode(newMode);
+    }
+  };
+
+  const handleDatabaseChange = (event) => {
+    const selectedDbId = event.target.value;
+    const newSelectedDb = databases.find(db => String(db.id) === String(selectedDbId));
+    setDatabase(newSelectedDb || null);
   };
 
   const handleRun = async () => {
-    if (!query.trim()) return;
+    if (!query.trim() || !database || !database.id) return;
     
     setLoading(true);
     setResults(null);
     setError(null);
+    setPage(0); // Reset pagination on new query
     
     try {
-      const result = await executeQuery(query, database);
+      const result = await DatabaseService.executeQuery(database.id, query);
       setResults(result);
+      if (!result.success) {
+          setError(result.message || 'Query execution failed.');
+      }
     } catch (err) {
-      setError('Failed to execute query. Please check your syntax and try again.');
+      setError(err.message || 'Failed to execute query. Please check syntax and connection.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -277,6 +297,7 @@ export default function QueryEditor() {
     setQuery('');
     setResults(null);
     setError(null);
+    setPage(0);
   };
 
   const handleChangePage = (event, newPage) => {
@@ -289,37 +310,103 @@ export default function QueryEditor() {
   };
 
   const downloadResults = () => {
-    // Simple CSV generation
-    if (!results || !results.rows) return;
+    if (!results || !results.rows || !results.columns) return;
     
-    const headers = results.columns.join(',');
-    const rows = results.rows.map(row => 
-      results.columns.map(col => `"${row[col] || ''}"`).join(',')
-    ).join('\n');
-    
-    const csv = `${headers}\n${rows}`;
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'query_results.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleTableClick = (tableName) => {
-    setSelectedTable(tableName);
-    
-    // In simple mode, generate a basic SELECT query when a table is clicked
-    if (editorMode === 'expert') {
-      setQuery(`SELECT * FROM ${tableName} LIMIT 100;`);
+    try {
+      const headers = results.columns.join(',');
+      const rows = results.rows.map(row => 
+        results.columns.map(col => {
+          let cellValue = row[col];
+          if (cellValue === null || cellValue === undefined) {
+            return ''
+          }
+          let stringValue = String(cellValue);
+          // Escape double quotes by doubling them, enclose in double quotes
+          stringValue = stringValue.replace(/"/g, '""'); 
+          return `"${stringValue}"`;
+        }).join(',')
+      ).join('\n');
+      
+      const csv = `${headers}\n${rows}`;
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'query_results.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch(e) {
+       console.error("CSV Export failed:", e);
+       setError("Failed to generate CSV file.");
     }
   };
 
+  const handleTableClick = async (tableName) => { // Make async for data fetching
+    setSelectedTable(tableName);
+    setTableStructure([]); // Clear old structure
+    setSimpleModeTableData([]); // Clear old data preview
+    setSimpleModeTableColumns([]);
+    setSimpleModeError(null);
+
+    // Fetch structure
+    if (database?.tableColumns && database.tableColumns[tableName]) {
+      setTableStructure(database.tableColumns[tableName]);
+    } else if (database && database.id && !database.isSample) {
+      // Structure wasn't pre-loaded, fetch schema again (might be redundant but safe)
+      console.log(`Structure for ${tableName} not pre-loaded, fetching schema again.`);
+      try {
+         setSimpleModeLoading(true); // Show loading for structure too if fetched separately
+         const schemaInfo = await DatabaseService.getDatabaseSchema(database.id);
+         if (schemaInfo.success && schemaInfo.tableColumns && schemaInfo.tableColumns[tableName]) {
+            setTableStructure(schemaInfo.tableColumns[tableName]);
+         } else {
+             console.warn(`Could not fetch structure for ${tableName} in second attempt.`);
+         }
+      } catch (err) {
+         console.error(`Error fetching schema for structure of ${tableName}:`, err);
+         setSimpleModeError(`Could not load structure for ${tableName}.`);
+      }
+      // Keep loading true until data is also fetched/failed
+    }
+
+    // Fetch data preview (only in simple mode for real databases)
+    if (editorMode === 'simple' && database && database.id && !database.isSample) {
+      setSimpleModeLoading(true); // Ensure loading is true
+      try {
+        const safeTableName = tableName.includes('-') || tableName.includes(' ') ? `"${tableName}"` : tableName;
+        const previewQuery = `SELECT * FROM ${safeTableName} LIMIT 10;`; // Fetch first 10 rows
+        const result = await DatabaseService.executeQuery(database.id, previewQuery);
+        if (result.success) {
+          setSimpleModeTableColumns(result.columns || []);
+          setSimpleModeTableData(result.rows || []);
+        } else {
+          console.error('Error fetching table data preview:', result.message);
+          setSimpleModeError(result.message || 'Failed to fetch table data preview.');
+        }
+      } catch (err) {
+        console.error('Exception fetching table data preview:', err);
+        setSimpleModeError(err.message || 'An unexpected error occurred while fetching table data preview.');
+      } finally {
+        setSimpleModeLoading(false);
+      }
+    } else {
+       // If not simple mode or sample DB, ensure loading is off
+       setSimpleModeLoading(false);
+    }
+
+    // For Expert mode, also update query
+    if (editorMode === 'expert') {
+      const safeTableName = tableName.includes('-') || tableName.includes(' ') ? `"${tableName}"` : tableName;
+      setQuery(`SELECT * FROM ${safeTableName} LIMIT 100;`);
+    }
+  };
+
+  // --- Reintroduce Simple Mode Handlers (logic disabled/mocked) --- 
   const handleCreateTable = () => {
+    console.log("Trigger Create Table Dialog");
     setOpenCreateTableDialog(true);
   };
 
@@ -334,6 +421,16 @@ export default function QueryEditor() {
   const handleColumnChange = (index, field, value) => {
     const updatedColumns = [...newColumns];
     updatedColumns[index] = { ...updatedColumns[index], [field]: value };
+    // Handle boolean toggle for nullable
+    if (field === 'nullable') {
+      updatedColumns[index][field] = !updatedColumns[index][field]; 
+    } else {
+      updatedColumns[index][field] = value; 
+    }
+    // Auto-disable autoIncrement if type is not INT or not primary
+    if (updatedColumns[index].type !== 'INT' || !updatedColumns[index].isPrimary) {
+        updatedColumns[index].autoIncrement = false;
+    }
     setNewColumns(updatedColumns);
   };
 
@@ -343,93 +440,131 @@ export default function QueryEditor() {
     setNewColumns(updatedColumns);
   };
 
-  const handleConfirmCreateTable = () => {
-    // In a real app, this would send an API request to create the table
-    setOpenCreateTableDialog(false);
-    setLoading(true);
+  const handleConfirmCreateTable = async () => { // Make async
+    if (!database || !database.id || !newTableName.trim() || newColumns.some(col => !col.name.trim())) {
+      setSnackbar({ open: true, message: 'Table name and all column names are required.', severity: 'warning' });
+      return;
+    }
+
+    const tableDefinition = { tableName: newTableName, columns: newColumns };
+    handleCloseCreateTableDialog();
+    setLoading(true); // Indicate loading
+    setError(null);
     
-    // Simulate API call
-    setTimeout(() => {
-      const updatedTables = [
-        ...tables, 
-        { 
-          name: newTableName, 
-          rows: 0, 
-          size: '0 MB', 
-          created: new Date().toISOString().split('T')[0] 
+    try {
+        const result = await DatabaseService.createTable(database.id, tableDefinition);
+        if (result.success) {
+            setSnackbar({ open: true, message: result.message || 'Table created successfully!', severity: 'success' });
+            setNewTableName(''); // Reset form
+            setNewColumns([{ name: 'id', type: 'INT', nullable: false, isPrimary: true, autoIncrement: true }, { name: 'name', type: 'VARCHAR(255)', nullable: false, isPrimary: false, autoIncrement: false }]);
+            await refreshTableList(); // Refresh the sidebar
+        } else {
+            setError(result.message || 'Failed to create table.');
+            setSnackbar({ open: true, message: result.message || 'Failed to create table.', severity: 'error' });
         }
-      ];
-      setTables(updatedTables);
-      setSelectedTable(newTableName);
-      setLoading(false);
-      
-      // Show success message
-      setError(null);
-      setResults({
-        success: true,
-        message: `Table "${newTableName}" created successfully.`,
-        affectedRows: 0
-      });
-      
-      // Reset form
-      setNewTableName('');
-      setNewColumns([
-        { name: 'id', type: 'INT', nullable: false, isPrimary: true, autoIncrement: true },
-        { name: 'name', type: 'VARCHAR(255)', nullable: false, isPrimary: false, autoIncrement: false }
-      ]);
-    }, 1500);
+    } catch (err) {
+         setError(err.message || 'An unexpected error occurred.');
+         setSnackbar({ open: true, message: err.message || 'An unexpected error occurred.', severity: 'error' });
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleDeleteTable = () => {
     if (!selectedTable) return;
+    console.log("Trigger Delete Table Dialog for:", selectedTable);
     setOpenDeleteTableDialog(true);
   };
 
-  const handleConfirmDeleteTable = () => {
-    // In a real app, this would send an API request to delete the table
-    setOpenDeleteTableDialog(false);
-    setLoading(true);
+  const handleConfirmDeleteTable = async () => { // Make async
+    if (!selectedTable || !database || !database.id) {
+        setSnackbar({ open: true, message: 'No table selected or database connection issue.', severity: 'warning' });
+        return;
+    }
     
-    // Simulate API call
-    setTimeout(() => {
-      const updatedTables = tables.filter(table => table.name !== selectedTable);
-      setTables(updatedTables);
-      setSelectedTable(null);
-      setTableStructure([]);
-      setLoading(false);
-      
-      // Show success message
-      setError(null);
-      setResults({
-        success: true,
-        message: `Table "${selectedTable}" deleted successfully.`,
-        affectedRows: 0
-      });
-    }, 1500);
+    const tableToDelete = selectedTable;
+    setOpenDeleteTableDialog(false);
+    setLoading(true); 
+    setError(null);
+
+    try {
+        const result = await DatabaseService.deleteTable(database.id, tableToDelete);
+        if (result.success) {
+             setSnackbar({ open: true, message: result.message || `Table "${tableToDelete}" deleted.`, severity: 'success' });
+             setSelectedTable(null); // Clear selection
+             setTableStructure([]);
+             await refreshTableList(); // Refresh sidebar
+        } else {
+            setError(result.message || 'Failed to delete table.');
+            setSnackbar({ open: true, message: result.message || 'Failed to delete table.', severity: 'error' });
+        }
+    } catch (err) {
+         setError(err.message || 'An unexpected error occurred.');
+         setSnackbar({ open: true, message: err.message || 'An unexpected error occurred.', severity: 'error' });
+    } finally {
+        setLoading(false);
+    }
   };
 
   const generateCreateTableSQL = () => {
-    if (!newTableName) return '';
+    if (!newTableName) return '-- Enter table name';
     
     const columnDefinitions = newColumns.map(col => {
-      let def = `\`${col.name}\` ${col.type}`;
+      if (!col.name || !col.type) return '-- Incomplete column definition';
+      // Basic quoting for safety, adapt per DB engine if needed
+      const safeColName = col.name.includes('-') || col.name.includes(' ') ? `"${col.name}"` : col.name;
+      let def = `  ${safeColName} ${col.type}`;
       def += col.nullable ? ' NULL' : ' NOT NULL';
+      if (col.default) def += ` DEFAULT ${col.default}`; // Add default value if present
       if (col.isPrimary) def += ' PRIMARY KEY';
-      if (col.autoIncrement) def += ' AUTO_INCREMENT';
+      if (col.autoIncrement) def += ' AUTOINCREMENT'; // SQLite syntax, adjust for others
       return def;
-    }).join(',\n  ');
+    }).join(',\n');
     
-    return `CREATE TABLE \`${newTableName}\` (\n  ${columnDefinitions}\n);`;
+    const safeTableName = newTableName.includes('-') || newTableName.includes(' ') ? `"${newTableName}"` : newTableName;
+    return `CREATE TABLE ${safeTableName} (\n${columnDefinitions}\n);`;
   };
 
   const handleRunCreateTableSQL = () => {
     const sql = generateCreateTableSQL();
     setQuery(sql);
-    setEditorMode('expert');
-    setOpenCreateTableDialog(false);
+    setEditorMode('expert'); // Switch to expert mode to show/run the query
+    handleCloseCreateTableDialog();
+  };
+  // --- End Simple Mode Handlers --- 
+
+  // Function to refresh the table list for the current database
+  const refreshTableList = useCallback(async () => {
+      if (!database || !database.id || database.isSample) { 
+        setTables([]);
+        return; 
+      }
+      // Don't set loading here, as it might be part of a larger operation
+      try {
+        const schemaInfo = await DatabaseService.getDatabaseSchema(database.id);
+        if (schemaInfo.success) {
+          setTables(schemaInfo.tables || []);
+        } else {
+          console.warn(`Failed to refresh tables for ${database.name}:`, schemaInfo.message);
+          setSnackbar({ open: true, message: `Error refreshing table list: ${schemaInfo.message}`, severity: 'warning' });
+          setTables([]);
+        }
+      } catch (err) {
+        setSnackbar({ open: true, message: `Error refreshing table list: ${err.message}`, severity: 'error' });
+        console.error(err);
+        setTables([]);
+      }
+  }, [database]); // Dependency on the current database connection
+
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setSnackbar({ ...snackbar, open: false });
   };
 
-  if (loading && !database) {
+  // Render logic needs to be adapted for Expert Mode only
+  if (loading && !database) { // Show loading only during initial connection fetch
     return (
       <RootStyle>
         <Box display="flex" justifyContent="center" alignItems="center" height="100%">
@@ -450,7 +585,7 @@ export default function QueryEditor() {
             SQL Editor
           </Typography>
         </Box>
-        
+        {/* Reintroduce mode tabs */}
         <Tabs 
           value={editorMode} 
           onChange={handleModeChange}
@@ -478,15 +613,21 @@ export default function QueryEditor() {
         </Tabs>
       </Box>
 
-      {database && (
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle1">
-            Connected to: <Chip label={database.name} color="primary" size="small" sx={{ ml: 1 }} />
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {database.engine} • {database.host} • {database.database}
-          </Typography>
-        </Box>
+      {databases.length > 0 && (
+        <FormControl fullWidth variant="outlined" sx={{ mb: 3 }}>
+          <InputLabel>Database Connection</InputLabel>
+          <Select
+            value={database?.id || ''}
+            onChange={handleDatabaseChange}
+            label="Database Connection"
+          >
+            {databases.map((db) => (
+              <MenuItem key={db.id} value={db.id}>
+                {db.name} ({db.engine} - {db.database})
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       )}
 
       {error && (
@@ -495,313 +636,183 @@ export default function QueryEditor() {
         </Alert>
       )}
 
-      {results && results.success && (
-        <Alert severity="success" sx={{ mb: 3 }}>
-          {results.message} {results.affectedRows > 0 && `(${results.affectedRows} rows affected)`}
-        </Alert>
-      )}
-
-      <Grid container spacing={3} sx={{ height: 'calc(100vh - 280px)' }}>
-        {/* Simple Mode */}
-        {editorMode === 'simple' && (
-          <>
-            <Grid item xs={12} md={3}>
-              <Paper sx={{ height: '100%', overflow: 'auto', p: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="subtitle1" fontWeight={500}>
-                    Tables
-                  </Typography>
-                  <Tooltip title="Create new table">
-                    <IconButton size="small" color="primary" onClick={handleCreateTable}>
-                      <AddIcon />
-                    </IconButton>
-                  </Tooltip>
+      <Grid container spacing={3} sx={{ height: 'calc(100vh - 250px)' }}> {/* Adjust height */}
+          {/* Table List Sidebar */}
+          <Grid item xs={12} md={3}>
+            <Paper sx={{ height: '100%', overflow: 'auto', p: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="subtitle1" fontWeight={500}>Tables</Typography>
+                    <Tooltip title="Create new table">
+                        <span> {/* Tooltip needs a span wrapper if button is disabled */} 
+                        <IconButton 
+                            size="small" 
+                            color="primary" 
+                            onClick={handleCreateTable}
+                            disabled={!database || database.isSample} // Disable for sample DB
+                        >
+                        <AddIcon />
+                        </IconButton>
+                        </span>
+                    </Tooltip>
                 </Box>
                 <Divider sx={{ mb: 2 }} />
+                {loading && tables.length === 0 && <CircularProgress size={20} />} 
+                {!loading && tables.length === 0 && !database?.isSample && (
+                    <Typography variant="body2" color="text.secondary">No tables found.</Typography>
+                )}
+                {database?.isSample && (
+                    <Typography variant="body2" color="text.secondary">Sample tables not listed.</Typography>
+                )}
                 <List dense>
                   {tables.map((table) => (
-                    <ListItem 
-                      disablePadding
-                      key={table.name}
-                      secondaryAction={
-                        <Typography variant="caption" color="text.secondary">
-                          {table.rows} rows
-                        </Typography>
-                      }
-                    >
+                    <ListItem disablePadding key={table.name}>
                       <ListItemButton 
                         selected={selectedTable === table.name}
                         onClick={() => handleTableClick(table.name)}
                         sx={{ borderRadius: 1 }}
                       >
-                        <ListItemIcon sx={{ minWidth: 36 }}>
-                          <StorageIcon fontSize="small" />
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary={table.name}
-                          primaryTypographyProps={{ fontSize: 14 }}
-                        />
+                        <ListItemIcon sx={{ minWidth: 36 }}><StorageIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText primary={table.name} primaryTypographyProps={{ fontSize: 14, noWrap: true }} />
                       </ListItemButton>
                     </ListItem>
                   ))}
                 </List>
-                {tables.length === 0 && (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      No tables found.
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      startIcon={<AddIcon />}
-                      onClick={handleCreateTable}
-                      sx={{ mt: 2, textTransform: 'none' }}
-                    >
-                      Create table
-                    </Button>
-                  </Box>
-                )}
-              </Paper>
-            </Grid>
-            
-            <Grid item xs={12} md={9}>
-              <Paper sx={{ height: '100%', p: 0, display: 'flex', flexDirection: 'column' }}>
-                {selectedTable ? (
-                  <>
-                    <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="h6">
-                        {selectedTable}
-                      </Typography>
-                      <Box>
-                        <Tooltip title="Delete table">
-                          <IconButton color="error" size="small" onClick={handleDeleteTable}>
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Edit as SQL">
-                          <IconButton 
-                            color="primary" 
-                            size="small" 
-                            onClick={() => setEditorMode('expert')}
-                            sx={{ ml: 1 }}
-                          >
-                            <CodeIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </Box>
-                    
-                    <Tabs value={0} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
-                      <Tab label="Structure" />
-                      <Tab label="Data" />
-                      <Tab label="Indexes" />
-                    </Tabs>
-                    
-                    <Box sx={{ p: 2, flexGrow: 1, overflow: 'auto' }}>
-                      {loading ? (
-                        <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-                          <CircularProgress />
-                        </Box>
-                      ) : (
-                        <TableContainer>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Column</TableCell>
-                                <TableCell>Type</TableCell>
-                                <TableCell>Null</TableCell>
-                                <TableCell>Key</TableCell>
-                                <TableCell>Default</TableCell>
-                                <TableCell>Extra</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {tableStructure.map((row) => (
-                                <TableRow key={row.column}>
-                                  <TableCell>{row.column}</TableCell>
-                                  <TableCell>{row.type}</TableCell>
-                                  <TableCell>{row.nullable ? 'Yes' : 'No'}</TableCell>
-                                  <TableCell>
-                                    {row.key === 'PRI' && (
-                                      <Chip size="small" label="Primary" color="primary" />
-                                    )}
-                                    {row.key === 'UNI' && (
-                                      <Chip size="small" label="Unique" color="secondary" />
-                                    )}
-                                    {row.key === 'MUL' && (
-                                      <Chip size="small" label="Index" color="info" />
-                                    )}
-                                  </TableCell>
-                                  <TableCell>{row.default || '-'}</TableCell>
-                                  <TableCell>{row.extra || '-'}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      )}
-                    </Box>
-                    
-                    <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-                      <Stack direction="row" spacing={2}>
-                        <ActionButton
-                          variant="contained"
-                          color="primary"
-                          startIcon={<AddIcon />}
-                        >
-                          Add column
-                        </ActionButton>
-                        <ActionButton
-                          variant="outlined"
-                          startIcon={<SearchIcon />}
-                        >
-                          Search data
-                        </ActionButton>
-                        <ActionButton
-                          variant="outlined"
-                          startIcon={<EditIcon />}
-                        >
-                          Edit record
-                        </ActionButton>
-                      </Stack>
-                    </Box>
-                  </>
-                ) : (
-                  <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="100%">
-                    <Typography variant="h6" color="text.secondary" gutterBottom>
-                      No table selected
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center', maxWidth: 400 }}>
-                      Select a table from the left sidebar, or create a new table.
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      startIcon={<AddIcon />}
-                      onClick={handleCreateTable}
-                    >
-                      Create new table
-                    </Button>
-                  </Box>
-                )}
-              </Paper>
-            </Grid>
-          </>
-        )}
-        
-        {/* Expert Mode */}
-        {editorMode === 'expert' && (
-          <>
-            <Grid item xs={12}>
-              <Paper sx={{ p: 2, mb: 3 }}>
-                <QueryTextarea
-                  fullWidth
-                  multiline
-                  rows={8}
-                  placeholder="Enter your SQL query here..."
-                  value={query}
-                  onChange={handleQueryChange}
+            </Paper>
+          </Grid>
+
+          {/* Editor and Results Area */} 
+          <Grid item xs={12} md={9} sx={{ display: 'flex', flexDirection: 'column' }}>
+            {/* Editor Area */} 
+            <Paper sx={{ p: 2, mb: 3 }}>
+              <QueryTextarea
+                fullWidth
+                multiline
+                rows={8}
+                placeholder={database ? `Enter your SQL query for ${database.name}...` : 'Select a database connection'}
+                value={query}
+                onChange={handleQueryChange}
+                variant="outlined"
+                className="query-editor"
+                InputProps={{
+                  sx: { fontFamily: '"SF Mono", Monaco, Consolas, "Courier New", monospace' }
+                }}
+                disabled={!database || loading}
+              />
+              
+              <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                <Button
+                  variant="contained"
+                  startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
+                  onClick={handleRun}
+                  disabled={loading || !query.trim() || !database || database.isSample} // Disable run for sample DB
+                >
+                  Run query
+                </Button>
+                <Button
                   variant="outlined"
-                  className="query-editor"
-                  InputProps={{
-                    sx: { fontFamily: '"SF Mono", Monaco, Consolas, "Courier New", monospace' }
-                  }}
-                />
-                
-                <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-                  <Button
-                    variant="contained"
-                    startIcon={loading ? <CircularProgress size={20} /> : <PlayArrowIcon />}
-                    onClick={handleRun}
-                    disabled={loading || !query.trim()}
-                  >
-                    Run query
-                  </Button>
+                  startIcon={<ClearIcon />}
+                  onClick={handleClear}
+                  disabled={loading}
+                >
+                  Clear
+                </Button>
+                {results && results.success && results.rows && results.rows.length > 0 && (
                   <Button
                     variant="outlined"
-                    startIcon={<ClearIcon />}
-                    onClick={handleClear}
+                    startIcon={<DownloadIcon />}
+                    onClick={downloadResults}
                   >
-                    Clear
+                    Download results
                   </Button>
-                  {results && results.rows && (
-                    <Button
-                      variant="outlined"
-                      startIcon={<DownloadIcon />}
-                      onClick={downloadResults}
-                    >
-                      Download results
-                    </Button>
-                  )}
-                </Box>
-              </Paper>
+                )}
+              </Box>
+            </Paper>
 
-              {results && results.rows && (
-                <ResultsCard>
+            {/* Results Area */} 
+            {loading && <Box sx={{ display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box>}
+            
+            {results && !loading && (
+               <ResultsCard variant="outlined"> {/* Use outlined variant */} 
                   <CardContent sx={{ p: 0, '&:last-child': { pb: 0 }, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-                    <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                      <Typography variant="subtitle1">
-                        Results: {results.rows.length} rows
-                      </Typography>
-                    </Box>
-                    <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-                      <TableContainer>
-                        <Table stickyHeader>
-                          <TableHead>
-                            <TableRow>
-                              {results.columns.map((column) => (
-                                <TableCell key={column}>{column}</TableCell>
-                              ))}
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {results.rows
-                              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                              .map((row, index) => (
-                                <TableRow key={index}>
-                                  {results.columns.map((column) => (
-                                    <TableCell key={column}>
-                                      {String(row[column] !== null ? row[column] : '')}
-                                    </TableCell>
-                                  ))}
-                                </TableRow>
-                              ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    </Box>
-                    <TablePagination
-                      component="div"
-                      count={results.rows.length}
-                      rowsPerPage={rowsPerPage}
-                      page={page}
-                      onPageChange={handleChangePage}
-                      onRowsPerPageChange={handleChangeRowsPerPage}
-                      rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                    />
+                    {results.success ? (
+                      <>
+                        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                          <Typography variant="subtitle1">
+                            {results.rows ? 
+                              `Results: ${results.rows.length} rows (Page ${page + 1})` : 
+                              results.message || 'Query Executed'}
+                            {results.affectedRows > 0 && ` - ${results.affectedRows} rows affected`}
+                          </Typography>
+                        </Box>
+                        {results.rows && results.columns && results.rows.length > 0 ? (
+                          <>
+                            <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+                              <TableContainer>
+                                <Table stickyHeader size="small">
+                                  <TableHead>
+                                    <TableRow>
+                                      {results.columns.map((column) => (
+                                        <TableCell key={column} sx={{ fontWeight: 'bold' }}>{column}</TableCell>
+                                      ))}
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {results.rows
+                                      // Client-side pagination of the current result set
+                                      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                                      .map((row, index) => (
+                                        <TableRow key={`row-${page}-${index}`}>
+                                          {results.columns.map((column) => (
+                                            <TableCell key={`${column}-${page}-${index}`}>
+                                              {String(row[column] !== null && row[column] !== undefined ? row[column] : 'NULL')}
+                                            </TableCell>
+                                          ))}
+                                        </TableRow>
+                                      ))}
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
+                            </Box>
+                            <TablePagination
+                              component="div"
+                              count={results.rows.length} // Paginate based on fetched rows
+                              rowsPerPage={rowsPerPage}
+                              page={page}
+                              onPageChange={handleChangePage}
+                              onRowsPerPageChange={handleChangeRowsPerPage}
+                              rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                            />
+                          </>
+                        ) : (
+                          <Box sx={{ p: 2 }}>
+                             <Typography color="textSecondary">{results.message || 'Query executed, no rows returned.'}</Typography>
+                          </Box>
+                        )}
+                      </>
+                    ) : ( // Handle case where results.success is false
+                      <Box sx={{ p: 2 }}>
+                        <Alert severity="error">{results.message || 'Query execution failed.'}</Alert>
+                      </Box>
+                    )}
                   </CardContent>
                 </ResultsCard>
-              )}
-            </Grid>
-          </>
-        )}
+            )}
+          </Grid>
       </Grid>
 
-      {/* Create Table Dialog */}
+      {/* Create Table Dialog (Restored UI, logic pending API) */} 
       <Dialog
         open={openCreateTableDialog}
         onClose={handleCloseCreateTableDialog}
         maxWidth="md"
         fullWidth
-        PaperProps={{
-          sx: { borderRadius: 2 }
-        }}
+        PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <DialogTitle>Create new table</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 3 }}>
             Define the structure of your new table.
           </DialogContentText>
-          
           <TextField
             autoFocus
             margin="dense"
@@ -812,22 +823,15 @@ export default function QueryEditor() {
             variant="outlined"
             sx={{ mb: 3 }}
           />
-          
-          <Typography variant="subtitle1" gutterBottom>
-            Columns
-          </Typography>
-          
+          <Typography variant="subtitle1" gutterBottom>Columns</Typography>
           {newColumns.map((column, index) => (
             <Box key={index} sx={{ mb: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
               <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={4}>
+                 <Grid item xs={12} sm={4}>
                   <TextField
-                    fullWidth
-                    label="Column name"
-                    value={column.name}
+                    fullWidth label="Column name" value={column.name}
                     onChange={(e) => handleColumnChange(index, 'name', e.target.value)}
-                    variant="outlined"
-                    size="small"
+                    variant="outlined" size="small"
                   />
                 </Grid>
                 <Grid item xs={12} sm={3}>
@@ -853,7 +857,7 @@ export default function QueryEditor() {
                     <FormControlLabel
                       control={
                         <Switch
-                          checked={!column.nullable}
+                          checked={!column.nullable} // Invert logic for display
                           onChange={(e) => handleColumnChange(index, 'nullable', !e.target.checked)}
                           size="small"
                         />
@@ -876,109 +880,145 @@ export default function QueryEditor() {
                           checked={column.autoIncrement}
                           onChange={(e) => handleColumnChange(index, 'autoIncrement', e.target.checked)}
                           size="small"
-                          disabled={!column.isPrimary || column.type !== 'INT'}
+                          disabled={column.type !== 'INT' || !column.isPrimary} // Corrected disable logic
                         />
                       }
-                      label="AUTO_INCREMENT"
+                      label="AUTO INC."
                     />
-                    {index > 0 && (
-                      <IconButton 
-                        size="small" 
-                        color="error" 
-                        onClick={() => handleRemoveColumn(index)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    )}
+                    {/* Allow deleting the first column too if needed, but usually ID is required */}
+                    <IconButton size="small" color="error" onClick={() => handleRemoveColumn(index)} disabled={newColumns.length <= 1}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
                   </Stack>
                 </Grid>
               </Grid>
             </Box>
           ))}
-          
-          <Button
-            startIcon={<AddIcon />}
-            onClick={handleAddColumn}
-            sx={{ mb: 3, textTransform: 'none' }}
-          >
-            Add column
-          </Button>
-          
-          <Typography variant="subtitle1" gutterBottom>
-            Generated SQL
-          </Typography>
-          <Box 
-            sx={{ 
-              p: 2, 
-              bgcolor: 'background.default', 
-              borderRadius: 1,
-              fontFamily: '"SF Mono", Monaco, Consolas, "Courier New", monospace',
-              fontSize: '0.875rem',
-              whiteSpace: 'pre-wrap',
-              overflow: 'auto',
-              maxHeight: 200
-            }}
-          >
+          <Button startIcon={<AddIcon />} onClick={handleAddColumn} sx={{ mb: 3, textTransform: 'none' }}>Add column</Button>
+          <Typography variant="subtitle1" gutterBottom>Generated SQL (Example)</Typography>
+          <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1, fontFamily: 'monospace', fontSize: '0.875rem', whiteSpace: 'pre-wrap', overflow: 'auto', maxHeight: 200 }}>
             {generateCreateTableSQL()}
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button onClick={handleCloseCreateTableDialog} sx={{ textTransform: 'none' }}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleRunCreateTableSQL} 
-            variant="outlined" 
-            color="primary"
-            startIcon={<CodeIcon />}
-            sx={{ textTransform: 'none', mr: 1 }}
-          >
-            As SQL query
-          </Button>
-          <Button 
-            onClick={handleConfirmCreateTable} 
-            variant="contained" 
-            color="primary"
-            startIcon={<SaveIcon />}
-            disabled={!newTableName.trim() || newColumns.some(col => !col.name.trim())}
-            sx={{ textTransform: 'none' }}
-          >
-            Create table
-          </Button>
+          <Button onClick={handleCloseCreateTableDialog} sx={{ textTransform: 'none' }}>Cancel</Button>
+          <Button onClick={handleRunCreateTableSQL} variant="outlined" color="primary" startIcon={<CodeIcon />} sx={{ textTransform: 'none', mr: 1 }}>As SQL query</Button>
+          <Button onClick={handleConfirmCreateTable} variant="contained" color="primary" startIcon={<SaveIcon />} disabled={!newTableName.trim() || newColumns.some(col => !col.name.trim()) || !database || database.isSample} sx={{ textTransform: 'none' }}>Create table</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Delete Table Confirmation Dialog */}
+      {/* Delete Table Confirmation Dialog (Restored UI) */} 
       <Dialog
         open={openDeleteTableDialog}
         onClose={() => setOpenDeleteTableDialog(false)}
-        PaperProps={{
-          sx: { borderRadius: 2 }
-        }}
+        PaperProps={{ sx: { borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center' }}>
-          <WarningIcon color="error" sx={{ mr: 1 }} />
-          Delete table
-        </DialogTitle>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center' }}><WarningIcon color="error" sx={{ mr: 1 }} /> Delete table</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete the table <strong>{selectedTable}</strong>? This action cannot be undone.
-          </DialogContentText>
+          <DialogContentText>Are you sure you want to delete the table <strong>{selectedTable}</strong>? This action cannot be undone.</DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button onClick={() => setOpenDeleteTableDialog(false)} sx={{ textTransform: 'none' }}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleConfirmDeleteTable} 
-            variant="contained" 
-            color="error"
-            sx={{ textTransform: 'none' }}
-          >
-            Delete
-          </Button>
+          <Button onClick={() => setOpenDeleteTableDialog(false)} sx={{ textTransform: 'none' }}>Cancel</Button>
+          <Button onClick={handleConfirmDeleteTable} variant="contained" color="error" sx={{ textTransform: 'none' }} disabled={!database || database.isSample}>Delete</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Structure TableContainer */}
+      {selectedTable && (
+        <Box sx={{ mt: 4 }}> {/* Add margin top */} 
+          <Typography variant="subtitle1" gutterBottom>Structure</Typography>
+          {simpleModeLoading && <CircularProgress size={24} sx={{ mt: 2 }} />} 
+          {simpleModeError && <Alert severity="warning" sx={{ mt: 2 }}>{simpleModeError}</Alert>} 
+          {!simpleModeLoading && !simpleModeError && tableStructure.length > 0 && (
+            <TableContainer sx={{ maxHeight: '300px', overflowY: 'auto', mt: 1 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    {tableStructure.map((colName, index) => (
+                      <TableCell key={`structure-head-${index}`} sx={{ fontWeight: 600 }}>
+                        {colName}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tableStructure.map((row, rowIndex) => (
+                    <TableRow key={`structure-row-${rowIndex}`}>
+                      {tableStructure.map((colName, colIndex) => (
+                        <TableCell key={`structure-cell-${rowIndex}-${colIndex}`}>
+                          {/* Handle potential non-string values */} 
+                          {typeof row[colName] === 'object' 
+                              ? JSON.stringify(row[colName]) 
+                              : String(row[colName] !== null && row[colName] !== undefined ? row[colName] : 'NULL')} 
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+          
+          {/* Data Preview Section */} 
+          {selectedTable && (
+              <Box sx={{ mt: 4 }}> {/* Add margin top */} 
+                  <Typography variant="subtitle1" gutterBottom>Data Preview (First 10 Rows)</Typography>
+                  {simpleModeLoading && <CircularProgress size={24} sx={{ mt: 2 }} />} 
+                  {simpleModeError && <Alert severity="warning" sx={{ mt: 2 }}>{simpleModeError}</Alert>} 
+                  {!simpleModeLoading && !simpleModeError && simpleModeTableData.length > 0 && (
+                      <TableContainer sx={{ maxHeight: '300px', overflowY: 'auto', mt: 1 }}>
+                          <Table size="small" stickyHeader>
+                              <TableHead>
+                              <TableRow>
+                                  {simpleModeTableColumns.map((colName, index) => (
+                                  <TableCell key={`preview-head-${index}`} sx={{ fontWeight: 600 }}>
+                                      {colName}
+                                  </TableCell>
+                                  ))}
+                              </TableRow>
+                              </TableHead>
+                              <TableBody>
+                              {simpleModeTableData.map((row, rowIndex) => (
+                                  <TableRow key={`preview-row-${rowIndex}`}>
+                                  {simpleModeTableColumns.map((colName, colIndex) => (
+                                      <TableCell key={`preview-cell-${rowIndex}-${colIndex}`}>
+                                      {/* Handle potential non-string values */} 
+                                      {typeof row[colName] === 'object' 
+                                          ? JSON.stringify(row[colName]) 
+                                          : String(row[colName] !== null && row[colName] !== undefined ? row[colName] : 'NULL')} 
+                                      </TableCell>
+                                  ))}
+                                  </TableRow>
+                              ))}
+                              </TableBody>
+                          </Table>
+                      </TableContainer>
+                  )}
+                   {!simpleModeLoading && !simpleModeError && simpleModeTableData.length === 0 && (
+                      <Typography color="textSecondary" sx={{ mt: 2 }}>No data found in table.</Typography>
+                  )}
+              </Box>
+          )}
+
+          {!selectedTable && (
+             <Typography sx={{ mt: 2, fontStyle: 'italic' }} color="textSecondary">
+               Select a table from the left sidebar to view its structure.
+             </Typography>
+          )}
+        </Box>
+      )}
+
+      {/* Add Snackbar for feedback */}
+      <Snackbar 
+          open={snackbar.open} 
+          autoHideDuration={6000} 
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+              {snackbar.message}
+          </Alert>
+      </Snackbar>
     </RootStyle>
   );
 } 

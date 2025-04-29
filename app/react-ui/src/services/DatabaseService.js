@@ -107,8 +107,8 @@ class DatabaseService {
       console.error('Error testing connection:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to test connection due to an unknown error.';
       // Return error details in the expected format for the form handler
-      return {
-        success: false,
+      return { 
+        success: false, 
         message: errorMessage
       };
     }
@@ -223,6 +223,51 @@ class DatabaseService {
         columns: [], // Include empty columns array on error
         totalRowCount: 0 
       };
+    }
+  }
+
+  /**
+   * Creates a new table for a specific database connection.
+   * @param {string|number} id - Connection ID.
+   * @param {object} tableDefinition - Object containing tableName and columns array.
+   * @param {string} tableDefinition.tableName - The name for the new table.
+   * @param {Array<object>} tableDefinition.columns - Array of column definitions.
+   * @returns {Promise<Object>} Promise resolving to { success: boolean, message?: string }.
+   */
+  async createTable(id, tableDefinition) {
+    const apiUrl = `${API_URL}/${id}/tables`;
+    console.log(`Creating table for DB ID: ${id}`, tableDefinition);
+    console.log(`API URL used: ${apiUrl}`);
+    try {
+      const response = await axios.post(apiUrl, tableDefinition);
+      console.log('Create table response:', response.data);
+      return response.data; // { success: true, message: '...' }
+    } catch (error) {
+      console.error('Error creating table:', error);
+      const message = error.response?.data?.message || error.message || 'Network or API error creating table.';
+      return { success: false, message: message };
+    }
+  }
+
+  /**
+   * Deletes a specific table for a database connection.
+   * @param {string|number} id - Connection ID.
+   * @param {string} tableName - Name of the table to delete.
+   * @returns {Promise<Object>} Promise resolving to { success: boolean, message?: string }.
+   */
+  async deleteTable(id, tableName) {
+    const encodedTableName = encodeURIComponent(tableName);
+    const apiUrl = `${API_URL}/${id}/tables/${encodedTableName}`;
+    console.log(`Deleting table: ${tableName} for DB ID: ${id}`);
+    console.log(`API URL used: ${apiUrl}`);
+    try {
+      const response = await axios.delete(apiUrl);
+      console.log('Delete table response:', response.data);
+      return response.data; // { success: true, message: '...' }
+    } catch (error) {
+      console.error(`Error deleting table ${tableName}:`, error);
+      const message = error.response?.data?.message || error.message || 'Network or API error deleting table.';
+      return { success: false, message: message };
     }
   }
 }

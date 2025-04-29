@@ -31,6 +31,12 @@ router.get('/:id/health', databaseController.getDatabaseHealth);
 // Get paginated/sorted data for a specific table
 router.get('/:id/tables/:tableName/data', databaseController.getTableData);
 
+// Create a new table
+router.post('/:id/tables', databaseController.createTable);
+
+// Delete a table
+router.delete('/:id/tables/:tableName', databaseController.deleteTable);
+
 // Execute SQL query
 router.post('/:id/execute', databaseController.executeQuery);
 router.post('/connections/:id/execute', databaseController.executeQuery);
