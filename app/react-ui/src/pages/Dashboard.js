@@ -300,6 +300,14 @@ export default function Dashboard() {
   const [totalDbSize, setTotalDbSize] = useState('N/A');
   const [healthSummary, setHealthSummary] = useState({ ok: 0, error: 0, unknown: 0 });
 
+  // New states for potentially real data
+  const [detailedHealthInfo, setDetailedHealthInfo] = useState({}); // For Health tab details
+  const [performanceMetrics, setPerformanceMetrics] = useState({}); // For Performance tab details
+  const [isHealthDetailsLoading, setIsHealthDetailsLoading] = useState(false);
+  const [isPerformanceLoading, setIsPerformanceLoading] = useState(false);
+  const [currentDbStorageInfo, setCurrentDbStorageInfo] = useState({ loading: false, sizeFormatted: 'N/A', error: null });
+  const [currentDbTransactionStats, setCurrentDbTransactionStats] = useState({ loading: false, activeTransactions: 'N/A', totalCommits: 'N/A', totalRollbacks: 'N/A', error: null });
+
   // Dynamisch die API-Basis-URL basierend auf dem aktuellen Host ermitteln
   const getApiBaseUrl = () => {
     // Wenn die App auf dem gleichen Server wie die API läuft, können wir relative URLs verwenden
@@ -434,8 +442,19 @@ export default function Dashboard() {
         // Set total size state
         setTotalDbSize(formatBytes(calculatedTotalSize)); // Use formatBytes helper
         
-        // Fetch real performance data here if available, otherwise use mock
-        setPerformanceData(mockPerformanceData); // Keep using mock for now
+        // Conditional loading of Health Details and Performance Data
+        // TODO: Implement API calls to fetch real detailed health and performance data
+        // For now, we use mock data only for the sample database
+        const sampleDbExists = finalDatabasesToShow.some(db => db.isSample);
+        if (sampleDbExists) { 
+          // If sample DB exists, populate its data from mocks
+          setDetailedHealthInfo(prev => ({ ...prev, 'sample': mockHealthData["Sample Database"] })); // Assuming sample DB ID is 'sample' or similar
+          setPerformanceMetrics(prev => ({ ...prev, 'sample': mockPerformanceData }));
+        } else {
+          // If no sample DB, or for real DBs, clear/initialize (later fetch real data)
+          setDetailedHealthInfo({}); 
+          setPerformanceMetrics({}); 
+        }
 
         // Wait for history and top tables data
         const [cpuRes, memRes, topTablesResult] = await Promise.all([
@@ -464,6 +483,10 @@ export default function Dashboard() {
         setTopTables([]); // Clear top tables on error
         setTotalDbSize('N/A'); // Reset size on error
         setHealthSummary({ ok: 0, error: 0, unknown: 0 }); // Reset health on error
+
+        // Reset detailed health/performance on error
+        setDetailedHealthInfo({});
+        setPerformanceMetrics({});
       } finally {
         setLoading(false);
       }
@@ -528,6 +551,61 @@ export default function Dashboard() {
          setActiveDatabaseId(firstRealDb ? firstRealDb.id : (databases[0]?.id || null));
     }
   }, [databases, activeDatabaseId]); // Rerun when databases list changes
+
+  // Fetch detailed info (like storage) when activeDatabaseId changes
+  useEffect(() => {
+    const fetchActiveDbDetails = async () => {
+      // Only fetch if active ID exists and it's not the sample DB
+      const activeDb = databases.find(db => db.id === activeDatabaseId);
+      if (activeDatabaseId && activeDb && !activeDb.isSample) {
+        // Fetch Storage Info
+        setCurrentDbStorageInfo({ loading: true, sizeFormatted: 'Loading...', error: null });
+        // Fetch Transaction Stats
+        setCurrentDbTransactionStats({ loading: true, activeTransactions: '...', totalCommits: '...', totalRollbacks: '...', error: null });
+        try {
+          // Fetch both concurrently
+          const [storageInfo, transStats] = await Promise.all([
+            DatabaseService.getStorageInfo(activeDatabaseId),
+            DatabaseService.getTransactionStats(activeDatabaseId)
+          ]);
+
+          if (storageInfo.success) {
+            setCurrentDbStorageInfo({ loading: false, sizeFormatted: storageInfo.sizeFormatted, error: null });
+          } else {
+            throw new Error(storageInfo.message || 'Failed to fetch storage info');
+          }
+
+          if (transStats.success) {
+              setCurrentDbTransactionStats({
+                  loading: false,
+                  activeTransactions: transStats.activeTransactions,
+                  totalCommits: transStats.totalCommits,
+                  totalRollbacks: transStats.totalRollbacks,
+                  error: null
+              });
+          } else {
+              // Handle transaction stats specific error without throwing a general one if storage worked
+              console.error(`Error fetching transaction stats for DB ${activeDatabaseId}:`, transStats.message);
+              setCurrentDbTransactionStats({ loading: false, activeTransactions: 'Error', totalCommits: 'Error', totalRollbacks: 'Error', error: transStats.message });
+          }
+
+        } catch (err) {
+          console.error(`Error fetching storage info for DB ${activeDatabaseId}:`, err);
+          setCurrentDbStorageInfo({ loading: false, sizeFormatted: 'Error', error: err.message });
+          // If the general catch is hit, ensure transaction stats are also marked as error/default
+          if (currentDbTransactionStats.loading) { // Check if it was still loading
+              setCurrentDbTransactionStats({ loading: false, activeTransactions: 'Error', totalCommits: 'Error', totalRollbacks: 'Error', error: err.message });
+          }
+        }
+      } else {
+        // Clear info if no active real DB or if sample is active
+        setCurrentDbStorageInfo({ loading: false, sizeFormatted: 'N/A', error: null });
+        setCurrentDbTransactionStats({ loading: false, activeTransactions: 'N/A', totalCommits: 'N/A', totalRollbacks: 'N/A', error: null });
+      }
+    };
+
+    fetchActiveDbDetails();
+  }, [activeDatabaseId, databases]); // Re-run when activeDatabaseId or the databases list changes
 
   const handleActiveDatabaseChange = (event) => {
       setActiveDatabaseId(event.target.value);
@@ -969,6 +1047,7 @@ export default function Dashboard() {
       {activeTab === 1 && (
         <Grid container spacing={3}>
           {databases.map((db) => {
+            const dbId = db.id || (db.isSample ? 'sample' : null); // Use 'sample' as ID for mock data
             // Get health status for this specific DB ID
             const currentHealth = healthData[db.id] || { status: 'Unknown', message: 'Checking...' };
             // Determine card style based on health status
@@ -987,7 +1066,7 @@ export default function Dashboard() {
             // Skip rendering health card for mock Sample DB if needed, or show basic info
             if (!db.id && db.isSample) {
                  return (
-                    <Grid item xs={12} md={4} key={db.name}>
+                    <Grid item xs={12} md={4} key={dbId}> {/* Use dbId for key */}
                         <RegularCard sx={{ ...cardStyle }}>
                             <CardContent>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -1004,7 +1083,7 @@ export default function Dashboard() {
             return (
                 <Grid item xs={12} md={4} key={db.id}>
                   {/* Use RegularCard with dynamic style instead of HealthCard */}
-                  <RegularCard sx={{ ...cardStyle }}> 
+                  <RegularCard sx={{ ...cardStyle }}>
                     <CardContent>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                         <Typography variant="h6">{db.name}</Typography>
@@ -1028,6 +1107,16 @@ export default function Dashboard() {
             );
           })}
 
+          {/* Placeholder/Message for real DB health details - shown only when NOT loading */}
+          {!isHealthDetailsLoading && Object.keys(detailedHealthInfo).length === 0 && databases.some(db => !db.isSample) && (
+            <Grid item xs={12}>
+              <Alert severity="info">
+                Detailed health information for real databases is not yet implemented.
+                {/* TODO: Add logic here to fetch real health data */} 
+              </Alert>
+            </Grid>
+          )}
+
           <Grid item xs={12}>
             <RegularCard>
               <CardContent>
@@ -1048,20 +1137,21 @@ export default function Dashboard() {
                     <Grid item xs={12} md={4}>
                       <Paper sx={{ p: 2, bgcolor: 'background.neutral' }}>
                         <Typography variant="body2" color="text.secondary">
-                          Average Growth Rate
+                          Database Size (Current)
                         </Typography>
                         <Typography variant="h6">
-                          5.2 MB/hour
+                          {currentDbStorageInfo.loading ? <CircularProgress size={20} /> : currentDbStorageInfo.sizeFormatted}
+                          {currentDbStorageInfo.error && <Tooltip title={currentDbStorageInfo.error}><ErrorIcon color="error" fontSize="small" sx={{ ml: 1 }} /></Tooltip>}
                         </Typography>
                       </Paper>
                     </Grid>
                     <Grid item xs={12} md={4}>
                       <Paper sx={{ p: 2, bgcolor: 'background.neutral' }}>
                         <Typography variant="body2" color="text.secondary">
-                          Last Checkpoint
+                          Average Growth Rate
                         </Typography>
                         <Typography variant="h6">
-                          23 min ago
+                          5.2 MB/hour
                         </Typography>
                       </Paper>
                     </Grid>
@@ -1089,7 +1179,9 @@ export default function Dashboard() {
                           Cache Hit Ratio
                         </Typography>
                         <Typography variant="body1" sx={{ color: 'success.main' }}>
-                          {performanceData.cacheHitRatio?.value || 0}%
+                          {/* Use performanceMetrics state */}
+                          {/* Example: Accessing data for a specific DB ID would be needed here */}
+                          {performanceMetrics['sample']?.cacheHitRatio?.value ?? 'N/A'} %
                         </Typography>
                       </Box>
                     </Paper>
@@ -1101,7 +1193,8 @@ export default function Dashboard() {
                           Deadlocks (24h)
                         </Typography>
                         <Typography variant="body1" sx={{ color: 'warning.main' }}>
-                          {performanceData.deadlocks?.last24h || 0}
+                          {/* Use performanceMetrics state */}
+                          {performanceMetrics['sample']?.deadlocks?.last24h ?? 'N/A'}
                         </Typography>
                       </Box>
                     </Paper>
@@ -1115,184 +1208,212 @@ export default function Dashboard() {
 
       {activeTab === 2 && (
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <RegularCard>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Query Performance
-                </Typography>
-                
-                <Grid container spacing={3} sx={{ mb: 3 }}>
-                  <Grid item xs={6}>
-                    <Box sx={{ textAlign: 'center', p: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Average Query Time
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <AccessTimeIcon sx={{ color: 'primary.main', mr: 1 }} />
-                        <Typography variant="h4">
-                          {performanceData.querySpeed?.avg || 0} ms
+          {/* Conditional Rendering based on if data exists */}
+          {/* Render performance data only if available (e.g., for sample DB) */}
+          {/* --- Query Performance Card --- */}
+          {/* This card currently only shows mock data for the sample DB */}
+           <Grid item xs={12} md={6}>
+             <RegularCard>
+                 <CardContent>
+                   <Typography variant="h6" gutterBottom>
+                     Query Performance
+                   </Typography>
+                   
+                   {/* Determine if sample data is available */}
+                   {/* Use activeDatabaseId to check if Sample DB is selected, or check if 'sample' key exists in performanceMetrics */}
+                   {/* Let's assume 'sample' key in performanceMetrics means sample data is loaded */}
+                   {performanceMetrics['sample'] ? (
+                     <>
+                       <Grid container spacing={3} sx={{ mb: 3 }}>
+                         <Grid item xs={6}>
+                           <Box sx={{ textAlign: 'center', p: 2 }}>
+                             <Typography variant="body2" color="text.secondary">
+                               Average Query Time
+                             </Typography>
+                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                               <AccessTimeIcon sx={{ color: 'primary.main', mr: 1 }} />
+                               <Typography variant="h4">
+                                 {performanceMetrics['sample']?.querySpeed?.avg ?? 'N/A'} ms
+                               </Typography>
+                             </Box>
+                           </Box>
+                         </Grid>
+                         
+                         <Grid item xs={6}>
+                           <Box sx={{ textAlign: 'center', p: 2 }}>
+                             <Typography variant="body2" color="text.secondary">
+                               95th Percentile
+                             </Typography>
+                             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                               <SpeedIcon sx={{ color: 'warning.main', mr: 1 }} />
+                               <Typography variant="h4">
+                                 {performanceMetrics['sample']?.querySpeed?.p95 ?? 'N/A'} ms
+                               </Typography>
+                             </Box>
+                           </Box>
+                         </Grid>
+                       </Grid>
+                       
+                       <Typography variant="subtitle1" gutterBottom>
+                         Slow Queries (Sample Data)
+                       </Typography>
+                       
+                       {(performanceMetrics['sample']?.slowQueries || []).map((query, index) => (
+                         <Paper 
+                           key={query.id}
+                           sx={{ 
+                             p: 2, 
+                             mb: 2, 
+                             bgcolor: 'background.neutral',
+                             borderLeft: '4px solid',
+                             borderColor: 'warning.main'
+                           }}
+                         >
+                           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                             <Typography variant="subtitle2">
+                               Query #{index + 1}
+                             </Typography>
+                             <Typography variant="body2" color="error">
+                               {query.time} sec ({query.count} executions)
+                             </Typography>
+                           </Box>
+                           <Typography 
+                             variant="body2" 
+                             component="pre"
+                             sx={{ 
+                               p: 1, 
+                               bgcolor: 'background.paper',
+                               borderRadius: 1,
+                               overflow: 'auto',
+                               fontSize: '0.75rem'
+                             }}
+                           >
+                             {query.sql}
+                           </Typography>
+                         </Paper>
+                       ))}
+                     </>
+                     ) : (
+                         <Alert severity="info" sx={{ mt: 2 }}>
+                             Detailed query performance metrics for real databases are not yet implemented.
+                         </Alert>
+                     )}
+                 </CardContent>
+               </RegularCard>
+             </Grid>
+
+             {/* --- Transaction & Lock Metrics Card --- */}
+             {/* This card shows real data for active DB or mock for sample */}
+              <Grid item xs={12} md={6}>
+                <RegularCard>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Transaction & Lock Metrics
+                    </Typography>
+                    
+                    {/* Placeholder: Transaction Metrics Grid */}
+                    <Grid container spacing={3} sx={{ mb: 4 }}>
+                      <Grid item xs={4}>
+                        <Box sx={{ textAlign: 'center' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            Active Transactions
+                          </Typography>
+                          <Typography variant="h4">
+                            {/* Show real data if available, else mock for sample, else N/A */}
+                            {(activeDatabaseId && !databases.find(db=>db.id === activeDatabaseId)?.isSample) 
+                              ? (currentDbTransactionStats.loading ? <CircularProgress size={24}/> : (currentDbTransactionStats.error ? 'Error' : currentDbTransactionStats.activeTransactions)) 
+                              : (performanceMetrics['sample']?.transactionMetrics?.active ?? 'N/A')}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={4}>
+                        <Box sx={{ textAlign: 'center' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            Commits/sec
+                          </Typography>
+                          <Typography variant="h4">
+                            {/* Show real data (total) if available, else mock for sample, else N/A */}
+                            {/* NOTE: Displaying TOTAL commits, not per/sec yet */}
+                            {(activeDatabaseId && !databases.find(db=>db.id === activeDatabaseId)?.isSample)
+                              ? (currentDbTransactionStats.loading ? '...' : (currentDbTransactionStats.error ? 'Error' : currentDbTransactionStats.totalCommits))
+                              : (performanceMetrics['sample']?.transactionMetrics?.commitsPerSec ?? 'N/A')}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={4}>
+                        <Box sx={{ textAlign: 'center' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            Rollbacks/sec
+                          </Typography>
+                          <Typography variant="h4">
+                            {/* Show real data (total) if available, else mock for sample, else N/A */}
+                            {/* NOTE: Displaying TOTAL rollbacks, not per/sec yet */}
+                            {(activeDatabaseId && !databases.find(db=>db.id === activeDatabaseId)?.isSample) 
+                              ? (currentDbTransactionStats.loading ? '...' : (currentDbTransactionStats.error ? 'Error' : currentDbTransactionStats.totalRollbacks))
+                              : (performanceMetrics['sample']?.transactionMetrics?.rollbacksPerSec ?? 'N/A')}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                    </Grid>
+                    
+                    {/* Placeholder: Lock Contention */}
+                    <Typography variant="subtitle1" gutterBottom>
+                      Lock Contention
+                    </Typography>
+                    <Paper sx={{ p: 2, mb: 3, bgcolor: 'background.neutral' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                        <LockIcon sx={{ color: 'info.main', mr: 1 }} />
+                        <Typography variant="subtitle2">
+                          Current Lock Wait Time
                         </Typography>
                       </Box>
-                    </Box>
-                  </Grid>
-                  
-                  <Grid item xs={6}>
-                    <Box sx={{ textAlign: 'center', p: 2 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        95th Percentile
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <SpeedIcon sx={{ color: 'warning.main', mr: 1 }} />
-                        <Typography variant="h4">
-                          {performanceData.querySpeed?.p95 || 0} ms
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Box sx={{ width: '100%', mr: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            // Show mock data for sample, 0 otherwise (real data not implemented)
+                            value={performanceMetrics['sample']?.lockContention?.waitTimePercent ?? 0} 
+                            sx={{ height: 10, borderRadius: 1 }}
+                          />
+                        </Box>
+                        <Typography variant="body2">
+                          {performanceMetrics['sample']?.lockContention?.waitTimePercent ?? 0}%
                         </Typography>
                       </Box>
-                    </Box>
-                  </Grid>
-                </Grid>
-                
-                <Typography variant="subtitle1" gutterBottom>
-                  Slow Queries
-                </Typography>
-                
-                {(performanceData.slowQueries || []).map((query, index) => (
-                  <Paper 
-                    key={query.id}
-                    sx={{ 
-                      p: 2, 
-                      mb: 2, 
-                      bgcolor: 'background.neutral',
-                      borderLeft: '4px solid',
-                      borderColor: 'warning.main'
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="subtitle2">
-                        Query #{index + 1}
-                      </Typography>
-                      <Typography variant="body2" color="error">
-                        {query.time} sec ({query.count} executions)
-                      </Typography>
-                    </Box>
-                    <Typography 
-                      variant="body2" 
-                      component="pre"
-                      sx={{ 
-                        p: 1, 
-                        bgcolor: 'background.paper',
-                        borderRadius: 1,
-                        overflow: 'auto',
-                        fontSize: '0.75rem'
-                      }}
-                    >
-                      {query.sql}
-                    </Typography>
-                  </Paper>
-                ))}
-              </CardContent>
-            </RegularCard>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <RegularCard>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Transaction Metrics
-                </Typography>
-                
-                <Grid container spacing={3} sx={{ mb: 4 }}>
-                  <Grid item xs={4}>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Active Transactions
-                      </Typography>
-                      <Typography variant="h4">
-                        23
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  
-                  <Grid item xs={4}>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Commits/sec
-                      </Typography>
-                      <Typography variant="h4">
-                        142
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  
-                  <Grid item xs={4}>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Rollbacks/sec
-                      </Typography>
-                      <Typography variant="h4">
-                        3
-                      </Typography>
-                    </Box>
-                  </Grid>
-                </Grid>
-                
-                <Typography variant="subtitle1" gutterBottom>
-                  Lock Contention
-                </Typography>
-                
-                <Paper sx={{ p: 2, mb: 3, bgcolor: 'background.neutral' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <LockIcon sx={{ color: 'info.main', mr: 1 }} />
-                    <Typography variant="subtitle2">
-                      Current Lock Wait Time
-                    </Typography>
-                  </Box>
-                  
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Box sx={{ width: '100%', mr: 1 }}>
-                      <LinearProgress 
-                        variant="determinate" 
-                        value={15} 
-                        sx={{ height: 10, borderRadius: 1 }}
-                      />
-                    </Box>
-                    <Typography variant="body2">
-                      15%
-                    </Typography>
-                  </Box>
-                </Paper>
-                
-                <Typography variant="subtitle1" gutterBottom>
-                  Index Usage
-                </Typography>
-                
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Paper sx={{ p: 2, bgcolor: 'background.neutral' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Most Used Index
-                      </Typography>
-                      <Typography variant="body1" noWrap>
-                        idx_users_email
-                      </Typography>
                     </Paper>
-                  </Grid>
-                  
-                  <Grid item xs={6}>
-                    <Paper sx={{ p: 2, bgcolor: 'background.neutral' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Unused Indexes
-                      </Typography>
-                      <Typography variant="body1">
-                        5
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </RegularCard>
-          </Grid>
-        </Grid>
+                    
+                    {/* Placeholder: Index Usage */}
+                    <Typography variant="subtitle1" gutterBottom>
+                      Index Usage
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={6}>
+                        <Paper sx={{ p: 2, bgcolor: 'background.neutral' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            Most Used Index
+                          </Typography>
+                          <Typography variant="body1" noWrap>
+                            {/* Show mock data for sample, N/A otherwise */} 
+                            {performanceMetrics['sample']?.indexUsage?.mostUsed ?? 'N/A'}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <Paper sx={{ p: 2, bgcolor: 'background.neutral' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            Unused Indexes
+                          </Typography>
+                          <Typography variant="h4">
+                            {performanceMetrics['sample']?.indexUsage?.unusedCount ?? 'N/A'}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    </Grid>
+                    
+                  </CardContent>
+                </RegularCard>
+              </Grid>
+            </Grid>
       )}
 
       {activeTab === 3 && (

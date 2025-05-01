@@ -286,6 +286,57 @@ class DatabaseService {
       return []; // Return empty array on error
     }
   }
+
+  /**
+   * Fetches storage size information for a specific database connection.
+   * @param {string|number} id - Connection ID.
+   * @returns {Promise<Object>} Promise resolving to { success, sizeBytes, sizeFormatted, message? }.
+   */
+  async getStorageInfo(id) {
+    const apiUrl = `${API_URL}/${id}/storage-info`;
+    console.log(`Fetching storage info for DB ID: ${id}`);
+    console.log(`API URL used: ${apiUrl}`);
+    try {
+      const response = await axios.get(apiUrl);
+      console.log('Get storage info response:', response.data);
+      return response.data; // { success: true, sizeBytes: ..., sizeFormatted: '...' }
+    } catch (error) {
+      console.error(`Error fetching storage info for DB ${id}:`, error);
+      const message = error.response?.data?.message || error.message || 'Network or API error fetching storage info.';
+      return { 
+        success: false, 
+        message: message, 
+        sizeBytes: 0,
+        sizeFormatted: 'N/A'
+      };
+    }
+  }
+
+  /**
+   * Fetches transaction statistics for a specific database connection.
+   * @param {string|number} id - Connection ID.
+   * @returns {Promise<Object>} Promise resolving to { success, activeTransactions, totalCommits, totalRollbacks, message? }.
+   */
+  async getTransactionStats(id) {
+    const apiUrl = `${API_URL}/${id}/transaction-stats`;
+    console.log(`Fetching transaction stats for DB ID: ${id}`);
+    console.log(`API URL used: ${apiUrl}`);
+    try {
+      const response = await axios.get(apiUrl);
+      console.log('Get transaction stats response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching transaction stats for DB ${id}:`, error);
+      const message = error.response?.data?.message || error.message || 'Network or API error fetching transaction stats.';
+      return { 
+        success: false, 
+        message: message, 
+        activeTransactions: 0,
+        totalCommits: 0,
+        totalRollbacks: 0
+      };
+    }
+  }
 }
 
 // Singleton instance

@@ -2856,3 +2856,270 @@
 2025-05-01 15:06:58,633 [INFO] Collected: CPU=3.8%, Memory=21.4%
 2025-05-01 15:06:58,634 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:07:58 UTC)" executed successfully
 2025-05-01 15:07:47,440 [INFO] Scheduler has been shut down
+2025-05-01 15:12:36 [INFO] Starting database sync service
+2025-05-01 15:12:40,713 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-01 15:12:40,713 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-01 15:12:40,714 [INFO] Scheduler started
+2025-05-01 15:12:40,719 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-01 15:12:40,723 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-01 15:12:40,723 [INFO] Scheduler started
+2025-05-01 15:12:40,739 [INFO] Initialized AI provider: openai
+2025-05-01 15:12:40,740 [INFO] Initialized AI provider: perplexity
+2025-05-01 15:12:40,740 [INFO] Initialized AI provider: sqlpal
+2025-05-01 15:12:40,746 [INFO] Scheduler has been shut down
+2025-05-01 15:12:40,747 [INFO] Initialized AI provider: openai
+2025-05-01 15:12:40,748 [INFO] Initialized AI provider: perplexity
+2025-05-01 15:12:40,748 [INFO] Initialized AI provider: sqlpal
+2025-05-01 15:12:43,896 [INFO] Returning system info: {'cpuUsage': 18.1, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.02 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 8 mins'}
+2025-05-01 15:12:43,958 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:12:43,958 [INFO] Found 0 data points for metric 'cpu'
+2025-05-01 15:12:43,962 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:12:43,973 [INFO] Found 0 data points for metric 'memory'
+2025-05-01 15:13:40,714 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:13:40 UTC)" (scheduled at 2025-05-01 15:13:40.712800+00:00)
+2025-05-01 15:13:40,715 [INFO] Attempting to collect system metrics...
+2025-05-01 15:13:40,817 [INFO] Collected: CPU=1.3%, Memory=21.7%
+2025-05-01 15:13:40,817 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:14:40 UTC)" executed successfully
+2025-05-01 15:14:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:15:40 UTC)" (scheduled at 2025-05-01 15:14:40.712800+00:00)
+2025-05-01 15:14:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:14:40,815 [INFO] Collected: CPU=2.5%, Memory=21.7%
+2025-05-01 15:14:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:15:40 UTC)" executed successfully
+2025-05-01 15:14:46,233 [INFO] Returning system info: {'cpuUsage': 1.3, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.02 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 10 mins'}
+2025-05-01 15:14:46,270 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:14:46,270 [INFO] Found 2 data points for metric 'cpu'
+2025-05-01 15:14:46,274 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:14:46,275 [INFO] Found 2 data points for metric 'memory'
+2025-05-01 15:15:35,156 [INFO] Returning system info: {'cpuUsage': 1.3, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.02 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 11 mins'}
+2025-05-01 15:15:35,188 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:15:35,188 [INFO] Found 2 data points for metric 'memory'
+2025-05-01 15:15:35,191 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:15:35,192 [INFO] Found 2 data points for metric 'cpu'
+2025-05-01 15:15:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:16:40 UTC)" (scheduled at 2025-05-01 15:15:40.712800+00:00)
+2025-05-01 15:15:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:15:40,816 [INFO] Collected: CPU=30.4%, Memory=21.7%
+2025-05-01 15:15:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:16:40 UTC)" executed successfully
+2025-05-01 15:16:05,151 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.02 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 11 mins'}
+2025-05-01 15:16:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:17:40 UTC)" (scheduled at 2025-05-01 15:16:40.712800+00:00)
+2025-05-01 15:16:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:16:40,815 [INFO] Collected: CPU=4.9%, Memory=21.7%
+2025-05-01 15:16:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:17:40 UTC)" executed successfully
+2025-05-01 15:16:56,218 [INFO] Returning system info: {'cpuUsage': 1.3, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 12 mins'}
+2025-05-01 15:16:56,244 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:16:56,244 [INFO] Found 4 data points for metric 'cpu'
+2025-05-01 15:16:56,247 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:16:56,248 [INFO] Found 4 data points for metric 'memory'
+2025-05-01 15:17:26,212 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 22.0, 'memoryUsed': '3.08 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 12 mins'}
+2025-05-01 15:17:33,153 [INFO] Returning system info: {'cpuUsage': 1.3, 'memoryUsagePercent': 22.0, 'memoryUsed': '3.08 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 13 mins'}
+2025-05-01 15:17:33,184 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:17:33,185 [INFO] Found 4 data points for metric 'cpu'
+2025-05-01 15:17:33,189 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:17:33,189 [INFO] Found 4 data points for metric 'memory'
+2025-05-01 15:17:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:18:40 UTC)" (scheduled at 2025-05-01 15:17:40.712800+00:00)
+2025-05-01 15:17:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:17:40,815 [INFO] Collected: CPU=2.5%, Memory=22.0%
+2025-05-01 15:17:40,815 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:18:40 UTC)" executed successfully
+2025-05-01 15:17:42,390 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 22.0, 'memoryUsed': '3.07 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 13 mins'}
+2025-05-01 15:17:42,415 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:17:42,415 [INFO] Found 5 data points for metric 'cpu'
+2025-05-01 15:17:42,418 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:17:42,418 [INFO] Found 5 data points for metric 'memory'
+2025-05-01 15:18:12,386 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.5, 'memoryUsed': '2.99 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 13 mins'}
+2025-05-01 15:18:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:19:40 UTC)" (scheduled at 2025-05-01 15:18:40.712800+00:00)
+2025-05-01 15:18:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:18:40,815 [INFO] Collected: CPU=3.7%, Memory=21.5%
+2025-05-01 15:18:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:19:40 UTC)" executed successfully
+2025-05-01 15:18:42,387 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.5, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 14 mins'}
+2025-05-01 15:19:12,387 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.5, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 14 mins'}
+2025-05-01 15:19:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:20:40 UTC)" (scheduled at 2025-05-01 15:19:40.712800+00:00)
+2025-05-01 15:19:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:19:40,815 [INFO] Collected: CPU=2.5%, Memory=21.6%
+2025-05-01 15:19:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:20:40 UTC)" executed successfully
+2025-05-01 15:19:42,386 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 15 mins'}
+2025-05-01 15:20:12,385 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.5, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 15 mins'}
+2025-05-01 15:20:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:21:40 UTC)" (scheduled at 2025-05-01 15:20:40.712800+00:00)
+2025-05-01 15:20:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:20:40,815 [INFO] Collected: CPU=2.5%, Memory=21.6%
+2025-05-01 15:20:40,815 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:21:40 UTC)" executed successfully
+2025-05-01 15:20:42,386 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.02 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 16 mins'}
+2025-05-01 15:21:12,388 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 16 mins'}
+2025-05-01 15:21:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:22:40 UTC)" (scheduled at 2025-05-01 15:21:40.712800+00:00)
+2025-05-01 15:21:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:21:40,815 [INFO] Collected: CPU=4.9%, Memory=21.7%
+2025-05-01 15:21:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:22:40 UTC)" executed successfully
+2025-05-01 15:21:42,389 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.02 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 17 mins'}
+2025-05-01 15:22:12,386 [INFO] Returning system info: {'cpuUsage': 1.3, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 17 mins'}
+2025-05-01 15:22:40,714 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:23:40 UTC)" (scheduled at 2025-05-01 15:22:40.712800+00:00)
+2025-05-01 15:22:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:22:40,816 [INFO] Collected: CPU=6.3%, Memory=21.6%
+2025-05-01 15:22:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:23:40 UTC)" executed successfully
+2025-05-01 15:22:42,385 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 18 mins'}
+2025-05-01 15:23:12,385 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 22.1, 'memoryUsed': '3.08 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 18 mins'}
+2025-05-01 15:23:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:24:40 UTC)" (scheduled at 2025-05-01 15:23:40.712800+00:00)
+2025-05-01 15:23:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:23:40,816 [INFO] Collected: CPU=7.3%, Memory=21.5%
+2025-05-01 15:23:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:24:40 UTC)" executed successfully
+2025-05-01 15:23:42,385 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 19 mins'}
+2025-05-01 15:24:12,385 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 19 mins'}
+2025-05-01 15:24:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:25:40 UTC)" (scheduled at 2025-05-01 15:24:40.712800+00:00)
+2025-05-01 15:24:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:24:40,816 [INFO] Collected: CPU=4.9%, Memory=21.6%
+2025-05-01 15:24:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:25:40 UTC)" executed successfully
+2025-05-01 15:24:42,386 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 20 mins'}
+2025-05-01 15:25:12,386 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 20 mins'}
+2025-05-01 15:25:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:26:40 UTC)" (scheduled at 2025-05-01 15:25:40.712800+00:00)
+2025-05-01 15:25:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:25:40,816 [INFO] Collected: CPU=6.2%, Memory=21.6%
+2025-05-01 15:25:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:26:40 UTC)" executed successfully
+2025-05-01 15:25:42,384 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 21 mins'}
+2025-05-01 15:26:12,383 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 21 mins'}
+2025-05-01 15:26:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:27:40 UTC)" (scheduled at 2025-05-01 15:26:40.712800+00:00)
+2025-05-01 15:26:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:26:40,816 [INFO] Collected: CPU=4.9%, Memory=21.6%
+2025-05-01 15:26:40,817 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:27:40 UTC)" executed successfully
+2025-05-01 15:26:42,383 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 22 mins'}
+2025-05-01 15:27:12,383 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.5, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 22 mins'}
+2025-05-01 15:27:40,714 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:28:40 UTC)" (scheduled at 2025-05-01 15:27:40.712800+00:00)
+2025-05-01 15:27:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:27:40,816 [INFO] Collected: CPU=3.8%, Memory=21.6%
+2025-05-01 15:27:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:28:40 UTC)" executed successfully
+2025-05-01 15:27:42,386 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 23 mins'}
+2025-05-01 15:28:12,387 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 23 mins'}
+2025-05-01 15:28:40,714 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:29:40 UTC)" (scheduled at 2025-05-01 15:28:40.712800+00:00)
+2025-05-01 15:28:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:28:40,816 [INFO] Collected: CPU=6.0%, Memory=21.7%
+2025-05-01 15:28:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:29:40 UTC)" executed successfully
+2025-05-01 15:28:42,408 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 24 mins'}
+2025-05-01 15:29:12,383 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.8, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 24 mins'}
+2025-05-01 15:29:40,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:30:40 UTC)" (scheduled at 2025-05-01 15:29:40.712800+00:00)
+2025-05-01 15:29:40,714 [INFO] Attempting to collect system metrics...
+2025-05-01 15:29:40,816 [INFO] Collected: CPU=23.5%, Memory=22.1%
+2025-05-01 15:29:40,816 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:30:40 UTC)" executed successfully
+2025-05-01 15:29:42,383 [INFO] Returning system info: {'cpuUsage': 22.2, 'memoryUsagePercent': 22.2, 'memoryUsed': '3.09 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 25 mins'}
+2025-05-01 15:30:12,386 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 22.3, 'memoryUsed': '3.11 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 25 mins'}
+2025-05-01 15:30:40,715 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:31:40 UTC)" (scheduled at 2025-05-01 15:30:40.712800+00:00)
+2025-05-01 15:30:40,717 [INFO] Attempting to collect system metrics...
+2025-05-01 15:30:40,819 [INFO] Collected: CPU=6.1%, Memory=22.9%
+2025-05-01 15:30:40,819 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:31:40 UTC)" executed successfully
+2025-05-01 15:30:42,388 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 23.0, 'memoryUsed': '3.23 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 26 mins'}
+2025-05-01 15:31:12,392 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 22.6, 'memoryUsed': '3.16 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 26 mins'}
+2025-05-01 15:31:40,714 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:32:40 UTC)" (scheduled at 2025-05-01 15:31:40.712800+00:00)
+2025-05-01 15:31:40,715 [INFO] Attempting to collect system metrics...
+2025-05-01 15:31:40,817 [INFO] Collected: CPU=2.5%, Memory=21.8%
+2025-05-01 15:31:40,817 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:32:40 UTC)" executed successfully
+2025-05-01 15:31:42,385 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.8, 'memoryUsed': '3.04 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 27 mins'}
+2025-05-01 15:32:12,383 [INFO] Returning system info: {'cpuUsage': 22.0, 'memoryUsagePercent': 21.8, 'memoryUsed': '3.04 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 27 mins'}
+2025-05-01 15:32:40,715 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:33:40 UTC)" (scheduled at 2025-05-01 15:32:40.712800+00:00)
+2025-05-01 15:32:40,716 [INFO] Attempting to collect system metrics...
+2025-05-01 15:32:40,819 [INFO] Collected: CPU=5.2%, Memory=22.2%
+2025-05-01 15:32:40,819 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:33:40 UTC)" executed successfully
+2025-05-01 15:32:42,385 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 22.2, 'memoryUsed': '3.10 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 28 mins'}
+2025-05-01 15:33:12,384 [INFO] Returning system info: {'cpuUsage': 19.8, 'memoryUsagePercent': 22.3, 'memoryUsed': '3.12 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 28 mins'}
+2025-05-01 15:33:40,714 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:34:40 UTC)" (scheduled at 2025-05-01 15:33:40.712800+00:00)
+2025-05-01 15:33:40,715 [INFO] Attempting to collect system metrics...
+2025-05-01 15:33:40,817 [INFO] Collected: CPU=33.8%, Memory=22.6%
+2025-05-01 15:33:40,818 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:34:40 UTC)" executed successfully
+2025-05-01 15:33:42,382 [INFO] Returning system info: {'cpuUsage': 8.8, 'memoryUsagePercent': 22.5, 'memoryUsed': '3.15 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 29 mins'}
+2025-05-01 15:34:12,386 [INFO] Returning system info: {'cpuUsage': 2.5, 'memoryUsagePercent': 23.1, 'memoryUsed': '3.24 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 91.8, 'diskUsed': '26.44 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 29 mins'}
+2025-05-01 15:34:33,598 [INFO] Scheduler has been shut down
+2025-05-01 15:39:20 [INFO] Starting database sync service
+2025-05-01 15:39:24,954 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-01 15:39:24,955 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-01 15:39:24,955 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-01 15:39:24,956 [INFO] Scheduler started
+2025-05-01 15:39:24,957 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-01 15:39:24,958 [INFO] Scheduler started
+2025-05-01 15:39:24,973 [INFO] Initialized AI provider: openai
+2025-05-01 15:39:24,974 [INFO] Initialized AI provider: perplexity
+2025-05-01 15:39:24,974 [INFO] Initialized AI provider: sqlpal
+2025-05-01 15:39:24,991 [INFO] Initialized AI provider: openai
+2025-05-01 15:39:24,991 [INFO] Initialized AI provider: perplexity
+2025-05-01 15:39:24,991 [INFO] Initialized AI provider: sqlpal
+2025-05-01 15:39:25,005 [INFO] Scheduler has been shut down
+2025-05-01 15:39:42,431 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 35 mins'}
+2025-05-01 15:40:12,387 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 35 mins'}
+2025-05-01 15:40:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:40:24 UTC)" (scheduled at 2025-05-01 15:40:24.954925+00:00)
+2025-05-01 15:40:24,957 [INFO] Attempting to collect system metrics...
+2025-05-01 15:40:25,059 [INFO] Collected: CPU=1.3%, Memory=21.8%
+2025-05-01 15:40:25,059 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:41:24 UTC)" executed successfully
+2025-05-01 15:40:42,381 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.8, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 36 mins'}
+2025-05-01 15:40:52,345 [INFO] Returning system info: {'cpuUsage': 25.9, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 36 mins'}
+2025-05-01 15:40:52,411 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:40:52,411 [INFO] Found 1 data points for metric 'cpu'
+2025-05-01 15:40:52,415 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:40:52,415 [INFO] Found 1 data points for metric 'memory'
+2025-05-01 15:41:02,371 [INFO] Returning system info: {'cpuUsage': 1.3, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 36 mins'}
+2025-05-01 15:41:02,405 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:41:02,405 [INFO] Found 1 data points for metric 'memory'
+2025-05-01 15:41:02,411 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:41:02,411 [INFO] Found 1 data points for metric 'cpu'
+2025-05-01 15:41:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:42:24 UTC)" (scheduled at 2025-05-01 15:41:24.954925+00:00)
+2025-05-01 15:41:24,956 [INFO] Attempting to collect system metrics...
+2025-05-01 15:41:25,058 [INFO] Collected: CPU=5.0%, Memory=21.7%
+2025-05-01 15:41:25,058 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:42:24 UTC)" executed successfully
+2025-05-01 15:41:35,314 [INFO] Returning system info: {'cpuUsage': 2.5, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 37 mins'}
+2025-05-01 15:41:35,347 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:41:35,347 [INFO] Found 2 data points for metric 'cpu'
+2025-05-01 15:41:35,350 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:41:35,350 [INFO] Found 2 data points for metric 'memory'
+2025-05-01 15:42:05,308 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.03 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 37 mins'}
+2025-05-01 15:42:24,955 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:43:24 UTC)" (scheduled at 2025-05-01 15:42:24.954925+00:00)
+2025-05-01 15:42:24,956 [INFO] Attempting to collect system metrics...
+2025-05-01 15:42:25,057 [INFO] Collected: CPU=2.5%, Memory=21.7%
+2025-05-01 15:42:25,058 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:43:24 UTC)" executed successfully
+2025-05-01 15:42:33,459 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.02 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 38 mins'}
+2025-05-01 15:42:33,487 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:42:33,487 [INFO] Found 3 data points for metric 'cpu'
+2025-05-01 15:42:33,491 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:42:33,492 [INFO] Found 3 data points for metric 'memory'
+2025-05-01 15:43:03,455 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.02 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 38 mins'}
+2025-05-01 15:43:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:44:24 UTC)" (scheduled at 2025-05-01 15:43:24.954925+00:00)
+2025-05-01 15:43:24,957 [INFO] Attempting to collect system metrics...
+2025-05-01 15:43:25,058 [INFO] Collected: CPU=4.9%, Memory=21.7%
+2025-05-01 15:43:25,059 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:44:24 UTC)" executed successfully
+2025-05-01 15:43:33,457 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.7, 'memoryUsed': '3.02 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 39 mins'}
+2025-05-01 15:44:03,454 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 39 mins'}
+2025-05-01 15:44:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:45:24 UTC)" (scheduled at 2025-05-01 15:44:24.954925+00:00)
+2025-05-01 15:44:24,956 [INFO] Attempting to collect system metrics...
+2025-05-01 15:44:25,058 [INFO] Collected: CPU=7.6%, Memory=21.6%
+2025-05-01 15:44:25,058 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:45:24 UTC)" executed successfully
+2025-05-01 15:44:33,452 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 40 mins'}
+2025-05-01 15:45:03,453 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 21.5, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 40 mins'}
+2025-05-01 15:45:06,116 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.5, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 40 mins'}
+2025-05-01 15:45:06,143 [INFO] Received request for performance history: metric=cpu, limit=30
+2025-05-01 15:45:06,144 [INFO] Found 5 data points for metric 'cpu'
+2025-05-01 15:45:06,147 [INFO] Received request for performance history: metric=memory, limit=30
+2025-05-01 15:45:06,147 [INFO] Found 5 data points for metric 'memory'
+2025-05-01 15:45:24,955 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:46:24 UTC)" (scheduled at 2025-05-01 15:45:24.954925+00:00)
+2025-05-01 15:45:24,956 [INFO] Attempting to collect system metrics...
+2025-05-01 15:45:25,057 [INFO] Collected: CPU=1.3%, Memory=21.5%
+2025-05-01 15:45:25,058 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:46:24 UTC)" executed successfully
+2025-05-01 15:45:36,110 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.01 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 41 mins'}
+2025-05-01 15:46:06,112 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 21.6, 'memoryUsed': '3.00 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 41 mins'}
+2025-05-01 15:46:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:47:24 UTC)" (scheduled at 2025-05-01 15:46:24.954925+00:00)
+2025-05-01 15:46:24,956 [INFO] Attempting to collect system metrics...
+2025-05-01 15:46:25,058 [INFO] Collected: CPU=2.5%, Memory=21.6%
+2025-05-01 15:46:25,058 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:47:24 UTC)" executed successfully
+2025-05-01 15:46:36,112 [INFO] Returning system info: {'cpuUsage': 28.9, 'memoryUsagePercent': 21.9, 'memoryUsed': '3.05 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 42 mins'}
+2025-05-01 15:47:06,116 [INFO] Returning system info: {'cpuUsage': 1.3, 'memoryUsagePercent': 21.9, 'memoryUsed': '3.06 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 42 mins'}
+2025-05-01 15:47:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:48:24 UTC)" (scheduled at 2025-05-01 15:47:24.954925+00:00)
+2025-05-01 15:47:24,957 [INFO] Attempting to collect system metrics...
+2025-05-01 15:47:25,060 [INFO] Collected: CPU=4.9%, Memory=21.8%
+2025-05-01 15:47:25,060 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:48:24 UTC)" executed successfully
+2025-05-01 15:47:36,111 [INFO] Returning system info: {'cpuUsage': 0.0, 'memoryUsagePercent': 21.8, 'memoryUsed': '3.04 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 43 mins'}
+2025-05-01 15:48:06,109 [INFO] Returning system info: {'cpuUsage': 1.2, 'memoryUsagePercent': 21.8, 'memoryUsed': '3.04 GB', 'memoryTotal': '15.62 GB', 'diskUsagePercent': 92.0, 'diskUsed': '26.53 GB', 'diskTotal': '30.39 GB', 'swapUsagePercent': 0.0, 'swapUsed': '268.00 KB', 'swapTotal': '975.00 MB', 'uptime': '0 days, 9 hours, 43 mins'}
+2025-05-01 15:48:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:49:24 UTC)" (scheduled at 2025-05-01 15:48:24.954925+00:00)
+2025-05-01 15:48:24,957 [INFO] Attempting to collect system metrics...
+2025-05-01 15:48:25,059 [INFO] Collected: CPU=3.8%, Memory=21.8%
+2025-05-01 15:48:25,059 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:49:24 UTC)" executed successfully
+2025-05-01 15:49:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:50:24 UTC)" (scheduled at 2025-05-01 15:49:24.954925+00:00)
+2025-05-01 15:49:24,957 [INFO] Attempting to collect system metrics...
+2025-05-01 15:49:25,058 [INFO] Collected: CPU=2.6%, Memory=21.9%
+2025-05-01 15:49:25,059 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:50:24 UTC)" executed successfully
+2025-05-01 15:50:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:51:24 UTC)" (scheduled at 2025-05-01 15:50:24.954925+00:00)
+2025-05-01 15:50:24,956 [INFO] Attempting to collect system metrics...
+2025-05-01 15:50:25,058 [INFO] Collected: CPU=5.0%, Memory=21.9%
+2025-05-01 15:50:25,059 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:51:24 UTC)" executed successfully
+2025-05-01 15:51:24,956 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:52:24 UTC)" (scheduled at 2025-05-01 15:51:24.954925+00:00)
+2025-05-01 15:51:24,956 [INFO] Attempting to collect system metrics...
+2025-05-01 15:51:25,058 [INFO] Collected: CPU=1.3%, Memory=21.7%
+2025-05-01 15:51:25,058 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-01 15:52:24 UTC)" executed successfully
+2025-05-01 15:51:59,630 [INFO] Scheduler has been shut down

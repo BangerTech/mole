@@ -489,6 +489,201 @@ const databaseService = {
          await db.close();
        }
    },
+
+  /**
+   * Fetches storage size information for a connection.
+   * @param {number} connectionId - The ID of the connection.
+   * @returns {Promise<Object>} Storage info object { success, sizeBytes, sizeFormatted, message? }.
+   */
+  async fetchStorageInfoForConnection(connectionId) {
+    let sizeBytes = 0;
+    let success = false;
+    let message = null;
+
+    try {
+      const connection = await this.getConnectionByIdFull(connectionId);
+      if (!connection) {
+        throw new Error('Database connection not found');
+      }
+      if (connection.isSample) {
+        return { success: true, sizeBytes: 0, sizeFormatted: 'N/A', message: 'Storage info not applicable for Sample DB' };
+      }
+
+      let decryptedPassword = '';
+      if (connection.encrypted_password) {
+        try {
+          decryptedPassword = decrypt(connection.encrypted_password);
+        } catch (e) {
+          throw new Error('Password decryption failed');
+        }
+      } else {
+        decryptedPassword = connection.password; // Use plain password
+      }
+
+      const { engine, host, port, database, username, ssl_enabled } = connection;
+
+      if (engine.toLowerCase() === 'mysql') {
+        const mysqlConnection = await mysql.createConnection({
+          host: host || 'localhost', port: port || 3306, database, user: username,
+          password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectTimeout: 5000 // Shorter timeout for simple query
+        });
+        try {
+          const [rows] = await mysqlConnection.query(
+            'SELECT SUM(data_length + index_length) AS size_bytes FROM information_schema.tables WHERE table_schema = ?',
+            [database]
+          );
+          sizeBytes = rows[0]?.size_bytes || 0;
+          success = true;
+        } finally {
+          await mysqlConnection.end();
+        }
+      } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+        const pool = new Pool({
+          host: host || 'localhost', port: port || 5432, database, user: username,
+          password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectionTimeoutMillis: 5000
+        });
+        const client = await pool.connect();
+        try {
+          // Use current_database() function which is simpler and refers to the connected DB
+          const result = await client.query('SELECT pg_database_size(current_database()) AS size_bytes');
+          sizeBytes = result.rows[0]?.size_bytes || 0;
+          success = true;
+        } finally {
+          client.release();
+          await pool.end();
+        }
+      } else if (engine.toLowerCase() === 'sqlite') {
+        try {
+          if (fs.existsSync(database)) {
+            const stats = fs.statSync(database);
+            sizeBytes = stats.size;
+            success = true;
+          } else {
+            message = 'SQLite file not found.';
+          }
+        } catch (fileError) {
+          message = `Error accessing SQLite file: ${fileError.message}`;
+        }
+      } else {
+        message = `Storage info not supported for engine: ${engine}`;
+      }
+    } catch (error) {
+      console.error(`Error fetching storage info for connection ${connectionId}:`, error);
+      message = error.message || 'Failed to retrieve storage information';
+      success = false; // Ensure success is false on error
+    }
+
+    return {
+      success,
+      sizeBytes: Number(sizeBytes), // Ensure it's a number
+      sizeFormatted: success ? formatBytes(Number(sizeBytes)) : 'N/A', // Format if successful
+      message
+    };
+  },
+
+  /**
+   * Fetches transaction statistics for a connection.
+   * @param {number} connectionId - The ID of the connection.
+   * @returns {Promise<Object>} Stats object { success, activeTransactions, totalCommits, totalRollbacks, message? }.
+   */
+  async fetchTransactionStatsForConnection(connectionId) {
+    let activeTransactions = 0;
+    let totalCommits = 0;
+    let totalRollbacks = 0;
+    let success = false;
+    let message = null;
+
+    try {
+      const connection = await this.getConnectionByIdFull(connectionId);
+      if (!connection) {
+        throw new Error('Database connection not found');
+      }
+      if (connection.isSample) {
+        return { success: true, activeTransactions: 0, totalCommits: 0, totalRollbacks: 0, message: 'Stats not applicable for Sample DB' };
+      }
+
+      let decryptedPassword = '';
+      if (connection.encrypted_password) {
+        try {
+          decryptedPassword = decrypt(connection.encrypted_password);
+        } catch (e) {
+          throw new Error('Password decryption failed');
+        }
+      } else {
+        decryptedPassword = connection.password;
+      }
+
+      const { engine, host, port, database, username, ssl_enabled } = connection;
+
+      if (engine.toLowerCase() === 'mysql') {
+        const mysqlConnection = await mysql.createConnection({
+          host: host || 'localhost', port: port || 3306, database, user: username,
+          password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectTimeout: 5000
+        });
+        try {
+          const [statusRows] = await mysqlConnection.query(
+            "SHOW GLOBAL STATUS WHERE Variable_name IN ('Com_commit', 'Com_rollback', 'Threads_connected')"
+          );
+          statusRows.forEach(row => {
+            if (row.Variable_name === 'Com_commit') totalCommits = Number(row.Value);
+            if (row.Variable_name === 'Com_rollback') totalRollbacks = Number(row.Value);
+            // Using Threads_connected as approximation for active transactions/connections
+            if (row.Variable_name === 'Threads_connected') activeTransactions = Number(row.Value);
+          });
+          success = true;
+        } finally {
+          await mysqlConnection.end();
+        }
+      } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+        const pool = new Pool({
+          host: host || 'localhost', port: port || 5432, database, user: username,
+          password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectionTimeoutMillis: 5000
+        });
+        const client = await pool.connect();
+        try {
+          // Fetch commit/rollback counts for the current database
+          const statsResult = await client.query(
+            'SELECT xact_commit, xact_rollback FROM pg_stat_database WHERE datname = current_database()'
+          );
+          if (statsResult.rows.length > 0) {
+            totalCommits = Number(statsResult.rows[0].xact_commit);
+            totalRollbacks = Number(statsResult.rows[0].xact_rollback);
+          }
+          // Fetch active connection count (excluding idle)
+          const activityResult = await client.query(
+            "SELECT count(*) AS active_connections FROM pg_stat_activity WHERE state <> 'idle' AND datname = current_database()"
+          );
+          activeTransactions = Number(activityResult.rows[0].active_connections);
+          success = true;
+        } finally {
+          client.release();
+          await pool.end();
+        }
+      } else if (engine.toLowerCase() === 'sqlite') {
+        // Transaction stats are not readily available for SQLite
+        success = true; // Indicate success but with zero values
+        message = 'Transaction stats not available for SQLite.';
+      } else {
+        message = `Transaction stats not supported for engine: ${engine}`;
+      }
+    } catch (error) {
+      console.error(`Error fetching transaction stats for connection ${connectionId}:`, error);
+      message = error.message || 'Failed to retrieve transaction stats';
+      success = false;
+    }
+
+    return {
+      success,
+      activeTransactions,
+      totalCommits,
+      totalRollbacks,
+      message
+    };
+  },
 };
 
 module.exports = databaseService; 

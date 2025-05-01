@@ -57,4 +57,10 @@ router.delete('/connections/:id', databaseController.deleteConnection);
 // New route for creating database instances
 router.post('/create-instance', databaseController.createDatabaseInstance);
 
+// New route for getting database storage information
+router.get('/:id/storage-info', databaseController.getDatabaseStorageInfo);
+
+// New route for getting database transaction statistics
+router.get('/:id/transaction-stats', databaseController.getDatabaseTransactionStats);
+
 module.exports = router; 

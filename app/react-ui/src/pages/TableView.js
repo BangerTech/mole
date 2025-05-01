@@ -138,43 +138,59 @@ const TableView = () => {
           console.log('[TableView] Real schema API response:', schemaInfo);
           if (schemaInfo.success && schemaInfo.tableColumns && schemaInfo.tableColumns[tableName]) {
             const gridColumns = schemaInfo.tableColumns[tableName].map(col => {
+              const columnName = col.name.toLowerCase(); // Use lowercase for comparison
               const columnType = col.type.toLowerCase();
               let gridType = 'string'; // Default type
               let valueGetter;
               let valueFormatter;
+              let width = 150; // Default width
   
-              // Specific handling for known columns like uptime/raw_uptime
-              if (col.name === 'uptime' || col.name === 'raw_uptime') {
-                 gridType = 'number'; // Treat uptime as a number (e.g., seconds)
+              // Specific handling for known numeric columns like uptime/raw_uptime
+              if (columnName === 'uptime' || columnName === 'raw_uptime') {
+                 gridType = 'number'; 
+                 width = 120; // Slightly wider for potentially larger numbers
               } 
               // General type detection
-              else if (columnType.includes('int') || columnType.includes('serial') || columnType.includes('float') || columnType.includes('double') || columnType.includes('decimal')) {
+              else if (columnType.includes('int') || columnType.includes('serial') || columnType.includes('float') || columnType.includes('double') || columnType.includes('decimal') || columnType.includes('numeric')) {
                 gridType = 'number';
-              } else if (columnType.includes('date') || columnType.includes('time')) {
+                width = 100;
+              } 
+              // Enhanced date/time handling (catches 'time', 'date', 'timestamp')
+              else if (columnType.includes('date') || columnType.includes('time')) { 
                 gridType = 'dateTime';
+                width = 180;
                 valueGetter = (value) => {
                   if (value == null) return null;
+                  // Attempt to parse various date/time formats
                   const date = new Date(value); 
-                  return isNaN(date.getTime()) ? null : date;
+                  // Check if the parsed date is valid
+                  return !isNaN(date.getTime()) ? date : null;
                 };
                 valueFormatter = (value) => {
+                  // Ensure value is a valid Date object before formatting
                    if (value instanceof Date && !isNaN(value)) {
-                     return value.toLocaleString(); 
+                     return value.toLocaleString(); // Use locale-specific format
                    } 
+                   // If original value was parsable but getter returns null (e.g., invalid date string), show empty
+                   // Or if value is simply null/undefined
                    return ''; 
                 };
               } else if (columnType.includes('bool')) {
                 gridType = 'boolean';
+                width = 80;
+              } else if (columnType.includes('text') || columnType.includes('varchar')) {
+                // Give text columns a bit more space
+                width = 200;
               }
   
               return {
-                field: col.name,
-                headerName: col.name,
+                field: col.name, // Use original name for the field
+                headerName: col.name, // Use original name for header
                 type: gridType,
-                width: gridType === 'dateTime' ? 180 : (gridType === 'boolean' ? 80 : (gridType === 'number' ? 100 : 150)), // Adjust width
+                width: width, // Use calculated width
                 sortable: true,
-                valueGetter: valueGetter,
-                valueFormatter: valueFormatter, // Add formatter
+                valueGetter: valueGetter, 
+                valueFormatter: valueFormatter,
                 description: `${col.type}${col.nullable ? ' (nullable)' : ''}${col.default ? ` [default: ${col.default}]` : ''}${col.key ? ` (${col.key})` : ''}`
               };
             });
@@ -235,6 +251,19 @@ const TableView = () => {
         const result = await DatabaseService.getTableData(databaseId, tableName, queryParams);
         console.log(`[TableView] Received real data for ${tableName}:`, result);
         if (result.success) {
+          // DEBUG: Log first row data for specific columns if available
+          if (result.rows && result.rows.length > 0) {
+            const firstRow = result.rows[0];
+            console.log(`[TableView Debug] First row 'time':`, firstRow.time, typeof firstRow.time);
+            console.log(`[TableView Debug] First row 'uptime':`, firstRow.uptime, typeof firstRow.uptime);
+            console.log(`[TableView Debug] First row 'raw_uptime':`, firstRow.raw_uptime, typeof firstRow.raw_uptime);
+            // Try parsing time again here for debugging
+            if (firstRow.time) {
+              const parsedDate = new Date(firstRow.time);
+              console.log(`[TableView Debug] Parsed 'time':`, parsedDate, 'Valid:', !isNaN(parsedDate.getTime()));
+            }
+          }
+
           const processedRows = result.rows.map((row, index) => ({
             ...row,
             id: row.id ?? `${paginationModel.page}-${index}`
@@ -401,6 +430,7 @@ const TableView = () => {
           sortModel={sortModel}
           onSortModelChange={setSortModel}
           getRowId={(row) => row.id} 
+          disableColumnResize={false} // Enable column resizing
           slots={{ toolbar: GridToolbar }}
           slotProps={{
             toolbar: {

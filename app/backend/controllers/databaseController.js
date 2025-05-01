@@ -928,7 +928,7 @@ exports.getTopTables = async (req, res) => {
     let allTables = [];
 
     // Fetch schema details for all connections concurrently
-    const schemaPromises = realConnections.map(conn =>
+    const schemaPromises = realConnections.map(conn => 
       databaseService.fetchSchemaForConnection(conn.id)
         // Add error handling for individual schema fetches
         .catch(err => {
@@ -938,7 +938,7 @@ exports.getTopTables = async (req, res) => {
     );
 
     const results = await Promise.all(schemaPromises);
-
+    
     results.forEach((schemaInfo, index) => {
       const connection = realConnections[index];
       // Check explicitly for success and tables array existence
@@ -1148,6 +1148,59 @@ exports.createDatabaseInstance = async (req, res) => {
       error: error.message // Provide error message for debugging
     });
   } // Close outer catch block
+};
+
+/**
+ * Get storage size information for a specific database connection
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getDatabaseStorageInfo = async (req, res) => {
+  const connectionId = req.params.id;
+  try {
+    const storageInfo = await databaseService.fetchStorageInfoForConnection(connectionId);
+    
+    if (!storageInfo.success) {
+      // Use 404 if connection not found, 500 otherwise
+      const statusCode = storageInfo.message.includes('not found') ? 404 : 500;
+      return res.status(statusCode).json(storageInfo);
+    }
+    
+    res.status(200).json(storageInfo); // { success: true, sizeBytes: number, sizeFormatted: string }
+
+  } catch (error) {
+    console.error(`Unexpected error in getDatabaseStorageInfo controller for ${connectionId}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Internal server error fetching storage info.' 
+    });
+  }
+};
+
+/**
+ * Get transaction statistics for a specific database connection
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getDatabaseTransactionStats = async (req, res) => {
+  const connectionId = req.params.id;
+  try {
+    const stats = await databaseService.fetchTransactionStatsForConnection(connectionId);
+    
+    if (!stats.success) {
+      const statusCode = stats.message.includes('not found') ? 404 : 500;
+      return res.status(statusCode).json(stats);
+    }
+    
+    res.status(200).json(stats); // { success: true, activeTransactions: number, totalCommits: number, totalRollbacks: number }
+
+  } catch (error) {
+    console.error(`Unexpected error in getDatabaseTransactionStats controller for ${connectionId}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Internal server error fetching transaction stats.' 
+    });
+  }
 };
 
 // ... rest of the controller ... 

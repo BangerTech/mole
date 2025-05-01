@@ -305,6 +305,97 @@ scheduler.add_job(collect_metrics, 'interval', minutes=1, id='metric_collector')
 scheduler.start()
 ```
 
+### Migration 007 - System Performance Monitoring Flask Integration (2025-07-01)
+
+In dieser Migration wurde die Architektur des System-Performance-Monitoring-Dienstes verbessert, um Stabilität und Zuverlässigkeit zu erhöhen. Folgende Änderungen wurden vorgenommen:
+
+1. **Gunicorn Integration für Python Flask-Service:**
+   - Umstellung des Python Flask-Anwendungsstarts auf Gunicorn WSGI-Server
+   - Verbesserung der Prozessverwaltung und Fehlererholung bei hoher Last
+   - Optimierte Worker-Konfiguration für bessere Performance
+   - Behebung von "Address already in use"-Konflikten zwischen Gunicorn und Flask
+
+2. **Backend API-Endpunkte-Behebung:**
+   - Korrektur der API-Endpunkte für System-Performance-Metriken:
+     - `/api/system/performance-history` funktioniert jetzt zuverlässig für historische Daten
+     - Behebung von 404-Fehlern bei Metrikanfragen
+     - Korrekte Bereitstellung von CPU, Speicher, Festplatten- und Swap-Nutzungsdaten
+
+3. **Frontend-Verbesserungen:**
+   - Korrektur der Systemstatus-Karte für vollständige Metrik-Anzeige:
+     - CPU-Auslastung mit verbesserter Aktualisierungsrate
+     - Speichernutzung mit korrekter Prozentanzeige
+     - Festplattennutzung mit sektoraler Darstellung
+     - Swap-Speicherstatus mit Warnfunktion bei hoher Auslastung
+   - Behebung der "Top Tables"-Kachel-Anzeige:
+     - Korrekte Anzeige der größten Tabellen über alle Datenbankverbindungen
+     - Verbessertes Größenformat mit menschenlesbaren Werten
+     - Zuverlässige Fehlerbehandlung für nicht erreichbare Datenbanken
+     - Sortierung nach tatsächlicher Tabellengröße statt Zeilenanzahl
+
+4. **UI-Optimierungen:**
+   - Behebung von unerwünschten Scrollbalken im Browser:
+     - Anpassung des CSS mit `overflow-y: hidden` für html und body Elemente
+     - Verbesserte Container-Höhenberechnung für verschiedene Bildschirmgrößen
+     - Optimierte Layout-Komponenten für konsistente Darstellung ohne Überlauf
+
+5. **Backend-Implementierungsdetails:**
+   - Verbesserung der Synchronisierung zwischen Node.js und Python-Diensten:
+     - Robustere Proxy-Konfiguration für API-Weiterleitungen
+     - Verbesserte Fehlerbehandlung mit detaillierten Fehlermeldungen
+     - Automatische Wiederverbindungslogik bei temporären Dienstausfällen
+   - Aktualisierung der Abhängigkeiten:
+     - Hinzufügung von Gunicorn zu Python-Requirements
+     - Optimierte Konfiguration im Docker-Entrypoint-Skript
+
+6. **Verbesserung der Database Creation-Funktionalität:**
+   - Robuste Implementierung des Datenbankerstellen-Funktionalität:
+     - Vollständige Integration in die Backend-API mit dem Endpunkt `/api/databases/create-instance`
+     - Unterstützung für drei Datenbanktypen (PostgreSQL, MySQL, InfluxDB)
+     - Sichere Verbindung zu Datenbankadmin-Schnittstellen über umgebungsvariablen-gesteuerte Zugangsdaten
+     - Automatische Speicherung von neu erstellten Datenbanken als Verbindungen
+   - Verbessertes Frontend für Datenbankerstellung:
+     - Intuitive Stepper-basierte Benutzeroberfläche für schrittweise Datenbankerstellung
+     - Echtzeit-Validierung von Datenbankname und Benutzeranmeldedaten
+     - Verbesserte Fehlerbehandlung mit benutzerfreundlichen Meldungen
+     - Sofortige Navigation zur neuen Datenbank nach erfolgreicher Erstellung
+   - Verbesserte Sicherheitsmaßnahmen:
+     - Strenge Validierung und Bereinigung von Benutzereingaben
+     - Beschränkung auf sichere Zeichensätze für Datenbanknamen
+     - Isolierte Admin-Verbindungen mit minimalen Berechtigungen
+     - Detailliertes Logging von Datenbankoperationen
+
+Diese Verbesserungen sorgen für eine stabilere Systemüberwachung, korrekte Anzeige aller Systemmetriken im Dashboard sowie eine deutlich verbesserte Datenbankerstellungsfunktion, die es Benutzern ermöglicht, schnell und unkompliziert neue Datenbanken zu erstellen und sofort mit ihnen zu arbeiten.
+
+```bash
+# Beispiel der verbesserten Docker-Entrypoint-Konfiguration für Gunicorn
+#!/bin/bash
+set -e
+
+# Starte Gunicorn mit der Flask-App
+exec gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 sync_manager:app
+```
+
+### Version 0.5.1 (aktuell)
+- Umfassende Verbesserungen der Systemüberwachung und Stabilität:
+  - Integration von Gunicorn als WSGI-Server für die Flask-Anwendung
+  - Behebung der Performance-Monitoring-Endpunkte:
+    - Korrekte Anzeige aller Systemmetriken (CPU, Speicher, Festplatte, Swap)
+    - Funktionierende historische Performance-Daten
+    - Verbesserte "Top Tables"-Darstellung mit korrekter Größensortierung
+  - Behebung von UI-Problemen:
+    - Entfernung unerwünschter Scrollbalken
+    - Bessere Responsive-Design-Anpassung
+    - Optimierte Container-Höhenberechnung
+  - Verbesserte Fehlerbehandlung und Logging
+  - Optimierte Proxy-Konfiguration zwischen Node.js und Python-Diensten
+  - Aktualisierung der Abhängigkeiten im Python-Service
+  - Vollständige Implementierung der Datenbankerstellungsfunktion:
+    - Native API-Integration für die Erstellung neuer Datenbanken direkt aus der Benutzeroberfläche
+    - Unterstützung für PostgreSQL, MySQL und InfluxDB (Buckets)
+    - Umfassende Validierung und Fehlerbehandlung
+    - Nahtlose Integration mit bestehenden Verbindungsfunktionen
+
 ## Frontend-Komponenten
 
 ### Hauptkomponenten
@@ -862,9 +953,7 @@ Die Frontend-Services konnten nicht mit dem Backend kommunizieren, da sie "local
 
 Diese Änderungen beheben die "Connection Refused"-Fehler, die auftraten, wenn die Frontend-Container versuchten, über "localhost" mit dem Backend zu kommunizieren.
 
-### Aktualisierte Probleme
-
-#### Datenbankverbindungsanzeige (✓ Behoben)
+### Datenbankverbindungsanzeige (✓ Behoben)
 Bei Klick auf eine Datenbankverbindung wurde nicht die tatsächliche Datenbank angezeigt, sondern immer die Sample-Datenbank. Folgende Änderungen wurden vorgenommen:
 
 1. Die Navigation von der Datenbankübersicht zur Detailansicht wurde korrigiert, um das richtige Routing-Format zu verwenden (`/database/id/:id`)
@@ -874,7 +963,7 @@ Bei Klick auf eine Datenbankverbindung wurde nicht die tatsächliche Datenbank a
 
 Diese Änderungen ermöglichen die korrekte Anzeige der tatsächlichen Datenbankverbindungen statt der Sample-Datenbank. 
 
-#### Real-Datenbank-Funktionalität (✓ Behoben)
+### Real-Datenbank-Funktionalität (✓ Behoben)
 Die Real-Datenbank-Funktionalität konnte Tabellen und Spalten nicht korrekt anzeigen und SQL-Abfragen nicht ausführen. Folgende Änderungen wurden vorgenommen:
 
 1. Backend-Endpunkte für Schema-Abfrage und SQL-Ausführung implementiert:
@@ -893,6 +982,86 @@ Die Real-Datenbank-Funktionalität konnte Tabellen und Spalten nicht korrekt anz
    - SQLite-Basisunterstützung (eingeschränkt)
 
 Diese Änderungen ermöglichen die vollständige Interaktion mit echten Datenbanken, einschließlich Schemaanzeige und Abfrageausführung. Die Sample-Datenbank wird jetzt nur noch angezeigt, wenn keine echten Datenbankverbindungen vorhanden sind. 
+
+### System-Performance-Monitoring (✓ Behoben)
+Es gab mehrere Probleme mit der System-Performance-Überwachung und der Anzeige von Systemstatistiken:
+
+1. **404-Fehler bei API-Endpunkten** (✓ Behoben)
+   - Die Endpunkte `/api/system/performance-history` und andere lieferten 404-Fehler
+   - Ursache: Die Flask-Anwendung im `mole-sync` Container startete nicht korrekt
+   - Lösung:
+     - Integration von Gunicorn als WSGI-Server für die Flask-Anwendung
+     - Behebung von "Address already in use"-Konflikten durch Entfernung des direkten Flask-Starts
+     - Hinzufügung von Gunicorn zu den Python-Requirements
+     - Optimierung des Docker-Entrypoints für den Gunicorn-Start
+
+2. **Unvollständige System-Status-Anzeige** (✓ Behoben)
+   - Die System-Status-Karte zeigte nur CPU-Metriken, nicht aber Speicher/Storage/Swap
+   - Ursache: Fehlende Verbindung zur Python-API für vollständige Metriken
+   - Lösung:
+     - Korrektur der API-Endpunkte und ihrer Implementierung
+     - Verbesserte Fehlerbehandlung im Frontend
+     - Korrekte Anzeige aller Systemmetriken (CPU, Speicher, Festplatte, Swap)
+
+3. **Top Tables Tile lädt nicht** (✓ Behoben)
+   - Die Top Tables Kachel blieb leer oder zeigte Fehler
+   - Ursache: Fehler in der `getTopTables`-Funktion und der `parseSizeToBytes`-Hilfsfunktion
+   - Lösung:
+     - Verbesserung der `getTopTables`-Funktion in `databaseController.js`
+     - Optimierung der `parseSizeToBytes`-Funktion für bessere Fehlerbehandlung
+     - Korrektes Parsing und Sortieren von Tabellengrößen
+     - Zuverlässige Fehlerbehandlung für nicht erreichbare Datenbanken
+
+4. **UI-Scrollbar-Probleme** (✓ Behoben)
+   - Unerwünschte Scrollbars erschienen im Browser
+   - Ursache: Fehlende CSS-Overflow-Einstellungen
+   - Lösung:
+     - Hinzufügung von `overflow-y: hidden` zu html und body Elementen in index.css
+     - Verbesserte Container-Höhenberechnung für verschiedene Bildschirmgrößen
+     - Optimierte Layout-Komponenten für konsistente Darstellung ohne Überlauf
+
+Diese Änderungen sorgen für eine vollständige und korrekte Anzeige aller Systemmetriken im Dashboard sowie eine verbesserte Benutzeroberfläche ohne unerwünschte Scrollbars.
+
+### Datenbankerstellungsfunktion (✓ Behoben)
+Die Funktion zum Erstellen neuer Datenbanken war unvollständig implementiert oder funktionierte nicht wie erwartet:
+
+1. **Unvollständige API-Integration** (✓ Behoben)
+   - Die Datenbankerstellungsfunktion verwendete veraltete PHP-basierte Skripte statt vollständiger API-Integration
+   - Ursache: Fehlende Backend-Endpunkte für Datenbankerstellung
+   - Lösung:
+     - Implementierung eines umfassenden `/api/databases/create-instance` Endpunkts im Node.js-Backend
+     - Verbindung zu Datenbankadmin-Schnittstellen über umgebungsvariablen-gesteuerte Zugangsdaten
+     - Unterstützung für drei Datenbanktypen (PostgreSQL, MySQL, InfluxDB)
+     - Ordnungsgemäße Fehlerbehandlung und Validierung
+
+2. **Unzureichende Benutzeroberfläche** (✓ Behoben)
+   - Die Benutzeroberfläche für die Datenbankerstellung war unvollständig oder nicht benutzerfreundlich
+   - Ursache: Inkonsistente Frontend-Implementation
+   - Lösung:
+     - Vollständige Implementierung der `DatabaseCreate`-Komponente mit intuitivem Stepper-Design
+     - Verbesserung der Benutzererfahrung durch schrittweise Anleitung
+     - Echtzeit-Validierung von Benutzereingaben
+     - Klare Fehlermeldungen und Erfolgsbenachrichtigungen
+
+3. **Sicherheitsprobleme** (✓ Behoben)
+   - Potenzielle Sicherheitslücken bei der Datenbankadministration
+   - Ursache: Unzureichende Validierung und Einschränkung von Benutzereingaben
+   - Lösung:
+     - Strenge Validierung und Bereinigung aller Benutzereingaben
+     - Beschränkung der Datenbanknamen auf sichere Zeichensätze (alphanumerisch + Unterstrich)
+     - Vermeidung von SQL-Injektionen durch parameterisierte Abfragen
+     - Minimale Berechtigungen für Admin-Verbindungen
+
+4. **Mangelnde Integration mit bestehenden Verbindungen** (✓ Behoben)
+   - Nach der Datenbankerstellung wurde keine Verbindung automatisch hinzugefügt
+   - Ursache: Fehlende Integration zwischen Erstellungs- und Verbindungsfunktionen
+   - Lösung:
+     - Automatisches Speichern von neu erstellten Datenbanken als Verbindungen
+     - Nahtlose Integration in den Datenbankverbindungs-Workflow
+     - Direkte Navigation zur neuen Datenbank nach erfolgreicher Erstellung
+     - Verbessertes Benutzererlebnis durch einheitlichen Workflow
+
+Diese Verbesserungen ermöglichen eine vollständig funktionsfähige Datenbankerstellungsfunktion, die es Benutzern ermöglicht, schnell und unkompliziert neue Datenbanken zu erstellen und sofort mit ihnen zu arbeiten.
 
 ### DatabaseService
 
