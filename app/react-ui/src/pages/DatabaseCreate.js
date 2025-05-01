@@ -49,12 +49,18 @@ export default function DatabaseCreate() {
     port: '5432',
     username: '',
     password: '',
+    notes: ''
   });
 
   const defaultPorts = {
     PostgreSQL: '5432',
     MySQL: '3306',
     InfluxDB: '8086'
+  };
+
+  const getApiBaseUrl = () => {
+    const hostname = window.location.hostname;
+    return `http://${hostname}:3001/api/databases`;
   };
 
   const handleBack = () => {
@@ -68,7 +74,6 @@ export default function DatabaseCreate() {
       [name]: value
     });
 
-    // Set default port when engine changes
     if (name === 'engine') {
       setFormData(prev => ({
         ...prev,
@@ -89,81 +94,50 @@ export default function DatabaseCreate() {
     setLoading(true);
     setCreateStatus({ status: '', message: '' });
 
-    // Map our engine names to the db_type expected by the API
-    const dbTypeMap = {
-      'PostgreSQL': 'postgresql',
-      'MySQL': 'mysql',
-      'InfluxDB': 'influxdb'
-    };
-
-    // Prepare data for the create-database.php endpoint
     const createData = {
-      db_type: dbTypeMap[formData.engine],
-      db_name: formData.name,
-      db_host: formData.host,
-      db_port: formData.port,
-      db_user: formData.username,
-      db_pass: formData.password
+      engine: formData.engine,
+      name: formData.name,
+      host: formData.host,
+      port: formData.port,
+      username: formData.username,
+      password: formData.password,
+      notes: formData.notes,
     };
 
-    // Dynamically get the API base URL
-    const apiBaseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-      ? 'http://localhost:5000' 
-      : `http://${window.location.hostname}:5000`;
+    const apiBaseUrl = getApiBaseUrl();
+    const createUrl = `${apiBaseUrl}/create-instance`;
+    console.log(`[DatabaseCreate] Sending request to ${createUrl}`, createData);
 
-    // Make the API call to create database
-    fetch(`${apiBaseUrl}/api/database/create`, {
+    fetch(createUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(createData)
     })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        setCreateStatus({
-          status: 'success',
-          message: data.message || 'Database created successfully!'
-        });
-        
-        // Add the new database to localStorage for persistence
-        const storedDatabases = localStorage.getItem('mole_real_databases');
-        const realDatabases = storedDatabases ? JSON.parse(storedDatabases) : [];
-        
-        // Add the new database to the list
-        const newDatabase = {
-          name: formData.name,
-          engine: formData.engine,
-          host: formData.host,
-          port: formData.port,
-          database: formData.name,
-          username: formData.username,
-          password: formData.password,
-          size: '0 MB',  // New database has no size initially
-          tables: 0,     // New database has no tables initially
-          isSample: false
-        };
-        
-        realDatabases.push(newDatabase);
-        localStorage.setItem('mole_real_databases', JSON.stringify(realDatabases));
-        
-        // After 2 seconds, navigate back to databases list
-        setTimeout(() => {
-          navigate('/databases');
-        }, 2000);
-      } else {
-        setCreateStatus({
-          status: 'error',
-          message: data.message || 'Failed to create database. Please check your inputs and try again.'
-        });
+    .then(async response => {
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
       }
+      return data;
+    })
+    .then(data => {
+      console.log('[DatabaseCreate] Received response:', data);
+      setCreateStatus({
+        status: data.warning ? 'warning' : 'success',
+        message: data.message || 'Database operation completed.'
+      });
+
+      setTimeout(() => {
+        navigate('/databases');
+      }, 3000);
     })
     .catch(error => {
-      console.error('Error creating database:', error);
+      console.error('Error creating database via backend:', error);
       setCreateStatus({
         status: 'error',
-        message: 'Network error: Failed to connect to the server.'
+        message: error.message || 'Operation failed: Could not connect or process the request.'
       });
     })
     .finally(() => {
@@ -178,8 +152,7 @@ export default function DatabaseCreate() {
       case 0:
         return formData.engine !== '';
       case 1:
-        return formData.name && formData.host && formData.port && 
-               formData.username && formData.password;
+        return formData.name && formData.username;
       case 2:
         return true;
       default:
@@ -193,7 +166,7 @@ export default function DatabaseCreate() {
         return (
           <Stack spacing={3}>
             <Typography variant="subtitle1" gutterBottom>
-              Select the type of database you want to create
+              Select the type of database instance to create
             </Typography>
             
             <FormControl fullWidth required>
@@ -206,7 +179,7 @@ export default function DatabaseCreate() {
               >
                 <MenuItem value="PostgreSQL">PostgreSQL</MenuItem>
                 <MenuItem value="MySQL">MySQL</MenuItem>
-                <MenuItem value="InfluxDB">InfluxDB</MenuItem>
+                <MenuItem value="InfluxDB">InfluxDB (Bucket)</MenuItem>
               </Select>
             </FormControl>
             
@@ -225,59 +198,70 @@ export default function DatabaseCreate() {
       case 1:
         return (
           <Stack spacing={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Configure Connection Details
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Enter the name for this connection and the credentials you will use to connect to the newly created database/bucket.
+              The Host/Port should point to where Mole can reach the database server (often 'localhost' or the Docker service name like 'mole-postgres').
+            </Typography>
             <TextField
               fullWidth
-              label="Database Name"
+              label="Connection & Database Name"
               name="name"
               value={formData.name}
               onChange={handleInputChange}
-              placeholder="my_database"
+              placeholder="my_new_db"
               required
-              helperText="Name for your new database (no spaces or special characters)"
+              helperText="Name for the connection AND the new database/bucket (letters, numbers, underscore)"
             />
-            
             <TextField
               fullWidth
-              label="Host"
+              label="Host (for Mole to connect)"
               name="host"
               value={formData.host}
               onChange={handleInputChange}
-              placeholder="localhost"
+              placeholder={formData.engine === 'InfluxDB' ? 'mole-influxdb' : (formData.engine === 'MySQL' ? 'mole-mysql' : 'mole-postgres')}
               required
-              helperText="Database server hostname or IP address"
+              helperText="Hostname or IP address Mole should use to connect to this DB."
             />
-            
             <TextField
               fullWidth
-              label="Port"
+              label="Port (for Mole to connect)"
               name="port"
               value={formData.port}
               onChange={handleInputChange}
               placeholder={defaultPorts[formData.engine]}
               required
               type="number"
-              helperText="Database server port number"
+              helperText="Port Mole should use to connect to this DB."
             />
-            
             <TextField
               fullWidth
-              label="Admin Username"
+              label="Username (for connecting)"
               name="username"
               value={formData.username}
               onChange={handleInputChange}
               required
-              helperText="Username with database creation privileges"
+              helperText="Username you will use to connect to the new DB."
             />
-            
             <TextField
               fullWidth
-              label="Admin Password"
+              label="Password (for connecting)"
               name="password"
               type="password"
               value={formData.password}
               onChange={handleInputChange}
-              required
-              helperText="Password for the admin user"
+              helperText="Password you will use to connect to the new DB."
+            />
+            <TextField
+              fullWidth
+              label="Notes (Optional)"
+              name="notes"
+              value={formData.notes}
+              onChange={handleInputChange}
+              multiline
+              rows={2}
             />
           </Stack>
         );
@@ -285,38 +269,42 @@ export default function DatabaseCreate() {
         return (
           <Stack spacing={3}>
             <Typography variant="subtitle1" gutterBottom>
-              Review your database configuration
+              Confirm Creation
             </Typography>
-            
             <Alert severity="info">
-              You are about to create a new {formData.engine} database named "{formData.name}". 
-              This operation requires administrative privileges on the database server.
+              You are about to create a new {formData.engine} instance named "{formData.name}".
+              A connection entry will also be saved using the Host, Port, Username, and Password you provided.
+              Ensure the backend has the necessary admin privileges and configuration to perform this action.
             </Alert>
             
             <Paper variant="outlined" sx={{ p: 3, bgcolor: 'background.neutral' }}>
               <Typography variant="subtitle1" gutterBottom>
-                Database Configuration
+                Summary
               </Typography>
               <Divider sx={{ my: 2 }} />
               <Stack spacing={2}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">Database Type:</Typography>
+                  <Typography variant="body2" color="text.secondary">Engine:</Typography>
                   <Typography variant="body2" fontWeight={500}>{formData.engine}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">Database Name:</Typography>
+                  <Typography variant="body2" color="text.secondary">New DB/Bucket Name:</Typography>
                   <Typography variant="body2" fontWeight={500}>{formData.name}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">Host:</Typography>
+                  <Typography variant="body2" color="text.secondary">Connection Name:</Typography>
+                  <Typography variant="body2" fontWeight={500}>{formData.name}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Connection Host:</Typography>
                   <Typography variant="body2" fontWeight={500}>{formData.host}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">Port:</Typography>
+                  <Typography variant="body2" color="text.secondary">Connection Port:</Typography>
                   <Typography variant="body2" fontWeight={500}>{formData.port}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">Admin Username:</Typography>
+                  <Typography variant="body2" color="text.secondary">Connection Username:</Typography>
                   <Typography variant="body2" fontWeight={500}>{formData.username}</Typography>
                 </Box>
               </Stack>
@@ -344,7 +332,7 @@ export default function DatabaseCreate() {
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h4">
-          Create New Database
+          Create New Database Instance
         </Typography>
       </Box>
 
@@ -373,11 +361,12 @@ export default function DatabaseCreate() {
             {activeStep === steps.length - 1 ? (
               <Button
                 variant="contained"
+                color="primary"
                 onClick={handleCreateDatabase}
                 disabled={!isStepValid(activeStep) || loading}
-                startIcon={loading ? <CircularProgress size={16} /> : null}
+                startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
               >
-                Create Database
+                {loading ? 'Creating...' : 'Create Database Instance'}
               </Button>
             ) : (
               <Button

@@ -32,7 +32,11 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  Skeleton,
+  ListItemIcon,
+  Avatar,
+  ListItemSecondaryAction
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import StorageIcon from '@mui/icons-material/Storage';
@@ -49,9 +53,46 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LockIcon from '@mui/icons-material/Lock';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import SendIcon from '@mui/icons-material/Send';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import { useNavigate } from 'react-router-dom';
 import AIService from '../services/AIService';
 import DatabaseService from '../services/DatabaseService';
+import SystemService from '../services/SystemService';
+import EventService from '../services/EventService';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import UpdateIcon from '@mui/icons-material/Update';
+import SystemStatusCard from '../components/SystemStatusCard';
+import { formatBytes } from '../utils/formatUtils';
+// Import Chart.js components
+import {
+    Chart as ChartJS, 
+    ArcElement, 
+    Tooltip as ChartTooltip, // Rename Tooltip to avoid conflict with MUI Tooltip 
+    Legend,
+    CategoryScale, // Needed for x-axis labels
+    LinearScale,   // Needed for y-axis values
+    PointElement,  // Needed for points on the line
+    LineElement,   // Needed for the line itself
+    Title          // Optional: For chart titles
+} from 'chart.js';
+import { Doughnut, Line } from 'react-chartjs-2';
+
+// Register Chart.js components
+ChartJS.register(
+    ArcElement, 
+    ChartTooltip, 
+    Legend, 
+    CategoryScale, 
+    LinearScale, 
+    PointElement, 
+    LineElement,
+    Title 
+);
 
 // Styled components
 const RootStyle = styled('div')({
@@ -66,14 +107,14 @@ const StatsCard = styled(Card)(({ theme }) => ({
   justifyContent: 'space-between',
   color: theme.palette.common.white,
   backgroundImage: 'linear-gradient(to bottom right, #2065D1, #103996)',
-  boxShadow: theme.shadows[3]
+  boxShadow: theme.shadows[8]
 }));
 
 const RegularCard = styled(Card)(({ theme }) => ({
   height: '100%',
   display: 'flex',
   flexDirection: 'column',
-  boxShadow: theme.shadows[2]
+  boxShadow: theme.shadows[4]
 }));
 
 const HealthCard = styled(Card)(({ theme }) => ({
@@ -107,6 +148,24 @@ const ProgressBar = styled(Box)(({ theme }) => ({
 const AiQueryBox = styled(Box)(({ theme }) => ({
   marginTop: theme.spacing(4),
   marginBottom: theme.spacing(2)
+}));
+
+const RecentDbCard = styled(Card)(({ theme, status }) => ({
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  borderLeft: `5px solid ${ 
+    status === 'OK' ? theme.palette.success.main : 
+    status === 'Error' ? theme.palette.error.main : 
+    theme.palette.warning.main // Default to warning for Unknown/Checking
+  }`,
+  boxShadow: theme.shadows[4],
+  transition: 'transform 0.3s, box-shadow 0.3s',
+  '&:hover': {
+    transform: 'translateY(-5px)',
+    boxShadow: theme.shadows[12],
+    cursor: 'pointer'
+  }
 }));
 
 // Mock data - would be replaced with real API calls
@@ -151,6 +210,68 @@ const mockPerformanceData = {
   }
 };
 
+// Helper to get engine icon (revert to using MUI StorageIcon)
+const getEngineIcon = (engine) => {
+  switch (engine?.toLowerCase()) {
+    case 'postgresql':
+    case 'postgres':
+      return <StorageIcon color="info" />; 
+    case 'mysql':
+      return <StorageIcon color="warning" />;
+    case 'sqlite':
+      return <StorageIcon color="success" />;
+    default:
+      return <StorageIcon color="disabled" />;
+  }
+};
+
+// Helper to get status icon
+const getStatusIcon = (status) => {
+   switch (status) {
+     case 'OK':
+       return <CheckCircleIcon color="success" fontSize="small" />;
+     case 'Error':
+       return <ErrorIcon color="error" fontSize="small" />;
+     default:
+       return <HelpOutlineIcon color="warning" fontSize="small" />;
+   }
+};
+
+// Helper function to parse size string (e.g., "22 MB", "1.5 GB") into bytes
+const parseSizeToBytes = (sizeStr) => {
+  if (!sizeStr || typeof sizeStr !== 'string') return 0;
+  const sizeMatch = sizeStr.match(/([\d.]+)\s*(Bytes|KB|MB|GB|TB)/i);
+  if (sizeMatch) {
+    const value = parseFloat(sizeMatch[1]);
+    const unit = sizeMatch[2].toUpperCase();
+    switch (unit) {
+      case 'BYTES': return value;
+      case 'KB': return value * 1024;
+      case 'MB': return value * 1024 * 1024;
+      case 'GB': return value * 1024 * 1024 * 1024;
+      case 'TB': return value * 1024 * 1024 * 1024 * 1024;
+      default: return 0;
+    }
+  }
+  return 0;
+};
+
+// Helper to get Event Icon
+const getEventIcon = (eventType) => {
+   switch (eventType) {
+      case 'CONNECTION_CREATED':
+          return <AddCircleOutlineIcon color="success" />;
+      case 'CONNECTION_UPDATED':
+          return <UpdateIcon color="info" />;
+      case 'CONNECTION_DELETED':
+          return <DeleteOutlineIcon color="error" />;
+      case 'HEALTH_ERROR': // Example for future
+          return <WarningIcon color="warning" />;
+      default:
+          return <EventNoteIcon color="action" />;
+   }
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -172,6 +293,12 @@ export default function Dashboard() {
   const [availableProviders, setAvailableProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [activeDatabaseId, setActiveDatabaseId] = useState(null);
+  const [cpuHistory, setCpuHistory] = useState([]);
+  const [memoryHistory, setMemoryHistory] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [topTables, setTopTables] = useState([]);
+  const [totalDbSize, setTotalDbSize] = useState('N/A');
+  const [healthSummary, setHealthSummary] = useState({ ok: 0, error: 0, unknown: 0 });
 
   // Dynamisch die API-Basis-URL basierend auf dem aktuellen Host ermitteln
   const getApiBaseUrl = () => {
@@ -216,38 +343,54 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    // Fetch real system data and databases
+    // Fetch real system data, databases, events, and top tables
     const fetchData = async () => {
       setLoading(true);
+      let calculatedTotalSize = 0;
+      let calculatedOk = 0;
+      let calculatedError = 0;
+      let calculatedUnknown = 0;
+
       try {
         const apiBaseUrl = getApiBaseUrl();
         
-        // Get system info
-        const sysInfoResponse = await fetch(`${apiBaseUrl}/system/info`);
-        if (!sysInfoResponse.ok) throw new Error('Failed to fetch system info');
-        const sysInfoData = await sysInfoResponse.json();
+        // Use SystemService for current info
+        const sysInfoData = await SystemService.getSystemInfo();
         setSystemInfo(sysInfoData);
+
+        // Fetch historical data
+        const cpuHistoryPromise = SystemService.getPerformanceHistory('cpu', 30);
+        const memoryHistoryPromise = SystemService.getPerformanceHistory('memory', 30);
+
+        // Fetch top tables (concurrently)
+        const topTablesPromise = DatabaseService.getTopTables(10);
 
         // Get database connections from API
         const connections = await DatabaseService.getDatabaseConnections();
-        let fetchedDatabases = [];
-        let healthPromises = []; // Initialize health promises array
+        let healthPromises = []; 
+        let finalDatabasesToShow = []; 
         
         if (connections && connections.length > 0) {
-          // Fetch schema for each connection to get table count
           const enrichedConnections = await Promise.all(
             connections.map(async (conn) => {
               let tableCount = 'N/A';
-              let size = 'N/A'; // Keep size as N/A for now
-              if (conn.id && !conn.isSample) { // Only fetch schema for real connections with ID
+              let size = 'N/A';
+              let sizeBytes = 0; // Initialize sizeBytes
+              if (conn.id && !conn.isSample) { 
                 try {
                   const schemaInfo = await DatabaseService.getDatabaseSchema(conn.id);
-                  if (schemaInfo.success && schemaInfo.tableColumns) {
-                    tableCount = Object.keys(schemaInfo.tableColumns).length; 
+                  if (schemaInfo.success) {
+                      if (schemaInfo.tableColumns) {
+                         tableCount = Object.keys(schemaInfo.tableColumns).length; 
+                      }
+                      if (schemaInfo.totalSize) {
+                         size = schemaInfo.totalSize; 
+                         sizeBytes = parseSizeToBytes(size); // Calculate bytes
+                         calculatedTotalSize += sizeBytes; // Add to total size sum
+                      }
                   } else {
                      console.warn(`Could not fetch schema for DB ID ${conn.id}:`, schemaInfo.message);
                   }
-                  // Prepare health check promise here
                   healthPromises.push(
                      DatabaseService.getDatabaseHealth(conn.id).then(status => ({ id: conn.id, ...status }))
                   );
@@ -257,37 +400,70 @@ export default function Dashboard() {
               }
               return { 
                 ...conn, 
-                size, // Keep size placeholder
-                tables: tableCount // Use actual count or 'N/A'
+                size, 
+                tables: tableCount,
+                sizeBytes // Include bytes for potential later use
               };
             })
           );
-          setDatabases(enrichedConnections);
-          fetchedDatabases = enrichedConnections; // Use enriched data
+          finalDatabasesToShow = enrichedConnections; 
         } else {
-          // Only show mock Sample DB if API returns empty
-          setDatabases(mockDatabases);
-          fetchedDatabases = []; // No real DBs to check health
+          finalDatabasesToShow = mockDatabases;
         }
         
-        // Fetch health status using promises collected earlier
+        setDatabases(finalDatabasesToShow);
+
+        // Prepare and fetch health checks only for REAL databases
+        healthPromises = finalDatabasesToShow
+            .filter(db => db.id && !db.isSample) 
+            .map(db => 
+                DatabaseService.getDatabaseHealth(db.id).then(status => ({ id: db.id, ...status }))
+            );
         const healthResults = await Promise.all(healthPromises);
         const newHealthData = {};
         healthResults.forEach(result => {
           newHealthData[result.id] = { status: result.status, message: result.message };
+          // Count health status for summary
+          if (result.status === 'OK') calculatedOk++;
+          else if (result.status === 'Error') calculatedError++;
+          else calculatedUnknown++;
         });
         setHealthData(newHealthData);
+        setHealthSummary({ ok: calculatedOk, error: calculatedError, unknown: calculatedUnknown });
+
+        // Set total size state
+        setTotalDbSize(formatBytes(calculatedTotalSize)); // Use formatBytes helper
         
         // Fetch real performance data here if available, otherwise use mock
         setPerformanceData(mockPerformanceData); // Keep using mock for now
 
+        // Wait for history and top tables data
+        const [cpuRes, memRes, topTablesResult] = await Promise.all([
+          cpuHistoryPromise, 
+          memoryHistoryPromise,
+          topTablesPromise
+        ]);
+        if (cpuRes.success) setCpuHistory(cpuRes.history);
+        if (memRes.success) setMemoryHistory(memRes.history);
+        setTopTables(topTablesResult || []); // Set top tables state
+
+        // Fetch recent events
+        const recentEvents = await EventService.getRecentEvents(10); // Get last 10 events
+        setEvents(recentEvents);
+
       } catch (error) {
         console.error("Failed to fetch data:", error);
         // Fallback to mock data if API fails
-        setDatabases(mockDatabases); // Show sample on error
+        setDatabases(mockDatabases); 
         setSystemInfo(mockSystemInfo);
-        setHealthData({}); // Clear health data on error
+        setHealthData({}); 
         setPerformanceData(mockPerformanceData);
+        setCpuHistory([]); // Clear history on error
+        setMemoryHistory([]);
+        setEvents([]); // Clear events on error
+        setTopTables([]); // Clear top tables on error
+        setTotalDbSize('N/A'); // Reset size on error
+        setHealthSummary({ ok: 0, error: 0, unknown: 0 }); // Reset health on error
       } finally {
         setLoading(false);
       }
@@ -357,11 +533,136 @@ export default function Dashboard() {
       setActiveDatabaseId(event.target.value);
   };
 
+  // Prepare data for Doughnut chart
+  const topDatabasesBySize = databases
+    .filter(db => db.id && !db.isSample && db.size && db.size !== 'N/A') // Filter for real DBs with size
+    .map(db => ({ ...db, sizeBytes: parseSizeToBytes(db.size) })) // Add size in bytes
+    .sort((a, b) => b.sizeBytes - a.sizeBytes) // Sort descending by size
+    .slice(0, 5); // Take top 5
+
+  const doughnutData = {
+    labels: topDatabasesBySize.map(db => db.name),
+    datasets: [
+      {
+        label: 'Database Size',
+        data: topDatabasesBySize.map(db => db.sizeBytes),
+        backgroundColor: [
+          'rgba(33, 150, 243, 0.7)', // Blue
+          'rgba(76, 175, 80, 0.7)',  // Green
+          'rgba(255, 193, 7, 0.7)',  // Amber
+          'rgba(244, 67, 54, 0.7)',   // Red
+          'rgba(156, 39, 176, 0.7)', // Purple
+        ],
+        borderColor: [
+          'rgba(33, 150, 243, 1)',
+          'rgba(76, 175, 80, 1)',
+          'rgba(255, 193, 7, 1)',
+          'rgba(244, 67, 54, 1)',
+          'rgba(156, 39, 176, 1)',
+        ],
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom', // Position legend at the bottom
+        labels: {
+           boxWidth: 12, // Smaller legend color boxes
+           padding: 15 // Padding between legend items
+        }
+      },
+      tooltip: { // Use ChartTooltip alias
+        callbacks: {
+          label: function(context) {
+             let label = context.dataset.label || '';
+             if (label) {
+                 label += ': ';
+             }
+             if (context.parsed !== null) {
+                 // Format bytes back to human-readable
+                 const bytes = context.parsed;
+                 const k = 1024;
+                 const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                 const i = Math.floor(Math.log(bytes) / Math.log(k));
+                 label += parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+             }
+             return label;
+          }
+        }
+      }
+    }
+  };
+
+  // Prepare data for Sparkline charts
+  const sparklineBaseOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+        x: { display: false }, // Hide x-axis labels
+        y: { display: false, min: 0, max: 100 } // Hide y-axis, set scale 0-100
+    },
+    plugins: {
+        legend: { display: false }, // Hide legend
+        tooltip: { enabled: false } // Disable tooltips
+    },
+    elements: {
+        point: { radius: 0 }, // Hide points
+        line: { tension: 0.3, borderWidth: 2 } // Smoothed line, thinner border
+    }
+  };
+
+  const cpuSparklineData = {
+    labels: cpuHistory.map(h => h.timestamp), // Timestamps for potential tooltips later
+    datasets: [{
+      label: 'CPU %',
+      data: cpuHistory.map(h => h.value),
+      borderColor: 'rgb(33, 150, 243)',
+      backgroundColor: 'rgba(33, 150, 243, 0.1)', // Optional fill
+      fill: true
+    }]
+  };
+
+   const memorySparklineData = {
+    labels: memoryHistory.map(h => h.timestamp),
+    datasets: [{
+      label: 'Memory %',
+      data: memoryHistory.map(h => h.value),
+      borderColor: 'rgb(76, 175, 80)',
+      backgroundColor: 'rgba(76, 175, 80, 0.1)', 
+      fill: true
+    }]
+  };
+
   if (loading) {
+    // Show Skeleton Layout while loading
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <CircularProgress />
-      </Box>
+      <RootStyle>
+         <Box sx={{ mb: 5 }}>
+            <Skeleton variant="text" width={250} height={40} />
+            <Skeleton variant="text" width={400} height={20} />
+         </Box>
+          <Skeleton variant="rectangular" width="100%" height={48} sx={{ mb: 3 }} />
+
+          {/* Updated Skeleton Layout */}
+           <Grid container spacing={3} sx={{ mb: 4 }}>
+             {/* Row 1: DB Count, Table Count */}
+             <Grid item xs={12} sm={6} md={3}><Skeleton variant="rounded" height={180} /></Grid>
+             <Grid item xs={12} sm={6} md={3}><Skeleton variant="rounded" height={180} /></Grid>
+             {/* Placeholder for where the detailed system status card will go */} 
+             <Grid item xs={12} md={6}><Skeleton variant="rounded" height={180} /></Grid> 
+          </Grid>
+          <Grid container spacing={3}>
+             {/* Row 2: Recent DBs */}
+             <Grid item xs={12} md={8}><Skeleton variant="rounded" height={400} /></Grid>
+             {/* Placeholder for new cards that will be below System Status */}
+             <Grid item xs={12} md={4}><Skeleton variant="rounded" height={400} /></Grid>
+          </Grid>
+      </RootStyle>
     );
   }
 
@@ -391,294 +692,276 @@ export default function Dashboard() {
       
       {activeTab === 0 && (
         <>
+          {/* Stats Cards Grid - Now 4 cards */}
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <StatsCard>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Box>
-                      <Typography variant="h3" sx={{ mb: 0.5 }}>
-                        {databases.length}
-                      </Typography>
-                      <Typography variant="subtitle2" sx={{ opacity: 0.72 }}>
-                        Databases
-                      </Typography>
-                    </Box>
-                    <Box sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 1 }}>
-                      <StorageIcon />
-                    </Box>
-                  </Box>
-                  <Stack direction="row" spacing={1}>
-                    <Button 
-                      variant="contained" 
-                      size="small" 
-                      onClick={() => navigate('/databases/create')}
-                      startIcon={<AddIcon />}
-                      sx={{ 
-                        bgcolor: '#ffffff', 
-                        color: '#0047AB',
-                        fontWeight: 'bold',
-                        fontSize: '0.75rem',
-                        padding: '6px 12px',
-                        boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-                        '&:hover': {
-                          bgcolor: '#f0f0f0',
-                          boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
-                        },
-                        flex: 1
-                      }}
-                    >
-                      Connect Database
-                    </Button>
-                    <Button 
-                      variant="contained" 
-                      size="small" 
-                      onClick={() => navigate('/databases/new')}
-                      startIcon={<AddIcon />}
-                      sx={{ 
-                        bgcolor: '#50C878', 
-                        color: '#ffffff',
-                        fontWeight: 'bold',
-                        fontSize: '0.75rem',
-                        padding: '6px 12px',
-                        boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-                        '&:hover': {
-                          bgcolor: '#40A060',
-                          boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
-                        },
-                        flex: 1
-                      }}
-                    >
-                      Create Database
-                    </Button>
-                  </Stack>
-                </CardContent>
-              </StatsCard>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={3}>
-              <RegularCard>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-                    <Box>
-                      <Typography variant="h4" sx={{ mb: 0.5 }}>
-                        {/* Safely calculate total tables, display N/A if any connection lacks count */}
-                        {databases.some(db => typeof db.tables !== 'number') 
-                          ? 'N/A' 
-                          : databases.reduce((sum, db) => sum + (db.tables || 0), 0)}
-                      </Typography>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Total Tables
-                      </Typography>
-                    </Box>
-                    <Box sx={{ p: 1, bgcolor: 'primary.lighter', borderRadius: 1, color: 'primary.main' }}>
-                      <TableChartIcon />
-                    </Box>
-                  </Box>
-                </CardContent>
-              </RegularCard>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={3}>
-              <RegularCard>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-                    <Box>
-                      <Typography variant="h4" sx={{ mb: 0.5 }}>
-                        {systemInfo.cpuUsage}%
-                      </Typography>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        CPU Usage
-                      </Typography>
-                    </Box>
-                    <Box sx={{ p: 1, bgcolor: 'primary.lighter', borderRadius: 1, color: 'primary.main' }}>
-                      <MemoryIcon />
-                    </Box>
-                  </Box>
-                </CardContent>
-              </RegularCard>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={3}>
-              <RegularCard>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-                    <Box>
-                      <Typography variant="h4" sx={{ mb: 0.5 }}>
-                        {systemInfo.memoryUsage}%
-                      </Typography>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Memory Usage
-                      </Typography>
-                    </Box>
-                    <Box sx={{ p: 1, bgcolor: 'primary.lighter', borderRadius: 1, color: 'primary.main' }}>
-                      <SpeedIcon />
-                    </Box>
-                  </Box>
-                </CardContent>
-              </RegularCard>
-            </Grid>
+             <Grid item xs={12} sm={6} md={3}>
+                {/* Databases Card */} 
+                 <StatsCard> 
+                   <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                         <Box>
+                            <Typography variant="h3" sx={{ mb: 0.5 }}>
+                               {databases.length}
+                            </Typography>
+                            <Typography variant="subtitle2" sx={{ opacity: 0.72 }}>
+                               Databases
+                            </Typography>
+                         </Box>
+                         <Box sx={{ p: 1, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 1 }}>
+                            <StorageIcon />
+                         </Box>
+                      </Box>
+                      <Stack direction="row" spacing={1}>
+                         <Button 
+                            variant="contained" 
+                            size="small" 
+                            onClick={() => navigate('/databases/create')}
+                            startIcon={<AddIcon />}
+                            sx={{ 
+                              bgcolor: '#50C878', 
+                              color: '#ffffff',
+                              fontWeight: 'bold',
+                              fontSize: '0.75rem',
+                              padding: '6px 12px',
+                              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+                              '&:hover': {
+                                bgcolor: '#40A060',
+                                boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+                              },
+                              flex: 1
+                            }}
+                         >
+                            Connect Database
+                         </Button>
+                         <Button 
+                            variant="contained" 
+                            size="small" 
+                            onClick={() => navigate('/databases/new')}
+                            startIcon={<AddIcon />}
+                            sx={{ 
+                              bgcolor: '#50C878', 
+                              color: '#ffffff',
+                              fontWeight: 'bold',
+                              fontSize: '0.75rem',
+                              padding: '6px 12px',
+                              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+                              '&:hover': {
+                                bgcolor: '#40A060',
+                                boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+                              },
+                              flex: 1
+                            }}
+                         >
+                            Create Database
+                         </Button>
+                      </Stack>
+                   </CardContent>
+                 </StatsCard>
+             </Grid>
+             <Grid item xs={12} sm={6} md={3}>
+                 {/* Total Tables Card */} 
+                 <RegularCard>
+                    <CardContent>
+                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+                          <Box>
+                             <Typography variant="h4" sx={{ mb: 0.5 }}>
+                                {/* Safely calculate total tables, display N/A if any connection lacks count */}
+                                {databases.some(db => typeof db.tables !== 'number') 
+                                  ? 'N/A' 
+                                  : databases.reduce((sum, db) => sum + (db.tables || 0), 0)}
+                             </Typography>
+                             <Typography variant="subtitle2" color="text.secondary">
+                                Total Tables
+                             </Typography>
+                          </Box>
+                          <Box sx={{ p: 1, bgcolor: 'primary.lighter', borderRadius: 1, color: 'primary.main' }}>
+                             <TableChartIcon />
+                          </Box>
+                       </Box>
+                    </CardContent>
+                 </RegularCard>
+             </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                  {/* Total Size Card (New) */} 
+                   <RegularCard>
+                      <CardContent>
+                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+                           <Box>
+                              <Typography variant="h4" sx={{ mb: 0.5 }}>{totalDbSize}</Typography>
+                              <Typography variant="subtitle2" color="text.secondary">Total Size</Typography>
+                           </Box>
+                           <Box sx={{ p: 1, bgcolor: 'secondary.lighter', borderRadius: 1, color: 'secondary.main' }}>
+                              <StorageIcon />{/* Or a specific size icon */}
+                           </Box>
+                        </Box>
+                      </CardContent>
+                   </RegularCard>
+              </Grid>
+               <Grid item xs={12} sm={6} md={3}>
+                   {/* Health Summary Card (New) */} 
+                    <RegularCard>
+                       <CardContent>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+                            <Box>
+                               <Typography variant="h4" sx={{ mb: 0.5 }}>
+                                 <Typography component="span" variant="h4" color="success.main">{healthSummary.ok}</Typography> / 
+                                 <Typography component="span" variant="h4" color="error.main">{healthSummary.error}</Typography>
+                               </Typography>
+                               <Typography variant="subtitle2" color="text.secondary">Connections OK / Error</Typography>
+                            </Box>
+                            <Box sx={{ p: 1, bgcolor: healthSummary.error > 0 ? 'error.lighter' : 'success.lighter', borderRadius: 1, color: healthSummary.error > 0 ? 'error.main' : 'success.main' }}>
+                               <HealthAndSafetyIcon />
+                            </Box>
+                          </Box>
+                       </CardContent>
+                    </RegularCard>
+               </Grid>
           </Grid>
 
+          {/* Second Row: Recent DBs and System Status */}
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+             {/* Recent Databases Section */}
+             <Grid item xs={12} md={8}>
+                 <Box> 
+                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="h6">Recent Databases</Typography>
+                      <Button size="small" onClick={() => navigate('/databases')} sx={{ textTransform: 'none' }}>View All</Button>
+                   </Box>
+                  <Grid container spacing={3}>
+                     {databases.map((db) => {
+                         const currentHealth = healthData[db.id] || { status: 'Unknown', message: '...' };
+                         return (
+                            <Grid item xs={12} sm={6} /* Adjusted size */ key={db.id || db.name}>
+                                <RecentDbCard 
+                                    status={currentHealth.status} 
+                                    onClick={() => db.id && navigate(`/database/id/${db.id}`)} 
+                                    sx={{ cursor: db.id ? 'pointer' : 'default'}}
+                                >
+                                     <CardContent sx={{ flexGrow: 1 }}>
+                                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+                                             {getEngineIcon(db.engine)}
+                                             <Typography variant="h6" sx={{ ml: 1.5, flexGrow: 1 }} noWrap>
+                                                 {db.name}
+                                             </Typography>
+                                             <Tooltip title={currentHealth.message || currentHealth.status}>
+                                               <Box sx={{ display: 'flex' }}>{getStatusIcon(currentHealth.status)}</Box>
+                                             </Tooltip>
+                                         </Box>
+                                         <Divider sx={{ mb: 1.5 }}/>
+                                         <Stack direction="row" justifyContent="space-around" textAlign="center">
+                                              <Box>
+                                                 <Typography variant="body2" color="text.secondary">Engine</Typography>
+                                                 <Typography variant="subtitle2">{db.engine}</Typography>
+                                              </Box>
+                                               <Box>
+                                                 <Typography variant="body2" color="text.secondary">Tables</Typography>
+                                                 <Typography variant="subtitle2">{typeof db.tables === 'number' ? db.tables : 'N/A'}</Typography>
+                                              </Box>
+                                              <Box>
+                                                  <Typography variant="body2" color="text.secondary">Size</Typography>
+                                                  <Typography variant="subtitle2">{db.size}</Typography>
+                                              </Box>
+                                         </Stack>
+                                     </CardContent>
+                                </RecentDbCard>
+                            </Grid>
+                         );
+                      })}
+                      {databases.length === 0 && !loading && (
+                         <Grid item xs={12}> 
+                           <Typography color="text.secondary" sx={{ textAlign: 'center', mt: 4 }}>
+                             No database connections found. 
+                             <Button size="small" onClick={() => navigate('/databases/create')} sx={{ ml: 1 }}>Add one?</Button>
+                           </Typography>
+                         </Grid>
+                      )}
+                  </Grid>
+                </Box>
+             </Grid>
+
+             {/* System Status Card */} 
+             <Grid item xs={12} md={4}>
+                 <SystemStatusCard systemInfo={systemInfo} />
+             </Grid>
+          </Grid>
+          
+          {/* Third Row: Additional Cards (Size Dist, Top Tables, Activity) */}
           <Grid container spacing={3}>
-            <Grid item xs={12} md={8}>
-              <RegularCard>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                    <Typography variant="h6">Recent Databases</Typography>
-                    <Button 
-                      size="small" 
-                      onClick={() => navigate('/databases')}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      View All
-                    </Button>
-                  </Box>
-                  
-                  {databases.map((db, index) => (
-                    <React.Fragment key={db.id || db.name}>
-                      <Box sx={{ py: 2 }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Box>
-                            <Typography variant="subtitle1">{db.name}</Typography>
-                            <Typography variant="body2" color="text.secondary">{db.engine}</Typography>
-                          </Box>
-                          <Box>
-                            <Typography variant="body2">{db.size}</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {typeof db.tables === 'number' ? `${db.tables} tables` : 'N/A'}
-                            </Typography>
-                          </Box>
-                          <Button 
-                            variant="outlined" 
-                            size="small"
-                            onClick={() => navigate(`/database/id/${db.id}`)}
-                            disabled={!db.id && !db.isSample}
-                          >
-                            Connect
-                          </Button>
-                        </Stack>
-                      </Box>
-                      {index < databases.length - 1 && <Divider />}
-                    </React.Fragment>
-                  ))}
-                </CardContent>
-              </RegularCard>
-            </Grid>
+             {/* Database Size Distribution Card */} 
+             {topDatabasesBySize.length > 0 && (
+                 <Grid item xs={12} md={4}>
+                     <RegularCard>
+                        <CardContent>
+                           <Typography variant="h6" sx={{ mb: 2 }}>Database Size Distribution</Typography>
+                           <Box sx={{ height: 250, position: 'relative' }}> 
+                               <Doughnut data={doughnutData} options={doughnutOptions} />
+                           </Box>
+                        </CardContent>
+                     </RegularCard>
+                 </Grid>
+              )}
 
-            <Grid item xs={12} md={4}>
-              <RegularCard>
-                <CardContent>
-                  <Typography variant="h6" sx={{ mb: 3 }}>
-                    System Information
-                  </Typography>
-                  
-                  <Stack spacing={2}>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        CPU Usage
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Box sx={{ width: '100%', mr: 1 }}>
-                          <Box 
-                            sx={{ 
-                              height: 10, 
-                              bgcolor: 'grey.200', 
-                              borderRadius: 5,
-                              position: 'relative'
-                            }}
-                          >
-                            <Box 
-                              sx={{
-                                position: 'absolute',
-                                height: '100%',
-                                bgcolor: 'primary.main',
-                                borderRadius: 5,
-                                width: `${systemInfo.cpuUsage}%`
-                              }}
-                            />
-                          </Box>
-                        </Box>
-                        <Typography variant="body2" color="text.primary">
-                          {systemInfo.cpuUsage}%
-                        </Typography>
-                      </Box>
-                    </Box>
+              {/* Top Tables Card */} 
+              {topTables.length > 0 && (
+                 <Grid item xs={12} md={4}>
+                     <RegularCard>
+                       <CardContent>
+                          <Typography variant="h6" sx={{ mb: 2 }}>Top Tables by Size</Typography>
+                          <List dense sx={{ maxHeight: 260, overflow: 'auto' }}>
+                             {topTables.map((table, index) => (
+                                <ListItem 
+                                   key={`${table.dbId}-${table.tableName}`}
+                                   disablePadding
+                                   secondaryAction={
+                                      <Typography variant="caption" color="text.secondary">{table.sizeFormatted}</Typography>
+                                   }
+                                >
+                                    <ListItemIcon sx={{ minWidth: '30px'}}>
+                                       <Typography color="text.secondary">{index + 1}.</Typography>
+                                    </ListItemIcon>
+                                    <ListItemText 
+                                       primary={table.tableName}
+                                       secondary={table.dbName}
+                                       primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500, noWrap: true }}
+                                       secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                                    />
+                                </ListItem>
+                             ))}
+                          </List>
+                       </CardContent>
+                     </RegularCard>
+                 </Grid>
+              )}
 
-                    <Box>
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Memory Usage
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Box sx={{ width: '100%', mr: 1 }}>
-                          <Box 
-                            sx={{ 
-                              height: 10, 
-                              bgcolor: 'grey.200', 
-                              borderRadius: 5,
-                              position: 'relative'
-                            }}
-                          >
-                            <Box 
-                              sx={{
-                                position: 'absolute',
-                                height: '100%',
-                                bgcolor: 'primary.main',
-                                borderRadius: 5,
-                                width: `${systemInfo.memoryUsage}%`
-                              }}
-                            />
-                          </Box>
-                        </Box>
-                        <Typography variant="body2" color="text.primary">
-                          {systemInfo.memoryUsage}%
-                        </Typography>
-                      </Box>
-                    </Box>
-
-                    <Box>
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Disk Usage
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Box sx={{ width: '100%', mr: 1 }}>
-                          <Box 
-                            sx={{ 
-                              height: 10, 
-                              bgcolor: 'grey.200', 
-                              borderRadius: 5,
-                              position: 'relative'
-                            }}
-                          >
-                            <Box 
-                              sx={{
-                                position: 'absolute',
-                                height: '100%',
-                                bgcolor: 'primary.main',
-                                borderRadius: 5,
-                                width: `${systemInfo.diskUsage}%`
-                              }}
-                            />
-                          </Box>
-                        </Box>
-                        <Typography variant="body2" color="text.primary">
-                          {systemInfo.diskUsage}%
-                        </Typography>
-                      </Box>
-                    </Box>
-
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        System Uptime
-                      </Typography>
-                      <Typography variant="body1">
-                        {systemInfo.uptime}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </RegularCard>
-            </Grid>
+              {/* Activity Feed Card */} 
+              {/* Adjust width based on whether other cards in this row are present */}
+               <Grid item xs={12} md={(topTables.length > 0 && topDatabasesBySize.length > 0) ? 4 : (topTables.length > 0 || topDatabasesBySize.length > 0 ? 6 : 12)}> 
+                 <RegularCard>
+                    <CardContent>
+                        <Typography variant="h6" sx={{ mb: 2 }}>Recent Activity</Typography>
+                        {events.length === 0 && !loading && (
+                            <Typography color="text.secondary" variant="body2">No recent activity.</Typography>
+                        )}
+                        <List dense sx={{ maxHeight: 260, overflow: 'auto' }}> 
+                            {events.map((event) => (
+                                <ListItem key={event.id} disablePadding sx={{ mb: 1}}>
+                                    <ListItemIcon sx={{minWidth: '40px'}}>
+                                        <Avatar sx={{ bgcolor: 'action.selected', width: 32, height: 32 }}>
+                                          {getEventIcon(event.event_type)}
+                                        </Avatar>
+                                    </ListItemIcon>
+                                    <ListItemText 
+                                        primary={event.message}
+                                        secondary={new Date(event.timestamp).toLocaleString()} 
+                                        primaryTypographyProps={{ fontSize: '0.875rem' }} 
+                                        secondaryTypographyProps={{ fontSize: '0.75rem' }} 
+                                    />
+                                </ListItem>
+                            ))}
+                        </List>
+                    </CardContent>
+                 </RegularCard>
+              </Grid>
           </Grid>
         </>
       )}

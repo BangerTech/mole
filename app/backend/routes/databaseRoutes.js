@@ -37,6 +37,9 @@ router.post('/:id/tables', databaseController.createTable);
 // Delete a table
 router.delete('/:id/tables/:tableName', databaseController.deleteTable);
 
+// Get top N largest tables across all databases
+router.get('/top-tables', databaseController.getTopTables);
+
 // Execute SQL query
 router.post('/:id/execute', databaseController.executeQuery);
 router.post('/connections/:id/execute', databaseController.executeQuery);
@@ -50,5 +53,8 @@ router.delete('/:id', databaseController.deleteConnection);
 router.get('/connections/:id', databaseController.getConnectionById);
 router.put('/connections/:id', databaseController.updateConnection);
 router.delete('/connections/:id', databaseController.deleteConnection);
+
+// New route for creating database instances
+router.post('/create-instance', databaseController.createDatabaseInstance);
 
 module.exports = router; 

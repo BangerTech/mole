@@ -68,6 +68,16 @@ const initDatabase = async () => {
       FOREIGN KEY (task_id) REFERENCES sync_tasks(id)
     );
     
+    -- Add new table for event logs
+    CREATE TABLE IF NOT EXISTS event_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL, -- e.g., 'CONNECTION_CREATED', 'CONNECTION_DELETED', 'HEALTH_ERROR'
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      message TEXT,
+      connection_id INTEGER, -- Optional reference to the connection involved
+      details TEXT -- Optional JSON string for extra details
+    );
+    
     -- Index for faster queries
     CREATE INDEX IF NOT EXISTS idx_is_sample ON database_connections(isSample);
   `);
@@ -88,5 +98,6 @@ initDatabase().catch(err => {
 });
 
 module.exports = {
-  getDbConnection
+  getDbConnection,
+  initDatabase
 }; 

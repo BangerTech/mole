@@ -248,122 +248,62 @@ In dieser Migration wurde die Abhängigkeit von localStorage im Frontend entfern
 
 3. **Architekturelle Vorteile:**
    - Bessere Skalierbarkeit für zukünftige Mehrbenutzerszenarien
-   - Vereinfachte Code-Wartung durch Entfernung von Fallback-Logik
-   - Höhere Datenkonsistenz durch Eliminierung mehrerer Wahrheitsquellen
 
-Betroffene Komponenten:
-- `DatabaseService.js`: Entfernung von localStorage-Fallbacks und Synchronisierungsfunktionen
-- `DatabasesList.js`: Direkte API-Aufrufe statt localStorage-Lesezugriffe
-- `DatabaseForm.js`: API-basierte Datenabfrage und -speicherung
-- `DatabaseDetails.js`: Direkte API-Aufrufe zum Abrufen von Verbindungsdetails und Schema
+### Migration 006 - System Performance Monitoring (2025-05-01)
 
-Die Migration erfolgte ohne Änderungen am Datenbankschema, da ausschließlich die Frontend-Datenzugriffslogik modifiziert wurde. Die bestehende SQLite-Datenbank im Backend bleibt unverändert.
+In dieser Migration wurde ein umfassendes System zur Überwachung der Systemleistung und Datenbankstatistiken implementiert. Die folgenden Komponenten wurden hinzugefügt oder verbessert:
 
-### Migration 006 - Health-Status Monitoring (2025-04-29)
+1. **System-Metriken-Sammlung:**
+   - Implementierung eines Python-basierten Dienstes für die Sammlung von Systemmetriken in Echtzeit (CPU, Arbeitsspeicher, Festplattenspeicher, Swap)
+   - Speicherung historischer Leistungsdaten für Trend- und Nutzungsanalysen
+   - Automatische Erfassung von Systemmetriken in regelmäßigen Intervallen (1 Minute)
 
-In dieser Migration wurde die Echtzeitüberwachung des Gesundheitszustands für Datenbankverbindungen implementiert. Folgende Änderungen wurden vorgenommen:
+2. **Backend-API-Erweiterungen:**
+   - Neuer Endpunkt `/api/system/info` zur Bereitstellung aktueller Systemleistungsdaten
+   - Neuer Endpunkt `/api/system/performance-history` für historische Leistungsdaten (CPU, Speicher)
+   - Endpunkt `/api/databases/top-tables` zur Anzeige der größten Tabellen über alle Datenbankverbindungen hinweg
 
-1. **Backend-API-Erweiterungen:**
-   - Neuer Endpunkt `/api/databases/:id/health` zur Echtzeitprüfung des Verbindungsstatus
-   - Motorspezifische Gesundheitschecks:
-     - PostgreSQL: Verbindungstest und einfache Query-Ausführung
-     - MySQL: Verbindungstest mit Ping-Funktion
-     - SQLite: Überprüfung der Dateiexistenz
-   - Standardisierte Antwortstruktur: `{ status: 'OK'|'Error'|'Unknown', message: '...' }`
+3. **Dashboard-Erweiterungen:**
+   - Neue "System Status" Karte mit Echtzeitanzeige von CPU-, Speicher- und Festplattennutzung
+   - Grafische Darstellung der Systemleistung mit Hilfe von Gauges und Diagrammen
+   - "Top Tables" Karte zur Anzeige der größten Tabellen in allen verbundenen Datenbanken
+   - Zusammenfassung der gesamten Datenbankgröße und Tabellenanzahl
 
-2. **Frontend-Erweiterungen:**
-   - Neue `getDatabaseHealth()`-Methode im `DatabaseService`
-   - Dynamische Abfrage des Gesundheitsstatus für alle konfigurierten Datenbanken
-   - Visuelle Anzeige des Verbindungsstatus im Health-Tab des Dashboards:
-     - Grüne Färbung für erfolgreiche Verbindungen
-     - Rote Färbung für fehlgeschlagene Verbindungen
-     - Gelbe Färbung während der Statusprüfung
+4. **Integration in die bestehende Architektur:**
+   - Node.js Backend als Proxy für Python-basierte Systemmetriken
+   - Nahtlose Integration in die Dashboard-Oberfläche
+   - Automatische Aktualisierung der Systemdaten alle 30 Sekunden
 
-3. **Architekturelle Vorteile:**
-   - Kontinuierliche Überwachung des Verbindungsstatus in Echtzeit
-   - Klare visuelle Rückmeldung über den aktuellen Zustand der Datenbankverbindungen
-   - Verbesserte Benutzeroberfläche zur schnellen Fehlererkennung
-   - Grundlage für zukünftige erweiterte Metriken (z.B. Abfragegeschwindigkeit, Cache-Nutzung)
+5. **Technische Implementierungsdetails:**
+   - Verwendung von `psutil` in Python für die zuverlässige Erfassung von Systemmetriken
+   - In-Memory-Speicherung von Verlaufsdaten mit konfigurierbarer Beibehaltungsdauer (standardmäßig 60 Minuten)
+   - RESTful API mit JSON-Antworten für Frontend-Integration
 
-Diese Erweiterung ermöglicht dem Benutzer schnelles Feedback über den Status jeder konfigurierten Datenbankverbindung direkt im Dashboard. Die API wurde so gestaltet, dass sie in Zukunft leicht um zusätzliche Metriken erweitert werden kann. Für die Sample-Datenbank wird ein Hinweis angezeigt, dass der Health-Check nicht anwendbar ist.
+Diese Erweiterungen bieten Administratoren einen umfassenden Überblick über die Systemleistung und ermöglichen eine bessere Überwachung der Datenbankgrößen und -nutzung. Die Implementierung wurde als Teil des Python-basierten `db-sync`-Dienstes realisiert, wodurch die bestehende Infrastruktur ohne zusätzliche Abhängigkeiten genutzt werden konnte.
 
-Die Migration erfolgte ohne Änderungen am Datenbankschema, da die Funktionalität vollständig durch neue API-Endpunkte und Frontend-Komponenten implementiert wurde.
+```python
+# Beispiel-Code für die Systemmetriken-Sammlung
+metrics_history = {
+    'cpu': [],
+    'memory': []
+}
 
-### Migration 007 - Table View with Server-Side Pagination and Sorting (2025-05-21)
+def collect_metrics():
+    try:
+        cpu = psutil.cpu_percent(interval=0.1)
+        mem = psutil.virtual_memory().percent
+        timestamp = time.time() * 1000
+        
+        metrics_history['cpu'].append({'timestamp': timestamp, 'value': round(cpu, 1)})
+        metrics_history['memory'].append({'timestamp': timestamp, 'value': round(mem, 1)})
+    except Exception as e:
+        logger.error(f"Error collecting metrics: {str(e)}")
 
-In dieser Migration wurde eine spezialisierte Tabellenansicht mit Server-seitiger Paginierung und Sortierung implementiert. Diese Funktionalität ermöglicht eine effiziente Anzeige und Navigation auch in großen Datentabellen. Folgende Änderungen wurden vorgenommen:
-
-1. **Backend-API-Erweiterungen:**
-   - Neuer Endpunkt `/api/databases/:id/tables/:tableName/data` zum Abrufen von paginierten Tabellendaten
-   - Implementierung von Server-seitigem Paging mit parametrisierten Abfragen (`page`, `limit`)
-   - Unterstützung für dynamische Sortierung (`sortBy`, `sortOrder`)
-   - Rückgabe formatierter Daten mit spaltenspezifischen Metadaten und Gesamtzeilenanzahl
-
-2. **Frontend-Erweiterungen:**
-   - Neue `TableView.js` Komponente mit Material UI DataGrid für optimierte Tabellenanzeige
-   - Integration des `@mui/x-data-grid` für erweiterte Tabellenfunktionalität:
-     - Intelligentes Rendering großer Datensätze
-     - Dynamische Spaltenformatierung basierend auf Datentypen
-     - Tooltips mit Spaltenmetadaten (Datentyp, Nullable, Default-Werte)
-     - Voll funktionsfähige Toolbar mit Filterung, Export und Dichteeinstellungen
-   - Implementierung von Server-seitiger Paginierung:
-     - Dynamische Seitenwechsel ohne Neuladen der gesamten Tabelle
-     - Konfigurierbare Einträge pro Seite (10, 25, 50, 100)
-     - Aktualisierung des Datenmodells bei Paginierungsänderungen
-   - Unterstützung für Server-seitige Sortierung:
-     - Spaltensortierung durch Klick auf Spaltenüberschriften
-     - Automatische API-Anfragen bei Sortierungsänderungen
-     - Beibehaltung von Sortier- und Filtereinstellungen bei Navigation
-
-3. **Architekturelle Verbesserungen:**
-   - Erweiterung des `DatabaseService` um eine neue `getTableData`-Methode für paginierte Tabellenanzeige
-   - Intelligente Fehlerbehandlung mit spezifischen Fehlermeldungen für verschiedene Datenbankengines
-   - Optimierte Datenbankabfragen für bessere Performance bei großen Tabellen
-   - Neue Routing-Integration in `App.js` für die dedizierte Tabellenansicht
-   - Verbesserte Breadcrumb-Navigation für eindeutige Orientierung
-
-Diese Erweiterung bietet eine professionelle, leistungsfähige Tabellenansicht mit folgenden Vorteilen:
-- Effiziente Anzeige sehr großer Datentabellen ohne Performance-Einbußen
-- Intuitive Benutzeroberfläche mit modernen Datentabellen-Features
-- Konsistente Darstellung verschiedener Datentypen
-- Nahtlose Integration in die bestehende Datenbankdetailansicht
-- Zuverlässige Funktionalität selbst bei langsamen Netzwerkverbindungen
-
-Die neue Tabellenansicht wird automatisch aktiviert, wenn ein Benutzer auf einen Tabellennamen in der Datenbankdetailansicht klickt, wodurch eine spezialisierte Seite für die ausgewählte Tabelle geladen wird.
-
-### Migration 008 - Removal of localStorage for Database Connections (2025-05-22)
-
-Diese Migration entfernte die Abhängigkeit von localStorage für die Verwaltung von Datenbankverbindungen und verbesserte damit die Architektur der Anwendung. Folgende Änderungen wurden implementiert:
-
-1. **Architekturelle Verbesserungen:**
-   - Vollständige Entfernung der localStorage-Fallback-Logik für Datenbankverbindungen
-   - Konsequente Nutzung der Backend-API als einzige Datenquelle für Verbindungsdetails
-   - Vereinfachung des Datenmodells und der Datenverwaltung
-   - Verbesserte Fehlererkennung und -behandlung im Frontend
-
-2. **Frontend-Änderungen:**
-   - Refactoring des `DatabaseService.js`:
-     - Entfernung aller localStorage-bezogenen Funktionen
-     - Direktes Weiterleiten von API-Fehlern an die aufrufenden Komponenten
-     - Implementierung einer neuen `getConnectionById`-Methode für einzelne Verbindungsdetails
-   - Aktualisierung aller abhängigen Komponenten:
-     - `DatabasesList.js`: Verwendet jetzt ausschließlich API-Aufrufe für Verbindungslisten
-     - `DatabaseForm.js`: Lädt Verbindungsdetails im Edit-Modus direkt von der API
-     - `DatabaseDetails.js`: Entfernt localStorage-Lookups und synchronisiert nicht mehr mit lokalem Speicher
-
-3. **Beibehaltene Funktionalität:**
-   - Sample Database bleibt verfügbar, wenn keine echten Verbindungen existieren
-   - Die Sample Database wird jetzt korrekt über API-Fehlerbehandlung implementiert
-   - Alle bestehenden Funktionen (Erstellen, Bearbeiten, Testen und Löschen von Verbindungen) bleiben erhalten
-
-Diese Migration verbesserte die Anwendung durch:
-- Vereinfachung des Codes und Verbesserung der Wartbarkeit
-- Beseitigung von potenziellen Synchronisierungsproblemen zwischen localStorage und Backend
-- Konsistentere Datenverwaltung, da Verbindungsdaten nur an einer Stelle gespeichert werden
-- Verbesserte Sicherheit durch Verringerung der im Browser gespeicherten sensiblen Daten
-- Klare Trennung von Verantwortlichkeiten im Code (Frontend vs. Backend)
-
-Für Endbenutzer bleibt die Funktionalität identisch, während die Anwendung intern robuster und wartungsfreundlicher wird.
+# Scheduler für regelmäßige Metrik-Sammlung
+scheduler = BackgroundScheduler(daemon=True)
+scheduler.add_job(collect_metrics, 'interval', minutes=1, id='metric_collector')
+scheduler.start()
+```
 
 ## Frontend-Komponenten
 

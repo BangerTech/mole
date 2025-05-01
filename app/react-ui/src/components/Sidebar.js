@@ -107,7 +107,7 @@ export default function Sidebar({ open }) {
             textAlign: 'center',
           }}
         >
-          Mole Database Manager v1.0
+          Mole Database Agent v0.5.0
         </Typography>
       </Box>
     </Box>

@@ -8,7 +8,8 @@ import os
 import time
 import logging
 import yaml
-import schedule
+import atexit
+from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 import subprocess
 import sys
@@ -45,6 +46,45 @@ logger = logging.getLogger(__name__)
 CONFIG_PATH = "/app/config/sync.yml"
 SCRIPTS_DIR = "/app/scripts"
 
+# --- Global storage for metric history --- 
+metrics_history: Dict[str, List[Dict[str, Union[float, int]]]] = {
+    'cpu': [],
+    'memory': []
+}
+MAX_HISTORY = 60 # Keep last 60 minutes (if collected every minute)
+
+# --- Function to collect metrics --- 
+def collect_metrics():
+    try:
+        logger.info("Attempting to collect system metrics...")
+        cpu = psutil.cpu_percent(interval=0.1)
+        mem = psutil.virtual_memory().percent
+        timestamp = time.time() * 1000 # Use milliseconds timestamp
+        
+        logger.info(f"Collected: CPU={cpu}%, Memory={mem}%")
+        
+        metrics_history['cpu'].append({'timestamp': timestamp, 'value': round(cpu, 1)})
+        metrics_history['memory'].append({'timestamp': timestamp, 'value': round(mem, 1)})
+        
+        # Trim old data
+        if len(metrics_history['cpu']) > MAX_HISTORY:
+            metrics_history['cpu'].pop(0)
+        if len(metrics_history['memory']) > MAX_HISTORY:
+            metrics_history['memory'].pop(0)
+            
+        logger.debug(f"Metrics history size: CPU={len(metrics_history['cpu'])}, Memory={len(metrics_history['memory'])}")
+    except Exception as e:
+        # Log the full error traceback
+        logger.error(f"Error collecting metrics: {str(e)}", exc_info=True) 
+
+# --- Initialize Scheduler --- 
+scheduler = BackgroundScheduler(daemon=True)
+scheduler.add_job(collect_metrics, 'interval', minutes=1, id='metric_collector')
+scheduler.start()
+
+# Ensure scheduler shuts down gracefully
+atexit.register(lambda: scheduler.shutdown())
+
 class DatabaseSync:
     """Main class to handle database synchronization tasks"""
     
@@ -79,7 +119,7 @@ class DatabaseSync:
         logger.info("Reloading configuration")
         self.config = self._load_config()
         # Clear existing jobs
-        schedule.clear()
+        scheduler.clear()
         # Setup jobs again
         self.setup_jobs()
     
@@ -117,12 +157,12 @@ class DatabaseSync:
         job_function = lambda: self._run_sync(connection)
         
         if frequency == "hourly":
-            schedule.every().hour.do(job_function)
+            scheduler.every().hour.do(job_function)
             logger.info(f"Scheduled {name} to run hourly")
         
         elif frequency == "daily":
             time_str = schedule_config.get("time", "02:00")
-            schedule.every().day.at(time_str).do(job_function)
+            scheduler.every().day.at(time_str).do(job_function)
             logger.info(f"Scheduled {name} to run daily at {time_str}")
         
         elif frequency == "weekly":
@@ -131,19 +171,19 @@ class DatabaseSync:
             
             for day in days:
                 if day == 1:
-                    schedule.every().monday.at(time_str).do(job_function)
+                    scheduler.every().monday.at(time_str).do(job_function)
                 elif day == 2:
-                    schedule.every().tuesday.at(time_str).do(job_function)
+                    scheduler.every().tuesday.at(time_str).do(job_function)
                 elif day == 3:
-                    schedule.every().wednesday.at(time_str).do(job_function)
+                    scheduler.every().wednesday.at(time_str).do(job_function)
                 elif day == 4:
-                    schedule.every().thursday.at(time_str).do(job_function)
+                    scheduler.every().thursday.at(time_str).do(job_function)
                 elif day == 5:
-                    schedule.every().friday.at(time_str).do(job_function)
+                    scheduler.every().friday.at(time_str).do(job_function)
                 elif day == 6:
-                    schedule.every().saturday.at(time_str).do(job_function)
+                    scheduler.every().saturday.at(time_str).do(job_function)
                 elif day == 7:
-                    schedule.every().sunday.at(time_str).do(job_function)
+                    scheduler.every().sunday.at(time_str).do(job_function)
             
             logger.info(f"Scheduled {name} to run weekly on days {days} at {time_str}")
         
@@ -157,7 +197,7 @@ class DatabaseSync:
                 if today.day == day:
                     job_function()
             
-            schedule.every().day.at(time_str).do(monthly_job)
+            scheduler.every().day.at(time_str).do(monthly_job)
             logger.info(f"Scheduled {name} to run monthly on day {day} at {time_str}")
         
         elif frequency == "custom":
@@ -173,10 +213,10 @@ class DatabaseSync:
                 # This is a simplified implementation - for complex cron expressions,
                 # you might want to use a library like croniter
                 if minute == "*":
-                    schedule.every().minute.do(job_function)
+                    scheduler.every().minute.do(job_function)
                 else:
                     for m in minute.split(','):
-                        schedule.every().hour.at(f":{m}").do(job_function)
+                        scheduler.every().hour.at(f":{m}").do(job_function)
                 
                 logger.info(f"Scheduled {name} with custom schedule: {cron}")
             except Exception as e:
@@ -511,7 +551,7 @@ echo "Sync completed!"
         
         try:
             while True:
-                schedule.run_pending()
+                scheduler.run_pending()
                 
                 # Check if config file was modified
                 if os.path.exists(CONFIG_PATH):
@@ -530,24 +570,54 @@ echo "Sync completed!"
 
 @app.route('/api/system/info', methods=['GET'])
 def get_system_info():
-    # Get real system information
-    cpu_usage = psutil.cpu_percent()
-    memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
-    
-    boot_time = datetime.fromtimestamp(psutil.boot_time())
-    uptime = datetime.now() - boot_time
-    days = uptime.days
-    hours, remainder = divmod(uptime.seconds, 3600)
-    
-    system_info = {
-        'cpuUsage': cpu_usage,
-        'memoryUsage': memory.percent,
-        'diskUsage': disk.percent,
-        'uptime': f"{days} days, {hours} hours"
-    }
-    
-    return jsonify(system_info)
+    try: # Added try...except block
+        # Get real system information
+        cpu_usage = psutil.cpu_percent(interval=0.1) # Add interval for non-blocking call
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        swap = psutil.swap_memory() # Get swap info
+
+        boot_time = datetime.fromtimestamp(psutil.boot_time())
+        uptime = datetime.now() - boot_time
+        days = uptime.days
+        hours, remainder = divmod(uptime.seconds, 3600)
+        minutes = int((remainder % 3600) // 60) # Correct calculation for minutes
+        uptime_str = f"{days} days, {hours} hours, {minutes} mins" # Updated format
+
+        # Helper to format bytes
+        def format_bytes(bts):
+            if bts < 1024: return f"{bts} Bytes"
+            elif bts < 1024**2: return f"{bts/1024:.2f} KB"
+            elif bts < 1024**3: return f"{bts/1024**2:.2f} MB"
+            else: return f"{bts/1024**3:.2f} GB"
+
+        system_info = {
+            'cpuUsage': round(cpu_usage, 1), # Rounded CPU usage
+            'memoryUsagePercent': round(memory.percent, 1),
+            'memoryUsed': format_bytes(memory.used),
+            'memoryTotal': format_bytes(memory.total),
+            'diskUsagePercent': round(disk.percent, 1),
+            'diskUsed': format_bytes(disk.used),
+            'diskTotal': format_bytes(disk.total),
+            'swapUsagePercent': round(swap.percent, 1), # Added Swap %
+            'swapUsed': format_bytes(swap.used),       # Added Swap Used
+            'swapTotal': format_bytes(swap.total),     # Added Swap Total
+            'uptime': uptime_str
+        }
+
+        # Add logging to see what is returned
+        logger.info(f"Returning system info: {system_info}")
+        return jsonify(system_info)
+        
+    except Exception as e:
+        logger.error(f"Error getting system info: {str(e)}", exc_info=True)
+        # Return default structure with N/A values on error
+        return jsonify({
+            'cpuUsage': 0, 'memoryUsagePercent': 0, 'memoryUsed': 'N/A', 'memoryTotal': 'N/A',
+            'diskUsagePercent': 0, 'diskUsed': 'N/A', 'diskTotal': 'N/A',
+            'swapUsagePercent': 0, 'swapUsed': 'N/A', 'swapTotal': 'N/A',
+            'uptime': 'N/A' 
+        }), 500
 
 @app.route('/api/databases', methods=['GET'])
 def get_databases():
@@ -1442,41 +1512,6 @@ def analyze_query(query):
     else:
         return "I've analyzed your query but don't have specific information about that. Please try asking about temperatures, energy consumption, user activity, transactions, or system performance."
 
-# Add a new API endpoint for database creation
-@app.route('/api/database/create', methods=['POST'])
-def create_database():
-    """
-    Create a new database using the create-database.php script
-    """
-    try:
-        data = request.json
-        
-        # Validate required fields
-        required_fields = ['db_type', 'db_name', 'db_host', 'db_port', 'db_user', 'db_pass']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({'success': False, 'message': f'Missing required field: {field}'})
-        
-        # Forward request to the create-database.php script
-        create_db_url = "http://app/db-creation/create-database.php"
-        response = requests.post(create_db_url, data=data)
-        
-        # Log the response
-        logger.info(f"Database creation request: {data['db_type']} - {data['db_name']} on {data['db_host']}")
-        
-        # Return the response from the PHP script
-        try:
-            return response.json()
-        except:
-            return jsonify({
-                'success': False, 
-                'message': f'Error parsing response from create-database.php: {response.text}'
-            })
-            
-    except Exception as e:
-        logger.error(f"Error creating database: {str(e)}")
-        return jsonify({'success': False, 'message': f'Server error: {str(e)}'})
-
 def get_sample_database():
     """
     Gibt die Konfiguration für die Sample-Datenbank zurück
@@ -1890,18 +1925,6 @@ class AIManager:
 # Initialize AI Manager
 ai_manager = AIManager()
 
-if __name__ == "__main__":
-    sync_manager = DatabaseSync()
-    # start the sync manager as a thread so it doesn't block the API server
-    import threading
-    thread = threading.Thread(target=sync_manager.run)
-    thread.daemon = True
-    thread.start()
-    
-    # Start the API server
-    logger.info("Starting API server on port 5000")
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False) 
-
 # Add new route for updating AI settings from Node.js backend
 @app.route('/api/ai/settings', methods=['POST'])
 def update_ai_settings():
@@ -2093,3 +2116,30 @@ def test_ai_provider():
             'success': False,
             'error': f"Error testing AI provider: {str(e)}"
         }), 500
+
+# --- Performance History Endpoint --- 
+@app.route('/api/system/performance-history', methods=['GET'])
+def get_performance_history_endpoint():
+    """Endpoint to provide historical performance metrics."""
+    metric = request.args.get('metric')
+    limit = request.args.get('limit', default=MAX_HISTORY, type=int)
+    logger.info(f"Received request for performance history: metric={metric}, limit={limit}")
+    logger.debug(f"Current metrics history state: {metrics_history}")
+    
+    if metric in metrics_history:
+        # Return the last 'limit' items
+        history_data = metrics_history[metric][-limit:]
+        logger.info(f"Found {len(history_data)} data points for metric '{metric}'")
+        return jsonify({
+            'success': True,
+            'metric': metric,
+            'history': history_data
+        })
+    else:
+        logger.warning(f"Invalid or missing metric '{metric}'. Available: {list(metrics_history.keys())}")
+        return jsonify({
+            'success': False,
+            'message': f'Invalid or missing metric parameter (use one of: {list(metrics_history.keys())})'
+        }), 400
+
+# --- End Performance History --- 

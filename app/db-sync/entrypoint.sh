@@ -53,5 +53,6 @@ else
     echo "Database sync service is disabled. Set 'enabled: true' in /app/config/sync.yml to enable it."
 fi
 
-# Keep the container running
-tail -f /dev/null 
+# Start the Flask API server using Gunicorn
+echo "Starting Flask API server on port 5000..."
+exec gunicorn --bind 0.0.0.0:5000 sync_manager:app 

@@ -270,6 +270,22 @@ class DatabaseService {
       return { success: false, message: message };
     }
   }
+
+  /**
+   * Fetches the top N largest tables across all connections.
+   * @param {number} limit - The maximum number of tables to fetch.
+   * @returns {Promise<Array>} Promise resolving to an array of top table objects.
+   */
+  async getTopTables(limit = 10) {
+    const apiUrl = `${API_URL}/top-tables`;
+    try {
+      const response = await axios.get(apiUrl, { params: { limit } });
+      return response.data?.topTables || []; // Return the topTables array
+    } catch (error) {
+      console.error('Error fetching top tables:', error);
+      return []; // Return empty array on error
+    }
+  }
 }
 
 // Singleton instance

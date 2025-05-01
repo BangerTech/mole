@@ -9,6 +9,7 @@ const mysql = require('mysql2/promise');
 const { Pool } = require('pg');
 const databaseService = require('../services/databaseService');
 const { encrypt, decrypt } = require('../utils/encryptionUtil');
+const { InfluxDB, Point } = require('@influxdata/influxdb-client');
 
 // Path for storing database connections in a JSON file (for migration/fallback)
 const DB_FILE_PATH = path.join(__dirname, '../data/database_connections.json');
@@ -212,9 +213,9 @@ exports.testConnection = async (req, res) => {
       } finally {
         // Ensure client is released and pool is ended regardless of response sending
         if (client) {
-          client.release();
+      client.release();
         }
-        await pool.end(); 
+      await pool.end();
       }
     }
     else if (engine.toLowerCase() === 'sqlite') {
@@ -244,365 +245,29 @@ exports.testConnection = async (req, res) => {
  * @param {Object} res - Express response object
  */
 exports.getDatabaseSchema = async (req, res) => {
+  const connectionId = req.params.id;
   try {
-    const connectionId = req.params.id;
+    // Call the service function to handle schema fetching logic
+    const schemaInfo = await databaseService.fetchSchemaForConnection(connectionId);
     
-    // Get connection details
-    const connection = await databaseService.getConnectionById(connectionId);
-    
-    if (!connection) {
-      return res.status(404).json({ message: 'Database connection not found' });
+    if (!schemaInfo) { // Should not happen if service handles errors, but safety check
+        return res.status(404).json({ success: false, message: 'Connection or schema not found.' });
     }
-    
-    const { engine, host, port, database, username, password, ssl_enabled } = connection;
-    
-    // Different connection logic based on database engine
-    if (engine.toLowerCase() === 'mysql') {
-      const mysqlConnection = await mysql.createConnection({
-        host: host || 'localhost',
-        port: port || 3306,
-        database,
-        user: username,
-        password: connection.encrypted_password ? decrypt(connection.encrypted_password) : password,
-        ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
-        connectTimeout: 10000 // 10 seconds timeout
-      });
-      
-      // Get tables
-      const [tablesResult] = await mysqlConnection.query(`
-        SELECT 
-          table_name AS name, 
-          table_type AS type,
-          table_rows AS row_count,
-          ROUND((data_length + index_length) / 1024) AS size_kb
-        FROM 
-          information_schema.tables 
-        WHERE 
-          table_schema = ?
-        ORDER BY
-          table_name
-      `, [database]);
-      
-      // Get columns for the tables
-      const [columnsResult] = await mysqlConnection.query(`
-        SELECT 
-          table_name,
-          column_name AS name, 
-          data_type AS type,
-          is_nullable AS nullable,
-          column_default AS default_value,
-          column_key AS key,
-          extra
-        FROM 
-          information_schema.columns 
-        WHERE 
-          table_schema = ?
-        ORDER BY
-          table_name, ordinal_position
-      `, [database]);
-      
-      // Group columns by table
-      const tableColumns = {};
-      columnsResult.forEach(column => {
-        if (!tableColumns[column.table_name]) {
-          tableColumns[column.table_name] = [];
-        }
-        tableColumns[column.table_name].push({
-          name: column.name,
-          type: column.type,
-          nullable: column.nullable === 'YES',
-          default: column.default_value,
-          key: column.key,
-          extra: column.extra
-        });
-      });
-      
-      // Format the final result
-      const tables = tablesResult.map(table => ({
-        name: table.name,
-        type: table.type === 'BASE TABLE' ? 'TABLE' : 'VIEW',
-        rows: table.row_count || 0,
-        size: `${Math.max(1, table.size_kb)} KB`,
-        columns: tableColumns[table.name]?.length || 0,
-        lastUpdated: new Date().toISOString().split('T')[0] // Just use today's date as we don't have actual update info
-      }));
-      
-      await mysqlConnection.end();
-      
-      res.status(200).json({
-        tables,
-        tableColumns,
-        success: true
-      });
-    } 
-    else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
-      const pool = new Pool({
-        host: host || 'localhost',
-        port: port || 5432,
-        database,
-        user: username,
-        password: connection.encrypted_password ? decrypt(connection.encrypted_password) : password,
-        ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
-        connectionTimeoutMillis: 10000 // 10 seconds timeout
-      });
-      
-      const client = await pool.connect();
-      
-      try {
-        // Get tables and views - Verbesserte Abfrage, die alle Tabellennamen als Identifizierer behandelt (mit Anführungszeichen)
-        const tablesQuery = `
-          SELECT 
-            table_name AS name,
-            table_type AS type,
-            (SELECT count(*) FROM information_schema.columns 
-             WHERE table_schema = $1 AND table_name = t.table_name) AS columns
-          FROM 
-            information_schema.tables t
-          WHERE 
-            table_schema = $1
-            AND table_type IN ('BASE TABLE', 'VIEW')
-          ORDER BY 
-            table_name
-        `;
-        
-        const tablesResult = await client.query(tablesQuery, ['public']);
-        
-        // Get size and row counts - Verbesserte Abfrage für pg_class
-        const sizeQuery = `
-          SELECT
-            c.relname AS name,
-            pg_size_pretty(pg_total_relation_size(c.oid)) AS size
-          FROM
-            pg_class c
-          JOIN
-            pg_namespace n ON n.oid = c.relnamespace
-          WHERE
-            n.nspname = $1
-            AND c.relkind IN ('r', 'v')  -- Tables and views
-          ORDER BY
-            c.relname
-        `;
-        
-        const sizeResult = await client.query(sizeQuery, ['public']);
-        
-        // Combine the results
-        const sizeMap = {};
-        sizeResult.rows.forEach(row => {
-          sizeMap[row.name] = {
-            rows: 0, // Default to 0 since n_live_tup is removed
-            size: row.size || '0 KB'
-          };
-        });
-        
-        // Get column information - Verbesserte Abfrage für Spalteninformationen
-        // Behandelt besser Identifizierer mit Sonderzeichen
-        const columnsQuery = `
-          SELECT 
-            c.table_name,
-            c.column_name AS name,
-            c.data_type AS type,
-            c.is_nullable AS nullable,
-            c.column_default AS default_value,
-            CASE 
-              WHEN pk.column_name IS NOT NULL THEN 'PRI'
-              WHEN uk.column_name IS NOT NULL THEN 'UNI'
-              WHEN fk.column_name IS NOT NULL THEN 'FOR'
-              ELSE ''
-            END AS key
-          FROM 
-            information_schema.columns c
-          LEFT JOIN (
-            SELECT 
-              kcu.column_name,
-              kcu.table_name
-            FROM 
-              information_schema.table_constraints tc
-            JOIN 
-              information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name
-            WHERE 
-              tc.constraint_type = 'PRIMARY KEY'
-              AND tc.table_schema = $1
-          ) pk ON pk.column_name = c.column_name AND pk.table_name = c.table_name
-          LEFT JOIN (
-            SELECT 
-              kcu.column_name,
-              kcu.table_name
-            FROM 
-              information_schema.table_constraints tc
-            JOIN 
-              information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name
-            WHERE 
-              tc.constraint_type = 'UNIQUE'
-              AND tc.table_schema = $1
-          ) uk ON uk.column_name = c.column_name AND uk.table_name = c.table_name
-          LEFT JOIN (
-            SELECT 
-              kcu.column_name,
-              kcu.table_name
-            FROM 
-              information_schema.table_constraints tc
-            JOIN 
-              information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name
-            WHERE 
-              tc.constraint_type = 'FOREIGN KEY'
-              AND tc.table_schema = $1
-          ) fk ON fk.column_name = c.column_name AND fk.table_name = c.table_name
-          WHERE 
-            c.table_schema = $1
-          ORDER BY
-            c.table_name, c.ordinal_position
-        `;
-        
-        const columnsResult = await client.query(columnsQuery, ['public']);
-        
-        // Group columns by table
-        const tableColumns = {};
-        columnsResult.rows.forEach(column => {
-          const tableName = column.table_name;
-          if (!tableColumns[tableName]) {
-            tableColumns[tableName] = [];
-          }
-          tableColumns[tableName].push({
-            name: column.name,
-            type: column.type,
-            nullable: column.nullable === 'YES',
-            default: column.default_value,
-            key: column.key,
-            extra: ''
-          });
-        });
-        
-        // Format the final result
-        const tables = tablesResult.rows.map(table => ({
-          name: table.name,
-          type: table.type === 'BASE TABLE' ? 'TABLE' : 'VIEW',
-          rows: sizeMap[table.name]?.rows || 0,
-          size: sizeMap[table.name]?.size || '0 KB',
-          columns: table.columns || 0,
-          lastUpdated: new Date().toISOString().split('T')[0] // Use today's date
-        }));
-        
-        // Calculate total size (approximation from fetched tables/views)
-        let totalSizeRaw = 0;
-        sizeResult.rows.forEach(row => {
-          // Convert human-readable size back to bytes (approximate)
-          const sizeMatch = row.size?.match(/([\d.]+)\s*(KB|MB|GB|TB)/i);
-          if (sizeMatch) {
-            const value = parseFloat(sizeMatch[1]);
-            const unit = sizeMatch[2].toUpperCase();
-            switch (unit) {
-              case 'KB': totalSizeRaw += value * 1024; break;
-              case 'MB': totalSizeRaw += value * 1024 * 1024; break;
-              case 'GB': totalSizeRaw += value * 1024 * 1024 * 1024; break;
-              case 'TB': totalSizeRaw += value * 1024 * 1024 * 1024 * 1024; break;
-            }
-          }
-        });
-        // Convert total bytes back to human-readable format
-        const formatBytes = (bytes, decimals = 2) => {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const dm = decimals < 0 ? 0 : decimals;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-        }
-        const totalSizeFormatted = formatBytes(totalSizeRaw);
 
-        client.release();
-        await pool.end();
-        
-        res.status(200).json({
-          tables,
-          tableColumns,
-          success: true,
-          totalSize: totalSizeFormatted // Add total size to response
-        });
-      } catch (error) {
-        client.release();
-        await pool.end();
-        console.error('PostgreSQL schema error:', error);
-        
-        // Falls es ein Fehler wegen der Identifizierer ist, versuchen wir eine einfachere Abfrage
-        try {
-          // Verbindung erneut herstellen
-          const fallbackPool = new Pool({
-            host: host || 'localhost',
-            port: port || 5432,
-            database,
-            user: username,
-            password: connection.encrypted_password ? decrypt(connection.encrypted_password) : password,
-            ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
-            connectionTimeoutMillis: 10000
-          });
-          
-          const fallbackClient = await fallbackPool.connect();
-          
-          // Einfachere Abfrage, die keine Identifizierer mit Bindestrichen verwendet
-          const simplifiedTablesQuery = `
-            SELECT table_name::text AS name 
-            FROM information_schema.tables 
-            WHERE table_schema = $1
-          `;
-          
-          const fallbackResult = await fallbackClient.query(simplifiedTablesQuery, ['public']);
-          
-          // Erstelle vereinfachte Tabellenliste
-          const simpleTables = fallbackResult.rows.map(row => ({
-            name: row.name,
-            type: 'TABLE',
-            rows: 0,
-            size: 'Unknown',
-            columns: 0,
-            lastUpdated: new Date().toISOString().split('T')[0]
-          }));
-          
-          fallbackClient.release();
-          await fallbackPool.end();
-          
-          // Rückgabe der vereinfachten Daten ohne Spaltendetails (und ohne Gesamtgröße)
-          res.status(200).json({
-            tables: simpleTables,
-            tableColumns: {},
-            success: true,
-            message: 'Simplified schema returned due to error with detailed query',
-            totalSize: 'N/A' // Indicate size couldn't be calculated
-          });
-          
-        } catch (fallbackError) {
-          console.error('Fallback schema error:', fallbackError);
-          res.status(200).json({
-            tables: [],
-            tableColumns: {},
-            success: true,
-            message: 'Failed to retrieve schema details: ' + error.message,
-            totalSize: 'N/A' // Indicate size couldn't be calculated
-          });
-        }
-      }
+    // Return the result from the service
+    if (schemaInfo.success) {
+        res.status(200).json(schemaInfo); // Contains { success, tables, tableColumns, totalSize, message? }
+    } else {
+        // Determine appropriate status code based on message or keep it simple
+        res.status(500).json(schemaInfo); // Contains { success: false, message, ... }
     }
-    else if (engine.toLowerCase() === 'sqlite') {
-      // For SQLite, we would use the sqlite3 module to connect
-      // This is a simplified implementation since SQLite is less common
-      res.status(200).json({
-        tables: [],
-        tableColumns: {},
-        success: true,
-        message: 'SQLite schema retrieval is not fully implemented yet'
-      });
-    }
-    else {
-      res.status(400).json({ 
-        success: false, 
-        message: `Unsupported database engine: ${engine}` 
-      });
-    }
-  }
-  catch (error) {
-    console.error('Database schema error:', error);
+
+  } catch (error) {
+    // Catch unexpected errors during the process
+    console.error(`Unexpected error in getDatabaseSchema controller for ${connectionId}:`, error);
     res.status(500).json({ 
       success: false, 
-      message: error.message || 'Failed to retrieve database schema' 
+      message: error.message || 'Internal server error fetching schema.' 
     });
   }
 };
@@ -870,37 +535,58 @@ exports.executeQuery = async (req, res) => {
 exports.getTableData = async (req, res) => {
   const { id: connectionId, tableName } = req.params;
   const { page = 1, limit = 25, sortBy = null, sortOrder = 'asc' } = req.query;
+  console.log(`[getTableData] Received request for DB ID: ${connectionId}, Table: ${tableName}`); // DEBUG
+  console.log(`[getTableData] Query Params: page=${page}, limit=${limit}, sortBy=${sortBy}, sortOrder=${sortOrder}`); // DEBUG
 
   // Validate and sanitize input
   const pageNum = parseInt(page, 10);
   const limitNum = parseInt(limit, 10);
   const sortOrderClean = sortOrder?.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-  // Basic validation for sortBy to prevent injection (allow only alphanumeric and underscore)
   const sortByClean = sortBy && /^[a-zA-Z0-9_]+$/.test(sortBy) ? sortBy : null;
   
   if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+      console.error(`[getTableData] Invalid pagination params: page=${page}, limit=${limit}`); // DEBUG
       return res.status(400).json({ success: false, message: 'Invalid pagination parameters.' });
   }
 
   const offset = (pageNum - 1) * limitNum;
 
   try {
+    console.log(`[getTableData] Fetching connection details for ID: ${connectionId}`); // DEBUG
     const connection = await databaseService.getConnectionById(connectionId);
     if (!connection) {
+      console.error(`[getTableData] Connection not found for ID: ${connectionId}`); // DEBUG
       return res.status(404).json({ success: false, message: 'Database connection not found' });
     }
+    // Log retrieved connection details (excluding password for security)
+    const { encrypted_password, password: plainPassword, ...connDetailsToLog } = connection; 
+    console.log(`[getTableData] Found connection details:`, connDetailsToLog); // DEBUG
 
-    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
-    let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
+    const { engine, host, port, database, username, ssl_enabled } = connection;
+    // Decrypt password carefully
+    let password = null;
+    try {
+        password = connection.encrypted_password ? decrypt(connection.encrypted_password) : connection.password;
+    } catch (decryptErr) {
+        console.error(`[getTableData] Decryption failed for connection ${connectionId}:`, decryptErr.message);
+        return res.status(500).json({ success: false, message: 'Failed to decrypt password for connection.' });
+    }
 
     let client; // General client/connection variable
     let rows = [];
     let columns = [];
     let totalRowCount = 0;
 
-    // Sanitize table name - simple quote escaping, adjust based on engine if needed
-    // A more robust solution might involve checking information_schema first
-    const safeTableName = tableName.replace(/\"/g, '\\"'); // Basic defense
+    // Use decodeURIComponent on tableName from params, as it might be encoded by the service
+    const decodedTableName = decodeURIComponent(tableName);
+    // Sanitize table name - more robust quoting needed based on engine
+    let safeTableName = decodedTableName.replace(/`/g, '``').replace(/\"/g, "\"\"").replace(/\'/g, "''"); // Basic defense, needs improvement
+    if (engine.toLowerCase() === 'mysql') {
+        safeTableName = `\\\`${decodedTableName.replace(/`/g, '``')}\\\``;
+    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+         safeTableName = `\\\"${decodedTableName.replace(/\"/g, "\"\"")}\\\"`;
+    }
+    console.log(`[getTableData] Using safe table name: ${safeTableName}`); // DEBUG
 
     if (engine.toLowerCase() === 'mysql') {
       const mysqlConnection = await mysql.createConnection({
@@ -916,11 +602,11 @@ exports.getTableData = async (req, res) => {
 
       try {
         // Construct ORDER BY clause
-        const orderByClause = sortByClean ? `ORDER BY \`${sortByClean}\` ${sortOrderClean}` : ''; // Use backticks for MySQL
+        const orderByClause = sortByClean ? `ORDER BY \\\`${sortByClean}\\\` ${sortOrderClean}` : ''; // Use backticks for MySQL
         
         // Data Query
-        const dataQuery = `SELECT * FROM \`${safeTableName}\` ${orderByClause} LIMIT ? OFFSET ?`;
-        console.log('MySQL Data Query:', dataQuery, [limitNum, offset]);
+        const dataQuery = `SELECT * FROM ${safeTableName} ${orderByClause} LIMIT ? OFFSET ?`;
+        console.log('[getTableData] MySQL Data Query:', dataQuery, [limitNum, offset]);
         const [dataResult] = await client.query(dataQuery, [limitNum, offset]);
         rows = dataResult;
 
@@ -938,7 +624,7 @@ exports.getTableData = async (req, res) => {
 
         // Count Query
         const countQuery = `SELECT COUNT(*) as count FROM \`${safeTableName}\``;
-        console.log('MySQL Count Query:', countQuery);
+        console.log('[getTableData] MySQL Count Query:', countQuery);
         const [countResult] = await client.query(countQuery);
         totalRowCount = countResult[0].count;
 
@@ -958,12 +644,13 @@ exports.getTableData = async (req, res) => {
       client = await pool.connect(); // Assign to general client
 
       try {
-        // Construct ORDER BY clause - Use double quotes for PostgreSQL identifiers
-        const orderByClause = sortByClean ? `ORDER BY \"${sortByClean}\" ${sortOrderClean}` : '';
+        // Construct ORDER BY clause - Use double quotes for PostgreSQL identifiers IF NEEDED (e.g., mixed case)
+        // For simple, validated names, direct injection is often okay.
+        const orderByClause = sortByClean ? `ORDER BY \\\"${sortByClean}\\\" ${sortOrderClean}` : ''; // Quoting needed for potentially mixed-case sort column
         
-        // Data Query
-        const dataQuery = `SELECT * FROM \"${safeTableName}\" ${orderByClause} LIMIT $1 OFFSET $2`;
-        console.log('PostgreSQL Data Query:', dataQuery, [limitNum, offset]);
+        // Data Query - Use the decoded table name directly without extra quotes for simple names
+        const dataQuery = `SELECT * FROM ${decodedTableName} ${orderByClause} LIMIT $1 OFFSET $2`;
+        console.log('[getTableData] PostgreSQL Data Query:', dataQuery, [limitNum, offset]); // DEBUG
         const dataResult = await client.query(dataQuery, [limitNum, offset]);
         rows = dataResult.rows;
 
@@ -978,13 +665,13 @@ exports.getTableData = async (req, res) => {
               SELECT column_name 
               FROM information_schema.columns 
               WHERE table_schema = 'public' AND table_name = $1 
-              ORDER BY ordinal_position;`, [safeTableName]);
+              ORDER BY ordinal_position;`, [decodedTableName]);
             columns = colsInfo.rows.map(r => r.column_name);
         }
 
-        // Count Query
-        const countQuery = `SELECT COUNT(*) as count FROM \"${safeTableName}\"`;
-        console.log('PostgreSQL Count Query:', countQuery);
+        // Count Query - Use decoded table name directly
+        const countQuery = `SELECT COUNT(*) as count FROM ${decodedTableName}`;
+        console.log('[getTableData] PostgreSQL Count Query:', countQuery); // DEBUG
         const countResult = await client.query(countQuery);
         totalRowCount = parseInt(countResult.rows[0].count, 10);
 
@@ -993,9 +680,11 @@ exports.getTableData = async (req, res) => {
         await pool.end();
       }
     } else {
+      console.warn(`[getTableData] Unsupported engine: ${engine}`); // DEBUG
       return res.status(400).json({ success: false, message: `Unsupported database engine for table data: ${engine}` });
     }
 
+    console.log(`[getTableData] Successfully fetched ${rows.length} rows, total count: ${totalRowCount}`); // DEBUG
     res.status(200).json({
       success: true,
       rows,
@@ -1004,7 +693,7 @@ exports.getTableData = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(`Error fetching data for table ${tableName}:`, error);
+    console.error(`[getTableData] Error fetching data for table ${tableName}:`, error); // DEBUG with context
     // Provide more specific error if possible (e.g., table not found)
     let errorMessage = 'Internal server error fetching table data.';
     if (error.message.includes('relation') && error.message.includes('does not exist')) {
@@ -1196,4 +885,269 @@ exports.deleteTable = async (req, res) => {
     console.error(`Error deleting table ${tableName}:`, error);
     res.status(500).json({ success: false, message: 'Internal server error deleting table.', error: error.message });
   }
-}; 
+};
+
+// Helper function (can be kept here or moved to utils if needed elsewhere)
+const parseSizeToBytes = (sizeStr) => {
+  if (!sizeStr || typeof sizeStr !== 'string') return 0;
+  // Relaxed regex to handle potential missing space
+  const sizeMatch = sizeStr.match(/([\\d.]+)\\s*(Bytes|KB|MB|GB|TB)/i);
+  if (sizeMatch) {
+    const value = parseFloat(sizeMatch[1]);
+    const unit = sizeMatch[2].toUpperCase();
+    switch (unit) {
+      case 'BYTES': return value;
+      case 'KB': return value * 1024;
+      case 'MB': return value * 1024 * 1024;
+      case 'GB': return value * 1024 * 1024 * 1024;
+      case 'TB': return value * 1024 * 1024 * 1024 * 1024;
+      default: return 0;
+    }
+  }
+  // Handle cases like 'N/A' or 'Unknown' gracefully
+  return 0;
+};
+
+/**
+ * Get the top N largest tables across all real database connections.
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getTopTables = async (req, res) => {
+  const limit = parseInt(req.query.limit, 10) || 10; // Default to top 10
+
+  try {
+    const connections = await databaseService.getAllConnections();
+    const realConnections = connections.filter(conn => conn.id && !conn.isSample);
+
+    if (realConnections.length === 0) {
+      // No real connections, return empty list immediately
+      return res.status(200).json({ success: true, topTables: [] });
+    }
+
+    let allTables = [];
+
+    // Fetch schema details for all connections concurrently
+    const schemaPromises = realConnections.map(conn =>
+      databaseService.fetchSchemaForConnection(conn.id)
+        // Add error handling for individual schema fetches
+        .catch(err => {
+          console.error(`Schema fetch failed for DB ID ${conn.id} (${conn.name}):`, err.message);
+          return { success: false, message: err.message, tables: [] }; // Return a standard error structure
+        })
+    );
+
+    const results = await Promise.all(schemaPromises);
+
+    results.forEach((schemaInfo, index) => {
+      const connection = realConnections[index];
+      // Check explicitly for success and tables array existence
+      if (schemaInfo && schemaInfo.success && Array.isArray(schemaInfo.tables)) {
+        schemaInfo.tables.forEach(table => {
+          // Ensure table size is handled gracefully before parsing
+          const sizeFormatted = table.size || '0 Bytes'; // Default to '0 Bytes' if size is missing
+          const sizeBytes = parseSizeToBytes(sizeFormatted);
+
+          allTables.push({
+            tableName: table.name,
+            dbName: connection.name, // Use the connection name
+            dbId: connection.id,
+            sizeFormatted: sizeFormatted, // Use the potentially defaulted value
+            sizeBytes: sizeBytes
+          });
+        });
+      } else {
+        // Log failure but continue aggregation
+        console.warn(`Skipping tables for ${connection.name} (ID: ${connection.id}) due to schema fetch issue: ${schemaInfo?.message || 'Unknown error'}`);
+      }
+    });
+
+    // Sort by size descending and take limit
+    const topTables = allTables
+      .sort((a, b) => b.sizeBytes - a.sizeBytes)
+      .slice(0, limit);
+
+    res.status(200).json({ success: true, topTables });
+
+  } catch (error) {
+    console.error('Error fetching top tables:', error);
+    res.status(500).json({ success: false, message: 'Internal server error fetching top tables.', error: error.message });
+  }
+};
+
+/**
+ * Create a new database instance (PostgreSQL, MySQL) or Bucket (InfluxDB)
+ * Uses admin credentials from environment variables.
+ * After successful creation, saves a connection entry using user-provided details.
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.createDatabaseInstance = async (req, res) => {
+  // Extract details provided by the user for the connection entry
+  const { engine: userEngineChoice, name: connectionName, host: userHost, port: userPort, username: connectionUser, password: connectionPassword, ssl_enabled: userSslEnabled, notes: userNotes } = req.body;
+  // Use the connection name as the database/bucket name to be created
+  const dbNameToCreate = connectionName;
+
+  console.log(`[createDatabaseInstance] Request received: Engine=${userEngineChoice}, Name=${dbNameToCreate}`);
+
+  // --- Input Validation --- 
+  if (!userEngineChoice || !dbNameToCreate || !connectionUser) { // Password can be empty
+    console.error('[createDatabaseInstance] Missing required fields in request body (engine, name, username are required).');
+    return res.status(400).json({ success: false, message: 'Missing required fields: engine, name, username are required.' });
+  }
+  // Strict validation for database/bucket name (alphanumeric + underscore ONLY)
+  if (!/^[a-zA-Z0-9_]+$/.test(dbNameToCreate)) {
+    console.error(`[createDatabaseInstance] Invalid database/bucket name format: ${dbNameToCreate}`);
+    return res.status(400).json({ success: false, message: 'Invalid database name. Use only letters, numbers, and underscores.' });
+  }
+
+  let creationSuccess = false;
+  let creationMessage = '';
+
+  // --- Database/Bucket Creation Logic --- 
+  try { // Outer try block for the creation process
+    if (userEngineChoice.toLowerCase() === 'postgresql') {
+      // Read PG Admin credentials and target from ENV vars
+      const pgAdminUser = process.env.DB_CREATE_PG_USER || 'postgres';
+      const pgAdminPassword = process.env.DB_CREATE_PG_PASSWORD;
+      const pgHost = process.env.DB_CREATE_PG_HOST || 'mole-postgres';
+      const pgPort = process.env.DB_CREATE_PG_PORT || 5432;
+
+      if (!pgAdminPassword) {
+        throw new Error('PostgreSQL admin password (DB_CREATE_PG_PASSWORD) not configured.');
+      }
+
+      const pool = new Pool({
+        host: pgHost, port: pgPort, user: pgAdminUser, password: pgAdminPassword,
+        database: 'postgres', // Connect to default db to create a new one
+        connectionTimeoutMillis: 10000
+      });
+      const client = await pool.connect();
+      console.log(`[createDatabaseInstance] Connected to PG admin@${pgHost} to check/create ${dbNameToCreate}`);
+      try {
+        const checkRes = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbNameToCreate]);
+        if (checkRes.rowCount > 0) {
+          creationSuccess = true;
+          creationMessage = `PostgreSQL database '${dbNameToCreate}' already exists.`;
+          console.log(creationMessage);
+        } else {
+          // Since dbNameToCreate is validated, we can use it directly. PG identifiers are often case-insensitive unless quoted.
+          // Using standard double quotes for safety, although potentially unnecessary for validated names.
+          await client.query(`CREATE DATABASE \\\"${dbNameToCreate}\\\"` );
+          creationSuccess = true;
+          creationMessage = `PostgreSQL database '${dbNameToCreate}' created successfully.`;
+          console.log(creationMessage);
+        }
+      } finally {
+        client.release();
+        await pool.end();
+      }
+    } else if (userEngineChoice.toLowerCase() === 'mysql') {
+      // Read MySQL Admin credentials and target from ENV vars
+      const mysqlAdminUser = process.env.DB_CREATE_MYSQL_USER || 'root';
+      const mysqlAdminPassword = process.env.DB_CREATE_MYSQL_PASSWORD;
+      const mysqlHost = process.env.DB_CREATE_MYSQL_HOST || 'mole-mysql';
+      const mysqlPort = process.env.DB_CREATE_MYSQL_PORT || 3306;
+
+      if (!mysqlAdminPassword) {
+        throw new Error('MySQL admin password (DB_CREATE_MYSQL_PASSWORD) not configured.');
+      }
+
+      const connection = await mysql.createConnection({
+          host: mysqlHost, port: mysqlPort, user: mysqlAdminUser, password: mysqlAdminPassword,
+          connectTimeout: 10000
+      });
+      console.log(`[createDatabaseInstance] Connected to MySQL admin@${mysqlHost} to check/create ${dbNameToCreate}`);
+      try {
+        // Use CREATE DATABASE IF NOT EXISTS. Backticks are standard for MySQL identifiers.
+        await connection.query(`CREATE DATABASE IF NOT EXISTS \\\`${dbNameToCreate}\\\``);
+        creationSuccess = true;
+        creationMessage = `MySQL database '${dbNameToCreate}' created or already exists.`;
+        console.log(creationMessage);
+      } finally {
+          await connection.end();
+      }
+    } else if (userEngineChoice.toLowerCase() === 'influxdb') {
+      // Read InfluxDB config from ENV vars
+      const influxUrl = process.env.DB_CREATE_INFLUXDB_URL || 'http://mole-influxdb:8086';
+      const influxToken = process.env.DB_CREATE_INFLUXDB_TOKEN;
+      const influxOrgName = process.env.DB_CREATE_INFLUXDB_ORG; // Org Name is needed for bucket creation
+
+      if (!influxToken || !influxOrgName) {
+          throw new Error('InfluxDB config (URL, TOKEN, ORG) incomplete in ENV vars.');
+      }
+
+      console.log(`[createDatabaseInstance] Creating InfluxDB bucket '${dbNameToCreate}' in org '${influxOrgName}' at ${influxUrl}`);
+      const influxDB = new InfluxDB({ url: influxUrl, token: influxToken });
+      const bucketsAPI = influxDB.getBucketsApi();
+
+      try {
+          const buckets = await bucketsAPI.getBuckets({ name: dbNameToCreate, orgName: influxOrgName });
+          if (buckets && buckets.buckets && buckets.buckets.length > 0) {
+              creationSuccess = true;
+              creationMessage = `InfluxDB bucket '${dbNameToCreate}' already exists.`;
+              console.log(creationMessage);
+          } else {
+              await bucketsAPI.createBucket({ orgName: influxOrgName, name: dbNameToCreate, retentionRules: [] });
+              creationSuccess = true;
+              creationMessage = `InfluxDB bucket '${dbNameToCreate}' created successfully.`;
+              console.log(creationMessage);
+          }
+      } catch (influxError) {
+          console.error(`[createDatabaseInstance] Error with InfluxDB API:`, influxError);
+          creationMessage = `Failed to create InfluxDB bucket: ${influxError.message || 'InfluxDB API error'}`;
+          // Do not set creationSuccess = true
+          throw influxError; // Rethrow to be caught by the outer catch block
+      }
+    } else {
+      // Handle unsupported engine
+      creationMessage = `Unsupported database engine for creation: ${userEngineChoice}`;
+      return res.status(400).json({ success: false, message: creationMessage });
+    }
+
+    // --- If creation step was successful, save the connection entry --- 
+    if (creationSuccess) {
+      console.log('[createDatabaseInstance] Proceeding to save connection entry.');
+      try {
+          const connectionToSave = {
+              name: connectionName, // User-provided connection name
+              engine: userEngineChoice, // User-chosen engine
+              host: userHost, // User-provided host for connecting later
+              port: userPort || (userEngineChoice === 'PostgreSQL' ? 5432 : (userEngineChoice === 'MySQL' ? 3306 : 8086)), // User-provided port or default
+              database: dbNameToCreate, // The name of the database/bucket created
+              username: connectionUser, // User-provided username
+              password: connectionPassword, // User-provided password
+              ssl_enabled: userSslEnabled || false,
+              notes: userNotes || '',
+              isSample: false
+          };
+          const savedConnection = await databaseService.createConnection(connectionToSave);
+          console.log('[createDatabaseInstance] Saved connection entry:', savedConnection);
+          // Return success with the original creation message and the new connection details
+          return res.status(201).json({ success: true, message: creationMessage, connection: savedConnection });
+      } catch (saveError) {
+          // Log the error but inform the user the DB was created
+          console.error('[createDatabaseInstance] Error saving connection entry after successful DB/Bucket creation:', saveError);
+          return res.status(207).json({ 
+              success: true, 
+              message: `${creationMessage}. However, failed to save connection details automatically: ${saveError.message}. Please add the connection manually.`,
+              warning: 'Failed to save connection details automatically.' 
+          }); // 207 Multi-Status
+      }
+    } else {
+       // This case should ideally not be reached if errors are thrown above, but acts as a safeguard
+       console.error(`[createDatabaseInstance] Reached end without success flag for ${dbNameToCreate}. Message: ${creationMessage}`);
+       return res.status(500).json({ success: false, message: creationMessage || 'Database/Bucket creation failed for an unknown reason.' });
+    } // Close if(creationSuccess)
+
+  } catch (error) { // Outer catch block for the entire process
+    console.error(`[createDatabaseInstance] General error during instance creation for ${dbNameToCreate}:`, error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Internal server error during database creation.',
+      error: error.message // Provide error message for debugging
+    });
+  } // Close outer catch block
+};
+
+// ... rest of the controller ... 

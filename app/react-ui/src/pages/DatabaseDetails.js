@@ -88,14 +88,14 @@ const DatabaseDetails = () => {
   // Fetch database details and schema
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
+        setLoading(true);
       setError(null);
       setDatabase(null);
       setTables([]);
       setStructure([]);
       setTableColumns({});
-
-      let databaseInfo = null;
+        
+        let databaseInfo = null;
       const isSampleId = databaseId === '1'; // Assuming '1' is the designated sample ID
 
       try {
@@ -110,22 +110,22 @@ const DatabaseDetails = () => {
         // If the ID was the sample ID and API fetch failed (e.g., 404), load sample data
         if (isSampleId) {
           console.log('ID is for sample database and API fetch failed. Loading sample data.');
-          databaseInfo = {
-            id: '1',
-            name: 'Sample Database',
-            engine: 'PostgreSQL',
-            host: 'localhost',
-            port: 5432,
-            database: 'sample_db',
+            databaseInfo = {
+              id: '1',
+              name: 'Sample Database',
+              engine: 'PostgreSQL',
+              host: 'localhost',
+              port: 5432,
+              database: 'sample_db',
             version: '13.4', // Example field
             size: '128.9 MB', // Example field
             tables: 25, // Example field
             views: 5, // Example field
             created: '2023-02-22', // Example field
             lastBackup: '2023-05-12', // Example field
-            lastConnected: '2023-05-20',
-            isSample: true
-          };
+              lastConnected: '2023-05-20',
+              isSample: true
+            };
         } else {
           // If it wasn't the sample ID and API fetch failed, set an error
           setError(`Failed to load database connection: ${fetchError.response?.data?.message || fetchError.message}`);
@@ -138,7 +138,7 @@ const DatabaseDetails = () => {
       if (databaseInfo) {
         setDatabase(databaseInfo);
         console.log('Using database details:', databaseInfo);
-
+        
         // For real (non-sample) databases, fetch actual schema information
         if (!databaseInfo.isSample) {
           try {
@@ -198,11 +198,11 @@ const DatabaseDetails = () => {
         setError('Could not load database information.');
       }
 
-      setLoading(false);
+        setLoading(false);
     };
     
     if (databaseId) { // Only fetch if an ID is present in the URL
-      fetchData();
+    fetchData();
     } else {
       setError('No database ID provided in URL.');
       setLoading(false);
@@ -285,7 +285,7 @@ const DatabaseDetails = () => {
     if (!database || !database.id || database.isSample) {
       console.error('Cannot delete: No valid database selected or it is a sample.');
       setError('Cannot delete this connection.'); // Provide feedback
-      setOpenDeleteDialog(false);
+    setOpenDeleteDialog(false);
       return;
     }
     
@@ -325,7 +325,7 @@ const DatabaseDetails = () => {
     console.log(`Navigating to table view for: ${table.name}`);
     // Navigate to the dedicated TableView component
     navigate(`/databases/${database.id}/tables/${encodeURIComponent(table.name)}`);
-
+    
     // We no longer set structure or change tabs here
     // setSelectedTable(table.name);
     // if (tableColumns && tableColumns[table.name]) {
@@ -635,56 +635,56 @@ const DatabaseDetails = () => {
                 </FormControl>
               </Box>
             )}
-
+            
             {/* Display Table Structure */} 
             {selectedTable && structure.length > 0 && (
               <>
                 <Typography variant="subtitle1" gutterBottom>Structure for: {selectedTable}</Typography>
                 <TableContainer sx={{ mb: 3, maxHeight: '300px', overflowY: 'auto' }}> {/* Limit height */}
                   <Table size="small" stickyHeader> {/* Add stickyHeader */}
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Nullable</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Default</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Key</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Extra</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {structure.map((column, index) => (
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Nullable</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Default</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Key</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Extra</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {structure.map((column, index) => (
                         <TableRow key={`${selectedTable}-col-${index}`}> {/* Add unique key */}
-                          <TableCell>{column.name}</TableCell>
-                          <TableCell>{column.type}</TableCell>
-                          <TableCell>{column.nullable ? 'YES' : 'NO'}</TableCell>
-                          <TableCell>{column.default || 'NULL'}</TableCell>
-                          <TableCell>
-                            {column.key && (
-                              <Chip
-                                label={column.key}
-                                size="small"
-                                sx={{ 
-                                  height: 20,
-                                  fontSize: '0.7rem',
-                                  borderRadius: 1,
-                                  bgcolor: column.key === 'PRI' ? 
-                                    theme.palette.primary.main + '20' : 
-                                    theme.palette.secondary.main + '20',
-                                  color: column.key === 'PRI' ? 
-                                    theme.palette.primary.main : 
-                                    theme.palette.secondary.main,
-                                  fontWeight: 'bold'
-                                }}
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell>{column.extra}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                      <TableCell>{column.name}</TableCell>
+                      <TableCell>{column.type}</TableCell>
+                      <TableCell>{column.nullable ? 'YES' : 'NO'}</TableCell>
+                      <TableCell>{column.default || 'NULL'}</TableCell>
+                      <TableCell>
+                        {column.key && (
+                          <Chip
+                            label={column.key}
+                            size="small"
+                            sx={{ 
+                              height: 20,
+                              fontSize: '0.7rem',
+                              borderRadius: 1,
+                              bgcolor: column.key === 'PRI' ? 
+                                theme.palette.primary.main + '20' : 
+                                theme.palette.secondary.main + '20',
+                              color: column.key === 'PRI' ? 
+                                theme.palette.primary.main : 
+                                theme.palette.secondary.main,
+                              fontWeight: 'bold'
+                            }}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell>{column.extra}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
               </>
             )}
 

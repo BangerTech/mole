@@ -261,7 +261,7 @@ export default function QueryEditor() {
   const handleModeChange = (event, newMode) => {
     // Allow switching modes again
     if (newMode !== null) { // Ensure a mode is selected
-       setEditorMode(newMode);
+    setEditorMode(newMode);
     }
   };
 
@@ -313,8 +313,8 @@ export default function QueryEditor() {
     if (!results || !results.rows || !results.columns) return;
     
     try {
-      const headers = results.columns.join(',');
-      const rows = results.rows.map(row => 
+    const headers = results.columns.join(',');
+    const rows = results.rows.map(row => 
         results.columns.map(col => {
           let cellValue = row[col];
           if (cellValue === null || cellValue === undefined) {
@@ -325,19 +325,19 @@ export default function QueryEditor() {
           stringValue = stringValue.replace(/"/g, '""'); 
           return `"${stringValue}"`;
         }).join(',')
-      ).join('\n');
-      
-      const csv = `${headers}\n${rows}`;
+    ).join('\n');
+    
+    const csv = `${headers}\n${rows}`;
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'query_results.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'query_results.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     } catch(e) {
        console.error("CSV Export failed:", e);
        setError("Failed to generate CSV file.");
@@ -449,7 +449,7 @@ export default function QueryEditor() {
     const tableDefinition = { tableName: newTableName, columns: newColumns };
     handleCloseCreateTableDialog();
     setLoading(true); // Indicate loading
-    setError(null);
+      setError(null);
     
     try {
         const result = await DatabaseService.createTable(database.id, tableDefinition);
@@ -484,7 +484,7 @@ export default function QueryEditor() {
     
     const tableToDelete = selectedTable;
     setOpenDeleteTableDialog(false);
-    setLoading(true); 
+    setLoading(true);
     setError(null);
 
     try {
@@ -492,7 +492,7 @@ export default function QueryEditor() {
         if (result.success) {
              setSnackbar({ open: true, message: result.message || `Table "${tableToDelete}" deleted.`, severity: 'success' });
              setSelectedTable(null); // Clear selection
-             setTableStructure([]);
+      setTableStructure([]);
              await refreshTableList(); // Refresh sidebar
         } else {
             setError(result.message || 'Failed to delete table.');
@@ -502,7 +502,7 @@ export default function QueryEditor() {
          setError(err.message || 'An unexpected error occurred.');
          setSnackbar({ open: true, message: err.message || 'An unexpected error occurred.', severity: 'error' });
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -638,11 +638,11 @@ export default function QueryEditor() {
 
       <Grid container spacing={3} sx={{ height: 'calc(100vh - 250px)' }}> {/* Adjust height */}
           {/* Table List Sidebar */}
-          <Grid item xs={12} md={3}>
-            <Paper sx={{ height: '100%', overflow: 'auto', p: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Grid item xs={12} md={3}>
+              <Paper sx={{ height: '100%', overflow: 'auto', p: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                     <Typography variant="subtitle1" fontWeight={500}>Tables</Typography>
-                    <Tooltip title="Create new table">
+                  <Tooltip title="Create new table">
                         <span> {/* Tooltip needs a span wrapper if button is disabled */} 
                         <IconButton 
                             size="small" 
@@ -650,10 +650,10 @@ export default function QueryEditor() {
                             onClick={handleCreateTable}
                             disabled={!database || database.isSample} // Disable for sample DB
                         >
-                        <AddIcon />
-                        </IconButton>
+                      <AddIcon />
+                    </IconButton>
                         </span>
-                    </Tooltip>
+                  </Tooltip>
                 </Box>
                 <Divider sx={{ mb: 2 }} />
                 {loading && tables.length === 0 && <CircularProgress size={20} />} 
@@ -677,56 +677,56 @@ export default function QueryEditor() {
                     </ListItem>
                   ))}
                 </List>
-            </Paper>
-          </Grid>
-
+              </Paper>
+            </Grid>
+            
           {/* Editor and Results Area */} 
           <Grid item xs={12} md={9} sx={{ display: 'flex', flexDirection: 'column' }}>
             {/* Editor Area */} 
-            <Paper sx={{ p: 2, mb: 3 }}>
-              <QueryTextarea
-                fullWidth
-                multiline
-                rows={8}
+              <Paper sx={{ p: 2, mb: 3 }}>
+                <QueryTextarea
+                  fullWidth
+                  multiline
+                  rows={8}
                 placeholder={database ? `Enter your SQL query for ${database.name}...` : 'Select a database connection'}
-                value={query}
-                onChange={handleQueryChange}
-                variant="outlined"
-                className="query-editor"
-                InputProps={{
-                  sx: { fontFamily: '"SF Mono", Monaco, Consolas, "Courier New", monospace' }
-                }}
-                disabled={!database || loading}
-              />
-              
-              <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-                <Button
-                  variant="contained"
-                  startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
-                  onClick={handleRun}
-                  disabled={loading || !query.trim() || !database || database.isSample} // Disable run for sample DB
-                >
-                  Run query
-                </Button>
-                <Button
+                  value={query}
+                  onChange={handleQueryChange}
                   variant="outlined"
-                  startIcon={<ClearIcon />}
-                  onClick={handleClear}
-                  disabled={loading}
-                >
-                  Clear
-                </Button>
-                {results && results.success && results.rows && results.rows.length > 0 && (
+                  className="query-editor"
+                  InputProps={{
+                    sx: { fontFamily: '"SF Mono", Monaco, Consolas, "Courier New", monospace' }
+                  }}
+                disabled={!database || loading}
+                />
+                
+                <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                  <Button
+                    variant="contained"
+                  startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
+                    onClick={handleRun}
+                  disabled={loading || !query.trim() || !database || database.isSample} // Disable run for sample DB
+                  >
+                    Run query
+                  </Button>
                   <Button
                     variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    onClick={downloadResults}
+                    startIcon={<ClearIcon />}
+                    onClick={handleClear}
+                  disabled={loading}
                   >
-                    Download results
+                    Clear
                   </Button>
-                )}
-              </Box>
-            </Paper>
+                {results && results.success && results.rows && results.rows.length > 0 && (
+                    <Button
+                      variant="outlined"
+                      startIcon={<DownloadIcon />}
+                      onClick={downloadResults}
+                    >
+                      Download results
+                    </Button>
+                  )}
+                </Box>
+              </Paper>
 
             {/* Results Area */} 
             {loading && <Box sx={{ display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box>}
@@ -736,52 +736,52 @@ export default function QueryEditor() {
                   <CardContent sx={{ p: 0, '&:last-child': { pb: 0 }, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
                     {results.success ? (
                       <>
-                        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                          <Typography variant="subtitle1">
+                    <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                      <Typography variant="subtitle1">
                             {results.rows ? 
                               `Results: ${results.rows.length} rows (Page ${page + 1})` : 
                               results.message || 'Query Executed'}
                             {results.affectedRows > 0 && ` - ${results.affectedRows} rows affected`}
-                          </Typography>
-                        </Box>
+                      </Typography>
+                    </Box>
                         {results.rows && results.columns && results.rows.length > 0 ? (
                           <>
-                            <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-                              <TableContainer>
+                    <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+                      <TableContainer>
                                 <Table stickyHeader size="small">
-                                  <TableHead>
-                                    <TableRow>
-                                      {results.columns.map((column) => (
+                          <TableHead>
+                            <TableRow>
+                              {results.columns.map((column) => (
                                         <TableCell key={column} sx={{ fontWeight: 'bold' }}>{column}</TableCell>
-                                      ))}
-                                    </TableRow>
-                                  </TableHead>
-                                  <TableBody>
-                                    {results.rows
+                              ))}
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {results.rows
                                       // Client-side pagination of the current result set
-                                      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                                      .map((row, index) => (
+                              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                              .map((row, index) => (
                                         <TableRow key={`row-${page}-${index}`}>
-                                          {results.columns.map((column) => (
+                                  {results.columns.map((column) => (
                                             <TableCell key={`${column}-${page}-${index}`}>
                                               {String(row[column] !== null && row[column] !== undefined ? row[column] : 'NULL')}
-                                            </TableCell>
-                                          ))}
-                                        </TableRow>
-                                      ))}
-                                  </TableBody>
-                                </Table>
-                              </TableContainer>
-                            </Box>
-                            <TablePagination
-                              component="div"
+                                    </TableCell>
+                                  ))}
+                                </TableRow>
+                              ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                    <TablePagination
+                      component="div"
                               count={results.rows.length} // Paginate based on fetched rows
-                              rowsPerPage={rowsPerPage}
-                              page={page}
-                              onPageChange={handleChangePage}
-                              onRowsPerPageChange={handleChangeRowsPerPage}
-                              rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                            />
+                      rowsPerPage={rowsPerPage}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      onRowsPerPageChange={handleChangeRowsPerPage}
+                      rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                    />
                           </>
                         ) : (
                           <Box sx={{ p: 2 }}>
@@ -796,8 +796,8 @@ export default function QueryEditor() {
                     )}
                   </CardContent>
                 </ResultsCard>
-            )}
-          </Grid>
+              )}
+            </Grid>
       </Grid>
 
       {/* Create Table Dialog (Restored UI, logic pending API) */} 
@@ -827,7 +827,7 @@ export default function QueryEditor() {
           {newColumns.map((column, index) => (
             <Box key={index} sx={{ mb: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
               <Grid container spacing={2} alignItems="center">
-                 <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={4}>
                   <TextField
                     fullWidth label="Column name" value={column.name}
                     onChange={(e) => handleColumnChange(index, 'name', e.target.value)}
@@ -887,8 +887,8 @@ export default function QueryEditor() {
                     />
                     {/* Allow deleting the first column too if needed, but usually ID is required */}
                     <IconButton size="small" color="error" onClick={() => handleRemoveColumn(index)} disabled={newColumns.length <= 1}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
                   </Stack>
                 </Grid>
               </Grid>

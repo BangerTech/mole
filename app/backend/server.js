@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const dotenv = require('dotenv');
 const axios = require('axios');
+const { initDatabase } = require('./models/database');
 
 // Load environment variables
 dotenv.config();
@@ -13,6 +14,7 @@ const emailRoutes = require('./routes/emailRoutes');
 const authRoutes = require('./routes/authRoutes');
 const databaseRoutes = require('./routes/databaseRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const eventLogRoutes = require('./routes/eventLogRoutes');
 
 // Create Express app
 const app = express();
@@ -25,32 +27,85 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Define routes
+// Initialize database
+initDatabase().catch(err => {
+  console.error('Failed to initialize database:', err);
+});
+
+// Serve static files from the React app build directory
+// Use path.resolve from __dirname to get the correct absolute path
+const buildPath = path.resolve(__dirname, '..', 'react-ui', 'build');
+console.log(`Serving static files from: ${buildPath}`); 
+app.use(express.static(buildPath));
+
+// --- API Routes --- 
+app.use('/api/databases', databaseRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/databases', databaseRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/events', eventLogRoutes);
 
-// System info route - proxies to db-sync service
+// --- System Info Proxy Routes --- 
+// Proxy GET /api/system/info to Python backend
 app.get('/api/system/info', async (req, res) => {
   try {
     const response = await axios.get(`${PYTHON_BACKEND_URL}/api/system/info`);
     res.json(response.data);
   } catch (error) {
-    console.error('Error fetching system info:', error.message);
-    // Return fallback mock data if the db-sync service is not available
-    res.json({
-      cpuUsage: 0,
-      memoryUsage: 0,
-      diskUsage: 0,
-      uptime: 'Not available'
+    console.error('Error proxying /api/system/info:', error.message);
+    res.status(error.response?.status || 502).json({
+      message: 'Failed to fetch system info from service.',
+      error: error.message
     });
   }
 });
 
+// Proxy GET /api/system/performance-history to Python backend
+app.get('/api/system/performance-history', async (req, res) => {
+    const { metric, limit } = req.query;
+    try {
+        const response = await axios.get(`${PYTHON_BACKEND_URL}/api/system/performance-history`, {
+            params: { metric, limit } // Forward query params
+        });
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error proxying /api/system/performance-history:', error.message);
+        res.status(error.response?.status || 502).json({
+            message: 'Failed to fetch performance history from service.',
+            error: error.message
+        });
+    }
+});
+// --- End System Info Proxy --- 
+
 // Base route
 app.get('/', (req, res) => {
-  res.json({ message: 'Mole Database Manager API' });
+  // Send index.html for root path as well to handle direct access
+  const indexPath = path.resolve(__dirname, '..', 'react-ui', 'build', 'index.html');
+  res.sendFile(indexPath, (err) => {
+      if (err) {
+          console.error('Error sending index.html for root:', err);
+          res.status(500).send(err.message);
+      }
+  });
+});
+
+// The "catchall" handler: for any other request that doesn't
+// match one above, send back React's index.html file.
+app.get('*' , (req, res) => {
+  const indexPath = path.resolve(__dirname, '..', 'react-ui', 'build', 'index.html');
+  res.sendFile(indexPath, (err) => {
+      if (err) {
+          // Avoid sending error if it's just a typical 404 for an asset not found
+          if (!err.message.includes('no such file or directory')) {
+             console.error('Error sending index.html catchall:', err);
+          }
+          // Gracefully handle not found without crashing if possible
+          if (!res.headersSent) {
+             res.status(404).send('Not Found');
+          }
+      }
+  });
 });
 
 // Start server
