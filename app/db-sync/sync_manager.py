@@ -569,20 +569,25 @@ echo "Sync completed!"
             raise
 
 @app.route('/api/system/info', methods=['GET'])
-def get_system_info():
-    try: # Added try...except block
-        # Get real system information
-        cpu_usage = psutil.cpu_percent(interval=0.1) # Add interval for non-blocking call
-        memory = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
-        swap = psutil.swap_memory() # Get swap info
+def get_system_info_endpoint():
+    """Endpoint to provide current system metrics."""
+    try:
+        cpu_usage = psutil.cpu_percent(interval=0.1) 
+        memory_info = psutil.virtual_memory()
+        disk_info = psutil.disk_usage('/') 
+        swap_info = psutil.swap_memory()
+        boot_time_timestamp = psutil.boot_time()
+        current_time_timestamp = time.time()
+        uptime_seconds = current_time_timestamp - boot_time_timestamp
+        
+        # Format uptime 
+        days = int(uptime_seconds // (24 * 3600))
+        hours = int((uptime_seconds % (24 * 3600)) // 3600)
+        minutes = int((uptime_seconds % 3600) // 60)
+        uptime_str = f"{days} days, {hours} hours, {minutes} mins"
 
-        boot_time = datetime.fromtimestamp(psutil.boot_time())
-        uptime = datetime.now() - boot_time
-        days = uptime.days
-        hours, remainder = divmod(uptime.seconds, 3600)
-        minutes = int((remainder % 3600) // 60) # Correct calculation for minutes
-        uptime_str = f"{days} days, {hours} hours, {minutes} mins" # Updated format
+        # Get current server time
+        current_server_time = datetime.now().isoformat()
 
         # Helper to format bytes
         def format_bytes(bts):
@@ -591,32 +596,31 @@ def get_system_info():
             elif bts < 1024**3: return f"{bts/1024**2:.2f} MB"
             else: return f"{bts/1024**3:.2f} GB"
 
-        system_info = {
-            'cpuUsage': round(cpu_usage, 1), # Rounded CPU usage
-            'memoryUsagePercent': round(memory.percent, 1),
-            'memoryUsed': format_bytes(memory.used),
-            'memoryTotal': format_bytes(memory.total),
-            'diskUsagePercent': round(disk.percent, 1),
-            'diskUsed': format_bytes(disk.used),
-            'diskTotal': format_bytes(disk.total),
-            'swapUsagePercent': round(swap.percent, 1), # Added Swap %
-            'swapUsed': format_bytes(swap.used),       # Added Swap Used
-            'swapTotal': format_bytes(swap.total),     # Added Swap Total
-            'uptime': uptime_str
-        }
-
-        # Add logging to see what is returned
-        logger.info(f"Returning system info: {system_info}")
-        return jsonify(system_info)
-        
+        return jsonify({
+            'cpuUsage': round(cpu_usage, 1),
+            'memoryUsagePercent': round(memory_info.percent, 1),
+            'memoryUsed': format_bytes(memory_info.used),
+            'memoryTotal': format_bytes(memory_info.total),
+            'diskUsagePercent': round(disk_info.percent, 1),
+            'diskUsed': format_bytes(disk_info.used),
+            'diskTotal': format_bytes(disk_info.total),
+            'swapUsagePercent': round(swap_info.percent, 1),
+            'swapUsed': format_bytes(swap_info.used),
+            'swapTotal': format_bytes(swap_info.total),
+            'uptime': uptime_str,
+            'rawUptimeSeconds': int(uptime_seconds), # Add raw uptime in seconds
+            'currentTime': current_server_time      # Add current server time
+        })
     except Exception as e:
         logger.error(f"Error getting system info: {str(e)}", exc_info=True)
-        # Return default structure with N/A values on error
+        # Return default structure with N/A values
         return jsonify({
             'cpuUsage': 0, 'memoryUsagePercent': 0, 'memoryUsed': 'N/A', 'memoryTotal': 'N/A',
             'diskUsagePercent': 0, 'diskUsed': 'N/A', 'diskTotal': 'N/A',
             'swapUsagePercent': 0, 'swapUsed': 'N/A', 'swapTotal': 'N/A',
-            'uptime': 'N/A' 
+            'uptime': 'N/A',
+            'rawUptimeSeconds': 0, # Default value
+            'currentTime': 'N/A'   # Default value
         }), 500
 
 @app.route('/api/databases', methods=['GET'])

@@ -457,24 +457,43 @@ exports.executeQuery = async (req, res) => {
       const client = await pool.connect();
       
       try {
-        // Verbessere die Fehlerbehandlung bei SQL-Ausführung
-        console.log('Executing PostgreSQL query:', query);
+        // Define orderByClause BEFORE using it in dataQuery
+        const orderByClause = sortByClean ? `ORDER BY "${sortByClean}" ${sortOrderClean}` : ''; // Quote sortBy field
         
-        // Execute the query
-        const result = await client.query(query);
-        
-        client.release();
-        await pool.end();
-        
-        // Extract column names
-        const columns = result.fields ? result.fields.map(field => field.name) : [];
-        
-        res.status(200).json({
-          success: true,
-          columns,
-          rows: result.rows,
-          message: `Query executed successfully. ${result.rows.length} rows returned.`
-        });
+        // Data Query - Use the decoded table name directly. Select columns explicitly if needed.
+        // Remove COALESCE to return actual NULL values. Quote identifiers properly.
+        const dataQuery = `SELECT * FROM public."${decodedTableName}" ${orderByClause} LIMIT $1 OFFSET $2`;
+        console.log('[getTableData] PostgreSQL Data Query:', dataQuery, [limitNum, offset]); // DEBUG
+        const dataResult = await client.query(dataQuery, [limitNum, offset]);
+        rows = dataResult.rows;
+
+        // --- Log RAW first row data ---
+        if (rows.length > 0) {
+          console.log('[getTableData RAW Row 0]:', rows[0]); 
+        }
+        // --- End Log RAW ---
+
+        // Columns (extract from result fields)
+        if (dataResult.fields) {
+            columns = dataResult.fields.map(field => field.name);
+        } else if (rows.length > 0) {
+             columns = Object.keys(rows[0]);
+        } else {
+            // If no rows, try getting columns from schema (less efficient)
+            const colsInfo = await client.query(`
+              SELECT column_name 
+              FROM information_schema.columns 
+              WHERE table_schema = 'public' AND table_name = $1 
+              ORDER BY ordinal_position;`, [decodedTableName]);
+            columns = colsInfo.rows.map(r => r.column_name);
+        }
+
+        // Count Query - Use decoded table name directly
+        const countQuery = `SELECT COUNT(*) as count FROM ${decodedTableName}`;
+        console.log('[getTableData] PostgreSQL Count Query:', countQuery); // DEBUG
+        const countResult = await client.query(countQuery);
+        totalRowCount = parseInt(countResult.rows[0].count, 10);
+
       } catch (queryError) {
         client.release();
         await pool.end();
@@ -542,7 +561,8 @@ exports.getTableData = async (req, res) => {
   const pageNum = parseInt(page, 10);
   const limitNum = parseInt(limit, 10);
   const sortOrderClean = sortOrder?.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-  const sortByClean = sortBy && /^[a-zA-Z0-9_]+$/.test(sortBy) ? sortBy : null;
+  const sortByClean = sortBy && /^[a-zA-Z0-9_]+$/.test(sortBy) ? sortBy : 'time';
+  const finalSortOrder = sortBy ? sortOrderClean : 'DESC';
   
   if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
       console.error(`[getTableData] Invalid pagination params: page=${page}, limit=${limit}`); // DEBUG
@@ -602,7 +622,7 @@ exports.getTableData = async (req, res) => {
 
       try {
         // Construct ORDER BY clause
-        const orderByClause = sortByClean ? `ORDER BY \\\`${sortByClean}\\\` ${sortOrderClean}` : ''; // Use backticks for MySQL
+        const orderByClause = sortByClean ? `ORDER BY \\\`${sortByClean}\\\` ${finalSortOrder}` : ''; // Use backticks for MySQL
         
         // Data Query
         const dataQuery = `SELECT * FROM ${safeTableName} ${orderByClause} LIMIT ? OFFSET ?`;
@@ -644,15 +664,21 @@ exports.getTableData = async (req, res) => {
       client = await pool.connect(); // Assign to general client
 
       try {
-        // Construct ORDER BY clause - Use double quotes for PostgreSQL identifiers IF NEEDED (e.g., mixed case)
-        // For simple, validated names, direct injection is often okay.
-        const orderByClause = sortByClean ? `ORDER BY \\\"${sortByClean}\\\" ${sortOrderClean}` : ''; // Quoting needed for potentially mixed-case sort column
+        // Define orderByClause BEFORE using it in dataQuery
+        const orderByClause = sortByClean ? `ORDER BY "${sortByClean}" ${finalSortOrder}` : ''; // Quote sortBy field
         
-        // Data Query - Use the decoded table name directly without extra quotes for simple names
-        const dataQuery = `SELECT * FROM ${decodedTableName} ${orderByClause} LIMIT $1 OFFSET $2`;
+        // Data Query - Use the decoded table name directly. Select columns explicitly if needed.
+        // Remove COALESCE to return actual NULL values. Quote identifiers properly.
+        const dataQuery = `SELECT * FROM public."${decodedTableName}" ${orderByClause} LIMIT $1 OFFSET $2`;
         console.log('[getTableData] PostgreSQL Data Query:', dataQuery, [limitNum, offset]); // DEBUG
         const dataResult = await client.query(dataQuery, [limitNum, offset]);
         rows = dataResult.rows;
+
+        // --- Log RAW first row data ---
+        if (rows.length > 0) {
+          console.log('[getTableData RAW Row 0]:', rows[0]); 
+        }
+        // --- End Log RAW ---
 
         // Columns (extract from result fields)
         if (dataResult.fields) {
@@ -685,9 +711,38 @@ exports.getTableData = async (req, res) => {
     }
 
     console.log(`[getTableData] Successfully fetched ${rows.length} rows, total count: ${totalRowCount}`); // DEBUG
+
+    // --- Process rows before sending ---
+    const processedRows = rows.map(row => {
+      const newRow = {};
+      for (const key in row) {
+        const value = row[key];
+        if (value instanceof Date) {
+          // Convert Date objects to ISO strings
+          newRow[key] = value.toISOString();
+        } else if (typeof value === 'bigint') {
+            // Convert BigInt to number (potential precision loss) or string
+             newRow[key] = Number(value); // Or String(value) if precision is critical
+        } else {
+          // Keep other types (number, string, null, boolean) as they are
+          newRow[key] = value;
+        }
+      }
+      return newRow;
+    });
+
+    // Log types of critical fields in the first PROCESSED row before sending
+    if (processedRows.length > 0) {
+      const firstRow = processedRows[0];
+      console.log(`[getTableData Type Check - Processed] First row types - time: ${typeof firstRow.time}, uptime: ${typeof firstRow.uptime}, raw_uptime: ${typeof firstRow.raw_uptime}, total_kwh: ${typeof firstRow.total_kwh}`);
+      // --- Log PROCESSED first row data ---
+      console.log('[getTableData PROCESSED Row 0]:', firstRow); 
+      // --- End Log PROCESSED ---
+    }
+
     res.status(200).json({
       success: true,
-      rows,
+      rows: processedRows, // Send processed rows
       columns, // Send column names along with data
       totalRowCount
     });

@@ -17,6 +17,8 @@ import StorageIcon from '@mui/icons-material/Storage';
 import DnsIcon from '@mui/icons-material/Dns'; // Icon for Swap
 import NetworkCheckIcon from '@mui/icons-material/NetworkCheck';
 import SpeedIcon from '@mui/icons-material/Speed';
+import AccessTimeIcon from '@mui/icons-material/AccessTime'; // Import Clock icon
+import TimerIcon from '@mui/icons-material/Timer'; // Import Timer icon
 
 // Helper to create the Gauge component
 const Gauge = ({ value, label, color }) => {
@@ -75,19 +77,42 @@ const SystemStatusCard = ({ systemInfo }) => {
         cpuUsage: 0, memoryUsagePercent: 0, memoryUsed: 'N/A', memoryTotal: 'N/A',
         diskUsagePercent: 0, diskUsed: 'N/A', diskTotal: 'N/A',
         swapUsagePercent: 0, swapUsed: 'N/A', swapTotal: 'N/A',
-        uptime: 'N/A'
+        uptime: 'N/A',
+        rawUptimeSeconds: 0, // Add default
+        currentTime: 'N/A' // Add default
+    };
+
+    // Format current time for better readability
+    const formatTime = (isoString) => {
+        if (!isoString || isoString === 'N/A') return 'N/A';
+        try {
+            return new Date(isoString).toLocaleString();
+        } catch (e) {
+            return 'Invalid Date';
+        }
+    };
+    
+    // Format raw uptime seconds
+    const formatRawUptime = (seconds) => {
+        if (typeof seconds !== 'number' || seconds <= 0) return 'N/A';
+        return `${seconds.toLocaleString()} seconds`;
     };
 
     return (
         <Card sx={{ height: '100%' }}>
             <CardContent>
                 <Typography variant="h6" gutterBottom>System Status</Typography>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Uptime: {info.uptime}
-                </Typography>
+                <Grid container spacing={1} sx={{ mb: 2, fontSize: '0.8rem', color: 'text.secondary' }}>
+                    <Grid item xs={12} sm={6} sx={{ display: 'flex', alignItems: 'center' }}>
+                         <TimerIcon fontSize="inherit" sx={{ mr: 0.5 }} /> Uptime: {info.uptime}
+                    </Grid>
+                     <Grid item xs={12} sm={6} sx={{ display: 'flex', alignItems: 'center' }}>
+                         <AccessTimeIcon fontSize="inherit" sx={{ mr: 0.5 }} /> Server Time: {formatTime(info.currentTime)}
+                    </Grid>
+                </Grid>
                 
                 {/* Gauges Row */}
-                <Grid container spacing={2} sx={{ mb: 3, mt: 1, justifyContent: 'center' }}>
+                <Grid container spacing={2} sx={{ mb: 3, justifyContent: 'center' }}>
                     <Grid item xs={4} sx={{ textAlign: 'center'}}>
                         <Gauge value={info.cpuUsage} label="CPU" color={theme.palette.success.main} />
                     </Grid>
@@ -117,7 +142,11 @@ const SystemStatusCard = ({ systemInfo }) => {
                         <ListItemIcon sx={{minWidth: 40}}><DnsIcon /></ListItemIcon>
                         <ListItemText primary="Swap" secondary={`${info.swapUsed} / ${info.swapTotal} (${info.swapUsagePercent}%)`} />
                     </ListItem>
-                    {/* Add Network later if needed */}
+                    {/* Add Uptime in seconds if needed, maybe less prominent */}
+                    {/* <ListItem>
+                        <ListItemIcon sx={{minWidth: 40}}><TimerIcon /></ListItemIcon>
+                        <ListItemText primary="Raw Uptime" secondary={formatRawUptime(info.rawUptimeSeconds)} />
+                    </ListItem> */}
                 </List>
             </CardContent>
         </Card>

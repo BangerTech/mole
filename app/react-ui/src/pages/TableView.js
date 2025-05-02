@@ -25,7 +25,7 @@ import { generateMockStructure, generateMockDataRows } from '../utils/mockData';
 const TableView = () => {
   const navigate = useNavigate();
   const { id: databaseId, tableName } = useParams();
-  console.log('[TableView] Received params:', { databaseId, tableName }); // DEBUG
+  // console.log('[TableView] Received params:', { databaseId, tableName }); // Reduce logging
 
   // State for the actual connection details
   const [connectionInfo, setConnectionInfo] = useState(null);
@@ -45,23 +45,22 @@ const TableView = () => {
   });
   const [sortModel, setSortModel] = useState([]); // Array of { field, sort } objects
 
-  // 1. Fetch Connection Info first to determine if it's sample or real
+  // 1. Fetch Connection Info first
   useEffect(() => {
     const fetchConnectionDetails = async () => {
       if (!databaseId) return;
       setLoading(true);
       setError(null);
-      setIsSampleDb(null); // Reset sample status
-      setConnectionInfo(null); // Reset connection info
-      console.log(`[TableView] Fetching connection details for ID: ${databaseId}`);
+      setIsSampleDb(null); 
+      setConnectionInfo(null); 
+      // console.log(`[TableView] Fetching connection details for ID: ${databaseId}`); // Reduce logging
       try {
         const conn = await DatabaseService.getConnectionById(databaseId);
-        console.log('[TableView] Fetched connection details:', conn);
+        // console.log('[TableView] Fetched connection details:', conn); // Reduce logging
         if (conn) {
           setConnectionInfo(conn);
-          setIsSampleDb(conn.isSample || false); // Set sample status based on fetched data
+          setIsSampleDb(conn.isSample || false);
         } else {
-          // This case should not happen if API returns 404, but as safety
           setError(`Database connection with ID ${databaseId} not found.`);
           setIsSampleDb(false); 
         }
@@ -86,14 +85,13 @@ const TableView = () => {
 
   // 2. Fetch Schema based on isSampleDb state
   useEffect(() => {
-    // Wait until we know if it's a sample DB or not
     if (isSampleDb === null || !tableName) return;
 
     const fetchSchema = async () => {
-      console.log(`[TableView] fetchSchema running for ID: ${databaseId}, Table: ${tableName}, IsSample: ${isSampleDb}`);
-      setLoading(true); // Schema loading starts
+      // console.log(`[TableView] fetchSchema running for ID: ${databaseId}, Table: ${tableName}, IsSample: ${isSampleDb}`); // Reduce logging
+      setLoading(true);
       setError(null);
-      setColumns([]); // Reset columns
+      setColumns([]);
 
       if (isSampleDb) {
         console.log(`[TableView] Loading MOCK schema for Sample DB table: ${tableName}`);
@@ -132,65 +130,65 @@ const TableView = () => {
         }
         setLoading(false); // Mock schema loading finished
       } else { // It's a real database
-        console.log(`[TableView] Loading REAL schema for DB ${databaseId} table: ${tableName}`);
+        // console.log(`[TableView] Loading REAL schema for DB ${databaseId} table: ${tableName}`); // Reduce logging
         try {
           const schemaInfo = await DatabaseService.getDatabaseSchema(databaseId);
-          console.log('[TableView] Real schema API response:', schemaInfo);
+          // console.log('[TableView] Real schema API response:', schemaInfo); // Reduce logging
           if (schemaInfo.success && schemaInfo.tableColumns && schemaInfo.tableColumns[tableName]) {
             const gridColumns = schemaInfo.tableColumns[tableName].map(col => {
               const columnName = col.name.toLowerCase(); // Use lowercase for comparison
               const columnType = col.type.toLowerCase();
               let gridType = 'string'; // Default type
               let valueGetter;
-              let valueFormatter;
+              let renderCell;
               let width = 150; // Default width
   
-              // Specific handling for known numeric columns like uptime/raw_uptime
-              if (columnName === 'uptime' || columnName === 'raw_uptime') {
+              // Specific handling for known numeric columns
+              if (columnName === 'uptime' || columnName === 'raw_uptime' || columnName === 'total_kwh') {
                  gridType = 'number'; 
-                 width = 120; // Slightly wider for potentially larger numbers
+                 width = 120; 
               } 
-              // General type detection
+              // General type detection for other numbers
               else if (columnType.includes('int') || columnType.includes('serial') || columnType.includes('float') || columnType.includes('double') || columnType.includes('decimal') || columnType.includes('numeric')) {
                 gridType = 'number';
                 width = 100;
-              } 
-              // Enhanced date/time handling (catches 'time', 'date', 'timestamp')
-              else if (columnType.includes('date') || columnType.includes('time')) { 
-                gridType = 'dateTime';
-                width = 180;
-                valueGetter = (value) => {
-                  if (value == null) return null;
-                  // Attempt to parse various date/time formats
-                  const date = new Date(value); 
-                  // Check if the parsed date is valid
-                  return !isNaN(date.getTime()) ? date : null;
+                // Add renderCell for simple number-to-string conversion (no locale formatting)
+                renderCell = (params) => {
+                    if (params.value === null || params.value === undefined) return '';
+                    // Use basic toString() for numbers - no thousand separators, dot decimal separator
+                    return params.value.toString(); 
                 };
-                valueFormatter = (value) => {
-                  // Ensure value is a valid Date object before formatting
-                   if (value instanceof Date && !isNaN(value)) {
-                     return value.toLocaleString(); // Use locale-specific format
-                   } 
-                   // If original value was parsable but getter returns null (e.g., invalid date string), show empty
-                   // Or if value is simply null/undefined
-                   return ''; 
+              } 
+              // Enhanced date/time handling (WORKAROUND: Treat as string)
+              else if (columnType.includes('date') || columnType.includes('time')) { 
+                // gridType = 'dateTime'; // Original type
+                gridType = 'string';    // Treat as string for now
+                width = 180;
+                valueGetter = undefined; // Remove valueGetter
+                // Add renderCell to format the ISO string from backend
+                renderCell = (params) => {
+                    if (params.value == null) return '';
+                    try {
+                        return new Date(params.value).toLocaleString(); // Use browser locale default
+                    } catch (e) {
+                        return params.value; // Fallback to raw string if date parsing fails
+                    }
                 };
               } else if (columnType.includes('bool')) {
                 gridType = 'boolean';
                 width = 80;
               } else if (columnType.includes('text') || columnType.includes('varchar')) {
-                // Give text columns a bit more space
                 width = 200;
               }
   
               return {
-                field: col.name, // Use original name for the field
-                headerName: col.name, // Use original name for header
+                field: col.name, 
+                headerName: col.name, 
                 type: gridType,
-                width: width, // Use calculated width
+                width: width, 
                 sortable: true,
                 valueGetter: valueGetter, 
-                valueFormatter: valueFormatter,
+                renderCell: renderCell, // Use renderCell for number formatting AND time formatting workaround
                 description: `${col.type}${col.nullable ? ' (nullable)' : ''}${col.default ? ` [default: ${col.default}]` : ''}${col.key ? ` (${col.key})` : ''}`
               };
             });
@@ -212,14 +210,13 @@ const TableView = () => {
 
   // 3. Fetch Data based on isSampleDb and when pagination/sorting changes
   const fetchData = useCallback(async () => {
-    // Wait until schema is loaded (columns are set) and we know sample status
     if (isSampleDb === null || columns.length === 0 || !tableName) {
-      console.log('[TableView] Skipping data fetch (waiting for sample status or columns).');
-      if (isSampleDb !== null && tableName) setLoading(false); // Stop loading if schema fetch failed
+      // console.log('[TableView] Skipping data fetch (waiting for sample status or columns).'); // Reduce logging
+      if (isSampleDb !== null && tableName) setLoading(false); 
       return;
     }
     
-    console.log(`[TableView] fetchData running for ID: ${databaseId}, Table: ${tableName}, IsSample: ${isSampleDb}`);
+    // console.log(`[TableView] fetchData running for ID: ${databaseId}, Table: ${tableName}, IsSample: ${isSampleDb}`); // Reduce logging
     setLoading(true);
     setError(null);
 
@@ -239,7 +236,7 @@ const TableView = () => {
       }
       setLoading(false);
     } else { // Real database
-      console.log(`[TableView] Fetching REAL data for DB ${databaseId} table: ${tableName}`);
+      // console.log(`[TableView] Fetching REAL data for DB ${databaseId} table: ${tableName}`); // Reduce logging
       const queryParams = {
         page: paginationModel.page + 1, 
         limit: paginationModel.pageSize,
@@ -247,21 +244,20 @@ const TableView = () => {
         sortOrder: sortModel.length > 0 ? sortModel[0].sort : null,
       };
       try {
-        console.log(`Fetching real table data with params:`, queryParams);
+        // console.log(`Fetching real table data with params:`, queryParams); // Reduce logging
         const result = await DatabaseService.getTableData(databaseId, tableName, queryParams);
-        console.log(`[TableView] Received real data for ${tableName}:`, result);
+        console.log(`[TableView] Received real data for ${tableName}:`, result); // Keep this log
         if (result.success) {
-          // DEBUG: Log first row data for specific columns if available
           if (result.rows && result.rows.length > 0) {
             const firstRow = result.rows[0];
+            // Keep these debug logs for data checking
             console.log(`[TableView Debug] First row 'time':`, firstRow.time, typeof firstRow.time);
             console.log(`[TableView Debug] First row 'uptime':`, firstRow.uptime, typeof firstRow.uptime);
             console.log(`[TableView Debug] First row 'raw_uptime':`, firstRow.raw_uptime, typeof firstRow.raw_uptime);
-            // Try parsing time again here for debugging
-            if (firstRow.time) {
-              const parsedDate = new Date(firstRow.time);
-              console.log(`[TableView Debug] Parsed 'time':`, parsedDate, 'Valid:', !isNaN(parsedDate.getTime()));
-            }
+            // if (firstRow.time) { // Reduce logging
+            //   const parsedDate = new Date(firstRow.time);
+            //   console.log(`[TableView Debug] Parsed 'time':`, parsedDate, 'Valid:', !isNaN(parsedDate.getTime()));
+            // }
           }
 
           const processedRows = result.rows.map((row, index) => ({
@@ -329,6 +325,9 @@ const TableView = () => {
           </Box>
       );
   }
+
+  // Log final columns state before rendering DataGrid
+  console.log('[TableView Final Columns State]:', columns);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -416,7 +415,7 @@ const TableView = () => {
         <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
       )}
 
-      <Paper sx={{ height: 650, width: '100%', borderRadius: 3 }}>
+      <Paper sx={{ width: '100%', borderRadius: 3, overflow: 'visible' }}>
         <DataGrid
           rows={rows}
           columns={columns}
@@ -430,7 +429,8 @@ const TableView = () => {
           sortModel={sortModel}
           onSortModelChange={setSortModel}
           getRowId={(row) => row.id} 
-          disableColumnResize={false} // Enable column resizing
+          disableColumnResize={false}
+          disableColumnReorder={false}
           slots={{ toolbar: GridToolbar }}
           slotProps={{
             toolbar: {
@@ -440,14 +440,8 @@ const TableView = () => {
             },
           }}
            sx={{ 
-             border: 'none', 
-             '& .MuiDataGrid-columnHeaders': { 
-               backgroundColor: 'action.hover', 
-               fontWeight: 'bold'
-             },
-             '& .MuiDataGrid-cell': {
-             }
-          }}
+             border: 'none',
+           }}
         />
       </Paper>
     </Box>
