@@ -15,6 +15,8 @@ const authRoutes = require('./routes/authRoutes');
 const databaseRoutes = require('./routes/databaseRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const eventLogRoutes = require('./routes/eventLogRoutes');
+// Import sync routes
+const syncRoutes = require('./routes/syncRoutes');
 
 // Create Express app
 const app = express();
@@ -44,6 +46,8 @@ app.use('/api/email', emailRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/events', eventLogRoutes);
+// Mount sync routes under /api/sync
+app.use('/api/sync', syncRoutes);
 
 // --- System Info Proxy Routes --- 
 // Proxy GET /api/system/info to Python backend

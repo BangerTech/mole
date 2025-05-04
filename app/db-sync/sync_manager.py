@@ -20,6 +20,7 @@ import psutil
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import random
+import threading # Import threading
 
 # AI model dependencies
 import openai
@@ -2147,3 +2148,277 @@ def get_performance_history_endpoint():
         }), 400
 
 # --- End Performance History --- 
+
+# --- Database Access for Sync Tasks (Needs access to mole.db) --- 
+
+def get_backend_db_connection():
+    """Connects to the Node.js backend's SQLite DB."""
+    # IMPORTANT: This assumes the mole.db file is accessible 
+    # via a shared volume mounted at /app/backend/data inside this container.
+    # Check docker-compose.yml to ensure the `backend_data` volume is mounted here.
+    db_path = "/app/backend/data/mole.db" 
+    if not os.path.exists(db_path):
+        logger.error(f"Backend database file not found at: {db_path}. Cannot access sync tasks.")
+        raise FileNotFoundError(f"Backend database file not found: {db_path}")
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row # Access columns by name
+        return conn
+    except sqlite3.Error as e:
+        logger.error(f"Error connecting to backend database {db_path}: {e}")
+        raise
+
+def get_sync_task_details(task_id: int) -> Optional[Dict]:
+    """Fetches details for a specific sync task from the backend DB."""
+    conn = None
+    try:
+        conn = get_backend_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sync_tasks WHERE id = ?", (task_id,))
+        task_row = cursor.fetchone()
+        if task_row:
+            return dict(task_row)
+        else:
+            logger.warning(f"Sync task with ID {task_id} not found in backend DB.")
+            return None
+    except Exception as e:
+        logger.error(f"Error fetching sync task details for ID {task_id}: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def update_sync_log(task_id: int, start_time: datetime, end_time: datetime, status: str, message: str = "", rows_synced: int = 0):
+    """Logs the result of a sync execution."""
+    conn = None
+    try:
+        conn = get_backend_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO sync_logs (task_id, start_time, end_time, status, message, rows_synced) VALUES (?, ?, ?, ?, ?, ?)",
+            (task_id, start_time.isoformat(), end_time.isoformat(), status, message, rows_synced)
+        )
+        conn.commit()
+        logger.info(f"Logged sync status for task {task_id}: {status}")
+    except Exception as e:
+        logger.error(f"Error updating sync log for task {task_id}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def update_last_sync_time(task_id: int, sync_time: datetime):
+     """Updates the last_sync field in the sync_tasks table."""
+     conn = None
+     try:
+         conn = get_backend_db_connection()
+         cursor = conn.cursor()
+         cursor.execute(
+             "UPDATE sync_tasks SET last_sync = ?, updated_at = ? WHERE id = ?",
+             (sync_time.isoformat(), datetime.now().isoformat(), task_id)
+         )
+         conn.commit()
+         logger.info(f"Updated last_sync time for task {task_id}")
+     except Exception as e:
+         logger.error(f"Error updating last_sync time for task {task_id}: {e}")
+     finally:
+         if conn:
+             conn.close()
+
+# --- Actual Sync Logic --- 
+
+def perform_database_sync(task_details: Dict):
+    """Performs the database synchronization based on task details."""
+    task_id = task_details['taskId']
+    source_conn = task_details['source']
+    target_conn = task_details['target']
+    # Assuming tables might be passed in the payload, or fetch from task if needed
+    # tables_to_sync = task_details.get('tables') 
+
+    # Fetch full task details from DB including options like tables, drop_target etc.
+    # This ensures we use the configuration stored in the DB, not just what the trigger payload sent.
+    full_task_config = get_sync_task_details(task_id)
+    if not full_task_config:
+        logger.error(f"[TASK {task_id}] Failed to retrieve full task configuration from DB.")
+        # Log error to DB?
+        return # Cannot proceed without config
+        
+    # Parse options (assuming options are stored in the task, maybe in a JSON field?)
+    # For now, assume simple options might be directly in task_details or full_task_config
+    options = {
+        "tables_only": task_details.get('tables'), # Use tables from payload if sent
+        "structure_only": full_task_config.get('structure_only', False), # Example option
+        "drop_target_first": full_task_config.get('drop_target_first', False) # Example option
+    }
+    
+    source_engine = source_conn.get("engine", "").lower()
+    target_engine = target_conn.get("engine", "").lower()
+    source_name = source_conn.get('name', f"DB {source_conn.get('id')}") # Use name or ID
+    target_name = target_conn.get('name', f"DB {target_conn.get('id')}") # Use name or ID
+
+    logger.info(f"[TASK {task_id}] Starting sync from {source_engine} '{source_name}' to {target_engine} '{target_name}'")
+    start_time = datetime.now()
+    status = "error" # Default to error
+    message = ""
+    rows_synced = 0 # Placeholder for row count
+
+    try:
+        # --- Choose sync method based on engine --- 
+        if source_engine == "postgresql" and target_engine == "postgresql":
+            status, message, rows_synced = sync_postgresql_to_postgresql(
+                task_id, source_conn, target_conn, options
+            )
+        elif source_engine == "mysql" and target_engine == "mysql":
+             # status, message, rows_synced = sync_mysql_to_mysql(...)
+             raise NotImplementedError("MySQL to MySQL sync not implemented yet.")
+        # Add other engine combinations here
+        else:
+             raise NotImplementedError(f"Sync from {source_engine} to {target_engine} not implemented yet.")
+
+        # Update last_sync time only on success
+        if status == "success":
+            update_last_sync_time(task_id, start_time)
+            logger.info(f"[TASK {task_id}] Sync completed successfully.")
+        else:
+             logger.error(f"[TASK {task_id}] Sync failed. Status: {status}, Message: {message}")
+
+    except Exception as e:
+        message = f"Error during synchronization process: {str(e)}"
+        logger.error(f"[TASK {task_id}] {message}", exc_info=True)
+        status = "error"
+    
+    finally:
+        end_time = datetime.now()
+        update_sync_log(task_id, start_time, end_time, status, message, rows_synced)
+
+# --- Specific Sync Implementations --- 
+
+def sync_postgresql_to_postgresql(task_id: int, source: Dict, target: Dict, options: Dict) -> Tuple[str, str, int]:
+    """Syncs data from a source PostgreSQL DB to a target PostgreSQL DB using pg_dump and psql."""
+    logger.info(f"[TASK {task_id}] Performing PostgreSQL to PostgreSQL sync...")
+    
+    dump_file = f"/tmp/pg_dump_{task_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.sql"
+    rows_synced = 0 # pg_dump doesn't easily report rows
+    
+    # --- Prepare pg_dump command --- 
+    pg_dump_cmd = ['pg_dump']
+    pg_dump_cmd.extend(['--host', source['host']])
+    pg_dump_cmd.extend(['--port', str(source['port'])])
+    pg_dump_cmd.extend(['--username', source['username']])
+    pg_dump_cmd.extend(['--dbname', source['database']])
+    pg_dump_cmd.extend(['--file', dump_file])
+    pg_dump_cmd.extend(['--no-owner', '--no-acl']) # Options for cleaner import
+    if options.get('structure_only'):
+        pg_dump_cmd.append('--schema-only')
+    # Handle specific tables
+    tables_only = options.get('tables_only')
+    if tables_only and isinstance(tables_only, list):
+        for table in tables_only:
+            pg_dump_cmd.extend(['--table', table]) # Use repeated -t flag
+
+    # --- Prepare psql command --- 
+    psql_cmd = ['psql']
+    psql_cmd.extend(['--host', target['host']])
+    psql_cmd.extend(['--port', str(target['port'])])
+    psql_cmd.extend(['--username', target['username']])
+    psql_cmd.extend(['--dbname', target['database']])
+    psql_cmd.extend(['--file', dump_file])
+    psql_cmd.extend(['--single-transaction']) # Run import in a single transaction
+
+    # --- Set environment variables for passwords --- 
+    source_env = os.environ.copy()
+    source_env['PGPASSWORD'] = source.get('password', '')
+    target_env = os.environ.copy()
+    target_env['PGPASSWORD'] = target.get('password', '')
+
+    try:
+        # --- Drop and Recreate Target DB if specified --- 
+        if options.get('drop_target_first'):
+            logger.info(f"[TASK {task_id}] Dropping and recreating target database '{target['database']}'...")
+            # Connect to 'postgres' db to drop/create the target db
+            drop_cmd = ['psql', '--host', target['host'], '--port', str(target['port']), '--username', target['username'], '--dbname', 'postgres', '-c', f"DROP DATABASE IF EXISTS \"{target['database']}\";"]
+            create_cmd = ['psql', '--host', target['host'], '--port', str(target['port']), '--username', target['username'], '--dbname', 'postgres', '-c', f"CREATE DATABASE \"{target['database']}\";"]
+            
+            logger.debug(f"[TASK {task_id}] Running drop command: {' '.join(drop_cmd)}")
+            drop_result = subprocess.run(drop_cmd, capture_output=True, text=True, env=target_env, check=True)
+            logger.info(f"[TASK {task_id}] Drop DB output: {drop_result.stdout}")
+            
+            logger.debug(f"[TASK {task_id}] Running create command: {' '.join(create_cmd)}")
+            create_result = subprocess.run(create_cmd, capture_output=True, text=True, env=target_env, check=True)
+            logger.info(f"[TASK {task_id}] Create DB output: {create_result.stdout}")
+
+        # --- Run pg_dump --- 
+        logger.info(f"[TASK {task_id}] Exporting source database...")
+        logger.debug(f"[TASK {task_id}] Running pg_dump command: {' '.join(pg_dump_cmd)}")
+        dump_result = subprocess.run(pg_dump_cmd, capture_output=True, text=True, env=source_env, check=True)
+        logger.info(f"[TASK {task_id}] pg_dump completed.")
+        logger.debug(f"[TASK {task_id}] pg_dump stderr: {dump_result.stderr}") # pg_dump often logs progress to stderr
+
+        # --- Run psql --- 
+        logger.info(f"[TASK {task_id}] Importing into target database...")
+        logger.debug(f"[TASK {task_id}] Running psql command: {' '.join(psql_cmd)}")
+        import_result = subprocess.run(psql_cmd, capture_output=True, text=True, env=target_env, check=True)
+        logger.info(f"[TASK {task_id}] psql import completed.")
+        logger.debug(f"[TASK {task_id}] psql output: {import_result.stdout}")
+        logger.debug(f"[TASK {task_id}] psql stderr: {import_result.stderr}")
+
+        return "success", "PostgreSQL sync completed successfully.", rows_synced
+
+    except subprocess.CalledProcessError as e:
+        error_message = f"Sync process failed with exit code {e.returncode}.\nCommand: {e.cmd}\nStderr: {e.stderr}\nStdout: {e.stdout}"
+        logger.error(f"[TASK {task_id}] {error_message}")
+        return "error", error_message, rows_synced
+    except Exception as e:
+        error_message = f"An unexpected error occurred during PostgreSQL sync: {str(e)}"
+        logger.error(f"[TASK {task_id}] {error_message}", exc_info=True)
+        return "error", error_message, rows_synced
+    finally:
+        # --- Clean up dump file --- 
+        if os.path.exists(dump_file):
+            try:
+                os.remove(dump_file)
+                logger.info(f"[TASK {task_id}] Cleaned up dump file: {dump_file}")
+            except OSError as e:
+                logger.error(f"[TASK {task_id}] Error removing dump file {dump_file}: {e}")
+
+# ... (Placeholder functions for MySQL sync, Generic sync etc.) ...
+
+# --- Flask Routes --- 
+
+@app.route('/trigger_sync', methods=['POST'])
+def trigger_sync_endpoint():
+    """Endpoint to trigger a database synchronization task based on payload."""
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 400
+
+    data = request.get_json()
+    task_id = data.get('taskId')
+    source_conn = data.get('source')
+    target_conn = data.get('target')
+
+    if not task_id or not source_conn or not target_conn:
+        logger.error(f"Trigger sync request missing data: {data}")
+        return jsonify({"error": "Missing taskId, source, or target connection details in request body"}), 400
+
+    logger.info(f"Received sync trigger request for Task ID: {task_id}")
+
+    # Optional: Validate connection details further?
+
+    # Run the sync in a background thread to avoid blocking the API response
+    try:
+        sync_thread = threading.Thread(target=perform_database_sync, args=(data,), daemon=True)
+        sync_thread.start()
+        logger.info(f"Background sync thread started for Task ID: {task_id}")
+        return jsonify({"message": f"Synchronization task {task_id} started successfully."}), 202 # 202 Accepted
+    except Exception as e:
+        logger.error(f"Failed to start sync thread for task {task_id}: {e}")
+        return jsonify({"error": "Failed to start synchronization process."}), 500
+
+if __name__ == "__main__":
+    # Old initialization logic (if any)
+    # sync_manager = DatabaseSync()
+    # sync_manager.run() # This blocks if run directly
+    
+    # Run Flask app (Gunicorn handles this in production via docker-compose)
+    logger.info("Starting Flask server for sync service API")
+    # Ensure host is 0.0.0.0 to be accessible outside container
+    app.run(host='0.0.0.0', port=5000, debug=False) 

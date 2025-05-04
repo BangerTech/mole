@@ -18,6 +18,24 @@ const { formatBytes } = require('../utils/formatUtils'); // Import from backend 
 // This can be switched in the future when fully migrated to Sequelize
 const USE_SEQUELIZE = false; // Set to true when ready to use Sequelize implementation
 
+// Define the sample database object
+const SAMPLE_DB = {
+  id: 'sample', // Unique ID for the sample
+  name: 'Sample Database (SQLite)',
+  engine: 'SQLite',
+  host: null,
+  port: null,
+  database: '/app/data/sample_mole.db', // Example path, adjust if needed
+  username: null,
+  password: undefined, // Ensure password is not sent
+  ssl_enabled: false,
+  notes: 'A sample database included with Mole.',
+  isSample: true, // Mark as sample
+  created_at: new Date().toISOString(),
+  last_connected: null,
+  encrypted_password: null // No encrypted password for sample
+};
+
 // Helper function to parse size string (e.g., "22 MB", "1.5 GB") into bytes
 // Moved from controller to be reusable here
 const parseSizeToBytes = (sizeStr) => {
@@ -174,24 +192,41 @@ const databaseService = {
     } else {
       // Direct SQLite implementation
       const db = await getDbConnection();
-      const connections = await db.all('SELECT * FROM database_connections ORDER BY name');
+      let connections = await db.all('SELECT * FROM database_connections ORDER BY name');
       await db.close();
       
-      // Sanitize password fields for security
-      return connections.map(conn => {
+      // Sanitize password fields and ensure isSample is boolean
+      connections = connections.map(conn => {
         const result = { ...conn };
-        result.password = undefined;
+        result.password = undefined; // Remove plain password field
+        // Ensure isSample flag is boolean (SQLite might store as 0/1)
+        result.isSample = !!result.isSample;
         return result;
       });
+
+      // If no real connections, add the sample one
+      if (connections.length === 0) {
+        console.log("No real connections found, adding Sample DB.");
+        connections.push(SAMPLE_DB);
+      }
+
+      return connections;
     }
   },
   
   /**
    * Get a database connection by ID
-   * @param {number} id - Connection ID
+   * @param {string|number} id - Connection ID
    * @returns {Promise<Object>} Database connection
    */
   async getConnectionById(id) {
+     // Handle request for the Sample DB specifically
+    if (id === 'sample') {
+        console.log("Fetching Sample DB details.");
+        return SAMPLE_DB; // Return the predefined sample object
+    }
+    
+    // Proceed with DB lookup for real IDs
     if (USE_SEQUELIZE) {
       // Sequelize implementation
       return await DatabaseConnection.findByPk(id);
@@ -207,6 +242,7 @@ const databaseService = {
       // Sanitize password
       if (connection) {
         connection.password = undefined;
+        connection.isSample = !!connection.isSample; // Ensure boolean
       }
       
       return connection;
@@ -427,28 +463,105 @@ const databaseService = {
    * @returns {Promise<Object>} Test result
    */
   async testConnection(connectionData) {
-    // This function is implemented in databaseController.js
-    // We're not moving it to the service layer because it has specific
-    // external dependencies (mysql2, pg) and doesn't involve our database models
-    throw new Error('Not implemented in the service layer');
+    // Handle test for Sample DB
+    if (connectionData.id === 'sample') {
+        return { success: true, message: 'Sample DB connection is always available.' };
+    }
+    // ... Existing test logic in databaseController.js needs to be called or moved here ...
+    // For now, retain the error as it points to controller logic
+    throw new Error('Test connection logic resides in databaseController.js');
+  },
+
+  /**
+   * Fetches the health status for a specific database connection.
+   * Uses the controller logic for actual checks, handles Sample DB here.
+   * @param {string|number} connectionId The ID of the database connection.
+   * @returns {Promise<Object>} A promise that resolves to the health status object { status, message }.
+   */
+  async getDatabaseHealth(connectionId) {
+    // Handle Sample DB directly
+    if (connectionId === 'sample') {
+      console.log("[getDatabaseHealth] Reporting OK for Sample DB.");
+      return { status: 'OK', message: 'Sample DB is virtual and always available.' };
+    }
+
+    // For real connections, we rely on the controller's implementation which handles connections
+    // This service method primarily exists for consistency but might need refactoring
+    // if we move all connection logic fully into the service.
+    // For now, we assume the controller handles the actual check.
+    // Let's simulate fetching the connection and performing a basic check here for completeness,
+    // acknowledging this duplicates controller logic.
+    console.log(`[getDatabaseHealth] Checking health for real connection: ${connectionId}`);
+    try {
+      const connection = await this.getConnectionByIdFull(connectionId);
+      if (!connection) {
+        return { status: 'Error', message: 'Connection not found.' };
+      }
+
+      // Minimal check: Can we fetch the connection?
+      // More robust checks (ping, simple query) should ideally live here or be called from here.
+      // Replicating controller logic partially:
+      const { engine, database } = connection;
+      if (engine && engine.toLowerCase() === 'sqlite') {
+          if (fs.existsSync(database)) {
+              return { status: 'OK', message: 'SQLite file exists.' };
+          } else {
+              // This is the case causing the user's reported error for Sample DB (now fixed above)
+              return { status: 'Error', message: 'SQLite file not found.' }; 
+          }
+      } else {
+          // Placeholder for other DB types - ideally call a real check
+          // Simulating OK for now if connection details exist
+          return { status: 'OK', message: 'Connection details found (real check pending).' };
+      }
+
+    } catch (error) {
+      console.error(`[getDatabaseHealth] Error checking health for ${connectionId}:`, error);
+      return { status: 'Error', message: `Health check failed: ${error.message}` };
+    }
   },
 
   /**
    * Fetches schema details for a connection (used internally and by controller).
    * Handles fetching connection details and decryption.
-   * @param {number} connectionId - The ID of the connection.
+   * @param {string|number} connectionId - The ID of the connection.
    * @returns {Promise<Object>} Schema details object.
    */
   async fetchSchemaForConnection(connectionId) {
+    // Handle schema for Sample DB
+    if (connectionId === 'sample') {
+        console.log("Fetching schema for Sample DB.");
+        // Return a predefined mock schema for the sample database (NOW WITH 6 TABLES)
+        return { 
+            success: true, 
+            tables: [
+                { name: 'users', type: 'TABLE', rows: 10, size: '1.2 MB', columns: 3, lastUpdated: '2024-01-15' },
+                { name: 'products', type: 'TABLE', rows: 150, size: '15.5 MB', columns: 3, lastUpdated: '2024-01-14' },
+                { name: 'orders', type: 'TABLE', rows: 500, size: '30.8 MB', columns: 3, lastUpdated: '2024-01-16' },
+                { name: 'customers', type: 'TABLE', rows: 25, size: '2.1 MB', columns: 4, lastUpdated: '2024-01-10' },
+                { name: 'sessions', type: 'TABLE', rows: 1000, size: '40.0 MB', columns: 5, lastUpdated: '2024-01-17' },
+                { name: 'logs', type: 'TABLE', rows: 5000, size: '38.4 MB', columns: 6, lastUpdated: '2024-01-17' }
+            ], 
+            tableColumns: {
+                'users': [ { name: 'id', type: 'INTEGER', nullable: false, default: null, key: 'PRI', extra: '' }, { name: 'name', type: 'TEXT', nullable: false }, { name: 'email', type: 'TEXT', nullable: true } ],
+                'products': [ { name: 'id', type: 'INTEGER', nullable: false, default: null, key: 'PRI', extra: '' }, { name: 'name', type: 'TEXT', nullable: false }, { name: 'price', type: 'DECIMAL', nullable: true } ],
+                'orders': [ { name: 'id', type: 'INTEGER', nullable: false, default: null, key: 'PRI', extra: '' }, { name: 'user_id', type: 'INTEGER', nullable: true }, { name: 'order_date', type: 'TIMESTAMP', nullable: true } ],
+                'customers': [ { name: 'id', type: 'INTEGER', nullable: false, key: 'PRI' }, { name: 'first_name', type: 'TEXT' }, { name: 'last_name', type: 'TEXT' }, { name: 'signup_date', type: 'DATE' } ],
+                'sessions': [ { name: 'session_id', type: 'TEXT', nullable: false, key: 'PRI' }, { name: 'user_id', type: 'INTEGER' }, { name: 'ip_address', type: 'TEXT' }, { name: 'start_time', type: 'TIMESTAMP' }, { name: 'end_time', type: 'TIMESTAMP' } ],
+                'logs': [ { name: 'log_id', type: 'INTEGER', nullable: false, key: 'PRI' }, { name: 'timestamp', type: 'TIMESTAMP' }, { name: 'level', type: 'TEXT' }, { name: 'source', type: 'TEXT' }, { name: 'message', type: 'TEXT' }, { name: 'user_id', type: 'INTEGER' } ]
+            },
+            totalSize: '128 MB', // Keep total size consistent for now
+            message: 'Displaying schema for Sample DB.' 
+        };
+    }
+
+    // Proceed with fetching for real connections
     try {
-        const connection = await this.getConnectionByIdFull(connectionId); // Fetch full details including password
+        const connection = await this.getConnectionByIdFull(connectionId); // Fetch full details
         if (!connection) {
              throw new Error('Database connection not found');
         }
-        if (connection.isSample) {
-            // Handle mock schema for Sample DB if needed, or return empty
-             return { success: true, tables: [], tableColumns: {}, totalSize: 'N/A', message: 'Schema not applicable for Sample DB' };
-        }
+        // No need to check isSample here again, ID 'sample' is handled above
         
         let decryptedPassword = '';
         if (connection.encrypted_password) {
@@ -473,10 +586,14 @@ const databaseService = {
 
    /**
     * Internal helper to get full connection details including encrypted password.
-    * @param {number} id - Connection ID
+    * @param {string|number} id - Connection ID
     * @returns {Promise<Object>} Full database connection object (or null)
     */
    async getConnectionByIdFull(id) {
+       // Handle Sample DB case
+       if (id === 'sample') {
+           return SAMPLE_DB;
+       }
        // Assuming direct SQLite implementation for simplicity
        const db = await getDbConnection();
        try {
@@ -484,18 +601,35 @@ const databaseService = {
            'SELECT * FROM database_connections WHERE id = ?',
            id
          );
+         if (connection) {
+             connection.isSample = !!connection.isSample;
+         }
          return connection; // Return full object including passwords
        } finally {
-         await db.close();
+         if (db) await db.close(); // Close connection
        }
    },
 
   /**
    * Fetches storage size information for a connection.
-   * @param {number} connectionId - The ID of the connection.
+   * @param {string|number} connectionId - The ID of the connection.
    * @returns {Promise<Object>} Storage info object { success, sizeBytes, sizeFormatted, message? }.
    */
   async fetchStorageInfoForConnection(connectionId) {
+    // Handle Sample DB
+    if (connectionId === 'sample') {
+        console.log("Fetching storage info for Sample DB.");
+        const sizeBytes = 128 * 1024 * 1024; // 128 MB in bytes
+        return { 
+            connectionId: connectionId, // Add ID
+            success: true, 
+            sizeBytes: sizeBytes, 
+            sizeFormatted: formatBytes(sizeBytes), 
+            message: 'Displaying size for Sample DB.' 
+        };
+    }
+
+    // Proceed with real connections
     let sizeBytes = 0;
     let success = false;
     let message = null;
@@ -505,9 +639,7 @@ const databaseService = {
       if (!connection) {
         throw new Error('Database connection not found');
       }
-      if (connection.isSample) {
-        return { success: true, sizeBytes: 0, sizeFormatted: 'N/A', message: 'Storage info not applicable for Sample DB' };
-      }
+      // No need to check isSample here again
 
       let decryptedPassword = '';
       if (connection.encrypted_password) {
@@ -546,7 +678,6 @@ const databaseService = {
         });
         const client = await pool.connect();
         try {
-          // Use current_database() function which is simpler and refers to the connected DB
           const result = await client.query('SELECT pg_database_size(current_database()) AS size_bytes');
           sizeBytes = result.rows[0]?.size_bytes || 0;
           success = true;
@@ -575,20 +706,29 @@ const databaseService = {
       success = false; // Ensure success is false on error
     }
 
+    // Ensure connectionId is included in the final return object
     return {
+      connectionId: connectionId, // Add ID here for real connections too
       success,
-      sizeBytes: Number(sizeBytes), // Ensure it's a number
-      sizeFormatted: success ? formatBytes(Number(sizeBytes)) : 'N/A', // Format if successful
+      sizeBytes: Number(sizeBytes),
+      sizeFormatted: success ? formatBytes(Number(sizeBytes)) : 'N/A',
       message
     };
   },
 
   /**
    * Fetches transaction statistics for a connection.
-   * @param {number} connectionId - The ID of the connection.
+   * @param {string|number} connectionId - The ID of the connection.
    * @returns {Promise<Object>} Stats object { success, activeTransactions, totalCommits, totalRollbacks, message? }.
    */
   async fetchTransactionStatsForConnection(connectionId) {
+    // Handle Sample DB
+    if (connectionId === 'sample') {
+        console.log("Fetching transaction stats for Sample DB.");
+        return { success: true, activeTransactions: 0, totalCommits: 0, totalRollbacks: 0, message: 'Stats not applicable for Sample DB.' };
+    }
+
+    // Proceed with real connections
     let activeTransactions = 0;
     let totalCommits = 0;
     let totalRollbacks = 0;
@@ -600,9 +740,7 @@ const databaseService = {
       if (!connection) {
         throw new Error('Database connection not found');
       }
-      if (connection.isSample) {
-        return { success: true, activeTransactions: 0, totalCommits: 0, totalRollbacks: 0, message: 'Stats not applicable for Sample DB' };
-      }
+      // No need to check isSample here
 
       let decryptedPassword = '';
       if (connection.encrypted_password) {

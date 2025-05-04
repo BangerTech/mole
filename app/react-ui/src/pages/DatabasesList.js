@@ -365,13 +365,6 @@ export default function DatabasesList() {
         <Typography variant="h4">
           Database Connections
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleCreateDatabase}
-        >
-          New Connection
-        </Button>
       </Box>
 
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -428,6 +421,15 @@ export default function DatabasesList() {
             <RefreshIcon />
           </IconButton>
         </Tooltip>
+
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleCreateDatabase}
+          sx={{ ml: 'auto' }}
+        >
+          New Connection
+        </Button>
       </Box>
 
       {error && (

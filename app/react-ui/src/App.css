@@ -135,20 +135,22 @@
   transform: translateX(-280px);
 }
 
-/* Content styling */
+/* Content styling - Remove fixed margin, let DashboardLayout handle it */
+/*
 .content {
   flex-grow: 1;
   transition: all 0.3s ease;
   overflow-y: auto;
   width: 100%;
   padding: 20px;
-  margin-left: 280px;
+  margin-left: 280px; 
   box-sizing: border-box;
 }
 
 .content-full {
   margin-left: 0;
 }
+*/
 
 .app-container.dark .content {
   background-color: #1a1a1a;

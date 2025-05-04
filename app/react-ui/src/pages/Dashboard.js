@@ -299,6 +299,7 @@ export default function Dashboard() {
   const [topTables, setTopTables] = useState([]);
   const [totalDbSize, setTotalDbSize] = useState('N/A');
   const [healthSummary, setHealthSummary] = useState({ ok: 0, error: 0, unknown: 0 });
+  const [error, setError] = useState(null);
 
   // New states for potentially real data
   const [detailedHealthInfo, setDetailedHealthInfo] = useState({}); // For Health tab details
@@ -358,6 +359,7 @@ export default function Dashboard() {
       let calculatedOk = 0;
       let calculatedError = 0;
       let calculatedUnknown = 0;
+      let fetchedConnections = []; // Store fetched connections here
 
       try {
         const apiBaseUrl = getApiBaseUrl();
@@ -375,57 +377,84 @@ export default function Dashboard() {
 
         // Get database connections from API
         const connections = await DatabaseService.getDatabaseConnections();
-        let healthPromises = []; 
-        let finalDatabasesToShow = []; 
+        fetchedConnections = Array.isArray(connections) ? connections : []; // Assign to outer scope
         
-        if (connections && connections.length > 0) {
-          const enrichedConnections = await Promise.all(
-            connections.map(async (conn) => {
-              let tableCount = 'N/A';
-              let size = 'N/A';
-              let sizeBytes = 0; // Initialize sizeBytes
-              if (conn.id && !conn.isSample) { 
-                try {
-                  const schemaInfo = await DatabaseService.getDatabaseSchema(conn.id);
-                  if (schemaInfo.success) {
-                      if (schemaInfo.tableColumns) {
-                         tableCount = Object.keys(schemaInfo.tableColumns).length; 
-                      }
-                      if (schemaInfo.totalSize) {
-                         size = schemaInfo.totalSize; 
-                         sizeBytes = parseSizeToBytes(size); // Calculate bytes
-                         calculatedTotalSize += sizeBytes; // Add to total size sum
-                      }
-                  } else {
-                     console.warn(`Could not fetch schema for DB ID ${conn.id}:`, schemaInfo.message);
-                  }
-                  healthPromises.push(
-                     DatabaseService.getDatabaseHealth(conn.id).then(status => ({ id: conn.id, ...status }))
-                  );
-                } catch (schemaError) {
-                  console.error(`Error fetching schema for DB ID ${conn.id}:`, schemaError);
-                }
-              }
-              return { 
-                ...conn, 
-                size, 
-                tables: tableCount,
-                sizeBytes // Include bytes for potential later use
-              };
-            })
-          );
-          finalDatabasesToShow = enrichedConnections; 
-        } else {
-          finalDatabasesToShow = mockDatabases;
+        // --- Fetch Storage Info for ALL connections --- 
+        let storageInfoPromises = [];
+        if (fetchedConnections.length > 0) {
+            storageInfoPromises = fetchedConnections.map(conn => 
+                DatabaseService.getStorageInfo(conn.id).catch(err => {
+                    console.error(`Error fetching storage info for ${conn.id}:`, err);
+                    return { success: false, sizeBytes: 0, message: err.message }; // Return error state
+                })
+            );
         }
+        const storageResults = await Promise.all(storageInfoPromises);
         
-        setDatabases(finalDatabasesToShow);
+        // Calculate total size from successful storage info results
+        calculatedTotalSize = storageResults.reduce((sum, result) => {
+            // Check if the result has success: true and sizeBytes property
+            if (result && result.success && typeof result.sizeBytes === 'number') {
+                return sum + result.sizeBytes;
+            }
+            return sum;
+        }, 0);
+        setTotalDbSize(formatBytes(calculatedTotalSize)); // Set total size state
+        // ------------------------------------------------
 
-        // Prepare and fetch health checks only for REAL databases
-        healthPromises = finalDatabasesToShow
-            .filter(db => db.id && !db.isSample) 
+        // --- Enrich connections with Table Count and Individual Size --- 
+        let finalDatabasesToShow = [];
+        if (fetchedConnections.length > 0) {
+             finalDatabasesToShow = await Promise.all(
+                 fetchedConnections.map(async (conn) => {
+                     let tableCount = 0; // Default to 0
+                     // Find corresponding storage result using the connectionId (handle type difference)
+                     let storageResult = storageResults.find(res => String(res?.connectionId) === String(conn.id));
+                     let displaySize = storageResult?.sizeFormatted || 'N/A'; // Use size from storage info if found
+                     
+                     if (conn.id === 'sample') {
+                         // Sample DB handled correctly by the backend service now
+                         // Use values directly if storageResult found, otherwise use defaults
+                         displaySize = storageResult?.sizeFormatted || '128 MB'; 
+                         tableCount = 6; 
+                     } else {
+                         // Fetch schema ONLY for table count if needed by UI
+                         // Size is now correctly sourced from storageResult
+                         try {
+                            const schemaInfo = await DatabaseService.getDatabaseSchema(conn.id);
+                            if (schemaInfo.success && schemaInfo.tables) {
+                                tableCount = schemaInfo.tables.length;
+                            } else {
+                                console.warn(`Schema fetch failed for table count (DB ID ${conn.id}):`, schemaInfo.message);
+                            }
+                         } catch (schemaError) {
+                            console.error(`Error fetching schema for table count (DB ID ${conn.id}):`, schemaError);
+                         }
+                     }
+                     
+                     return { 
+                         ...conn, 
+                         size: displaySize, // Display size per card (now correctly sourced)
+                         tables: typeof tableCount === 'number' ? tableCount : 0, // Ensure 'tables' is a number
+                     };
+                 })
+             );
+        } else {
+            finalDatabasesToShow = fetchedConnections;
+        }
+        setDatabases(finalDatabasesToShow);
+        // -------------------------------------------------------------
+
+        // --- Prepare and fetch health checks --- 
+        const healthPromises = finalDatabasesToShow
+            .filter(db => db.id) // Filter out any potentially invalid entries
             .map(db => 
-                DatabaseService.getDatabaseHealth(db.id).then(status => ({ id: db.id, ...status }))
+                DatabaseService.getDatabaseHealth(db.id)
+                    .then(status => ({ id: db.id, ...status }))
+                    .catch(err => {
+                        console.error(`Error fetching health for ${db.id}:`, err);
+                        return { id: db.id, status: 'Error', message: 'Failed to fetch health' }; // Return error state
+                    })
             );
         const healthResults = await Promise.all(healthPromises);
         const newHealthData = {};
@@ -438,9 +467,7 @@ export default function Dashboard() {
         });
         setHealthData(newHealthData);
         setHealthSummary({ ok: calculatedOk, error: calculatedError, unknown: calculatedUnknown });
-
-        // Set total size state
-        setTotalDbSize(formatBytes(calculatedTotalSize)); // Use formatBytes helper
+        // -------------------------------------------
         
         // Conditional loading of Health Details and Performance Data
         // TODO: Implement API calls to fetch real detailed health and performance data
@@ -462,29 +489,29 @@ export default function Dashboard() {
           memoryHistoryPromise,
           topTablesPromise
         ]);
-        if (cpuRes.success) setCpuHistory(cpuRes.history);
-        if (memRes.success) setMemoryHistory(memRes.history);
+        if (cpuRes?.success) setCpuHistory(cpuRes.history);
+        if (memRes?.success) setMemoryHistory(memRes.history);
         setTopTables(topTablesResult || []); // Set top tables state
 
         // Fetch recent events
         const recentEvents = await EventService.getRecentEvents(10); // Get last 10 events
-        setEvents(recentEvents);
+        setEvents(recentEvents || []); // Ensure it's an array
 
       } catch (error) {
         console.error("Failed to fetch data:", error);
-        // Fallback to mock data if API fails
-        setDatabases(mockDatabases); 
-        setSystemInfo(mockSystemInfo);
+        setError(`Dashboard Error: ${error.message}`); // Set error state
+        // Keep potentially partially loaded data or clear it?
+        // Clearing might be safer
+        setDatabases([]); 
+        setSystemInfo({ cpuUsage: 0, memoryUsage: 0, diskUsage: 0, uptime: 'Error' });
         setHealthData({}); 
-        setPerformanceData(mockPerformanceData);
-        setCpuHistory([]); // Clear history on error
+        setPerformanceData({});
+        setCpuHistory([]);
         setMemoryHistory([]);
-        setEvents([]); // Clear events on error
-        setTopTables([]); // Clear top tables on error
-        setTotalDbSize('N/A'); // Reset size on error
-        setHealthSummary({ ok: 0, error: 0, unknown: 0 }); // Reset health on error
-
-        // Reset detailed health/performance on error
+        setEvents([]);
+        setTopTables([]);
+        setTotalDbSize('Error');
+        setHealthSummary({ ok: 0, error: 0, unknown: 0 });
         setDetailedHealthInfo({});
         setPerformanceMetrics({});
       } finally {
@@ -500,14 +527,21 @@ export default function Dashboard() {
         const apiBaseUrl = getApiBaseUrl();
         const sysInfoResponse = await fetch(`${apiBaseUrl}/system/info`);
         const sysInfoData = await sysInfoResponse.json();
-        setSystemInfo(sysInfoData);
-      } catch (error) {
-        console.error("Failed to update system info:", error);
+        // Check if response indicates an error from the backend service
+        if (sysInfoResponse.ok) {
+            setSystemInfo(sysInfoData);
+        } else {
+             throw new Error(sysInfoData.message || `HTTP error ${sysInfoResponse.status}`);
+        }
+      } catch (fetchError) {
+        console.error("Failed to update system info:", fetchError);
+        // Use the state setter function correctly
+        setError(`System Info Update Error: ${fetchError.message}`); 
       }
     }, 30000);
     
     return () => clearInterval(intervalId);
-  }, []);
+  }, []); // Empty dependency array means this runs once on mount
 
   // Load available AI providers on mount
   useEffect(() => {
@@ -789,11 +823,15 @@ export default function Dashboard() {
                             <StorageIcon />
                          </Box>
                       </Box>
-                      <Stack direction="row" spacing={1}>
+                      <Stack 
+                        direction={{ xs: 'column', sm: 'row' }} // Stack vertically on xs, row on sm and up
+                        spacing={1} 
+                        sx={{ mt: 'auto' }} // Push stack to bottom if needed
+                      >
                          <Button 
                             variant="contained" 
                             size="small" 
-                            onClick={() => navigate('/databases/create')}
+                            onClick={() => navigate('/databases/create')} // Assuming this is connect/add existing
                             startIcon={<AddIcon />}
                             sx={{ 
                               bgcolor: '#50C878', 
@@ -806,7 +844,7 @@ export default function Dashboard() {
                                 bgcolor: '#40A060',
                                 boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
                               },
-                              flex: 1
+                              flex: 1 // Allow buttons to take equal space in row layout
                             }}
                          >
                             Connect Database
@@ -814,7 +852,7 @@ export default function Dashboard() {
                          <Button 
                             variant="contained" 
                             size="small" 
-                            onClick={() => navigate('/databases/new')}
+                            onClick={() => navigate('/databases/new')} // Navigate to create new page
                             startIcon={<AddIcon />}
                             sx={{ 
                               bgcolor: '#50C878', 
@@ -827,7 +865,7 @@ export default function Dashboard() {
                                 bgcolor: '#40A060',
                                 boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
                               },
-                              flex: 1
+                              flex: 1 // Allow buttons to take equal space in row layout
                             }}
                          >
                             Create Database
@@ -844,9 +882,9 @@ export default function Dashboard() {
                           <Box>
                              <Typography variant="h4" sx={{ mb: 0.5 }}>
                                 {/* Safely calculate total tables, display N/A if any connection lacks count */}
-                                {databases.some(db => typeof db.tables !== 'number') 
-                                  ? 'N/A' 
-                                  : databases.reduce((sum, db) => sum + (db.tables || 0), 0)}
+                                {loading ? <Skeleton width={60} /> : 
+                                 databases.reduce((sum, db) => sum + (db.tables || 0), 0)
+                                }
                              </Typography>
                              <Typography variant="subtitle2" color="text.secondary">
                                 Total Tables

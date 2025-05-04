@@ -249,581 +249,103 @@ In dieser Migration wurde die Abhängigkeit von localStorage im Frontend entfern
 3. **Architekturelle Vorteile:**
    - Bessere Skalierbarkeit für zukünftige Mehrbenutzerszenarien
 
-### Migration 006 - System Performance Monitoring (2025-05-01)
+### Migration 006 - Database Table View Display Improvements (2024-06-28)
 
-In dieser Migration wurde ein umfassendes System zur Überwachung der Systemleistung und Datenbankstatistiken implementiert. Die folgenden Komponenten wurden hinzugefügt oder verbessert:
+In dieser Migration wurden umfassende Verbesserungen an der Tabellenanzeige und Datenverarbeitung vorgenommen, um korrekte Darstellung von PostgreSQL-Daten zu gewährleisten. Folgende Änderungen wurden implementiert:
 
-1. **System-Metriken-Sammlung:**
-   - Implementierung eines Python-basierten Dienstes für die Sammlung von Systemmetriken in Echtzeit (CPU, Arbeitsspeicher, Festplattenspeicher, Swap)
-   - Speicherung historischer Leistungsdaten für Trend- und Nutzungsanalysen
-   - Automatische Erfassung von Systemmetriken in regelmäßigen Intervallen (1 Minute)
+1. **Backend-Datenverarbeitung (databaseController.js):**
+   - Korrekte Behandlung von NULL-Werten durch Entfernung von COALESCE-Funktionen
+   - Verbesserte SQL-Abfragen mit korrekter Identifizierer-Quotierung
+   - Typgetreue Datenkonvertierung für Datums-, Zeit- und numerische Felder
+   - Hinzufügung von Datentyp-Metadaten zu den API-Antworten
 
-2. **Backend-API-Erweiterungen:**
-   - Neuer Endpunkt `/api/system/info` zur Bereitstellung aktueller Systemleistungsdaten
-   - Neuer Endpunkt `/api/system/performance-history` für historische Leistungsdaten (CPU, Speicher)
-   - Endpunkt `/api/databases/top-tables` zur Anzeige der größten Tabellen über alle Datenbankverbindungen hinweg
+2. **Frontend-Tabellenanzeige (TableView.js):**
+   - Implementierung typenspezifischer valueGetter- und renderCell-Funktionen
+   - Korrekte Lokalisierung von Dezimalzahlen (Punkt statt Komma als Dezimaltrennzeichen)
+   - Verbesserte Darstellung von Datums- und Zeitformaten
+   - Korrekte Anzeige von NULL-Werten
+   - Debugging-Funktionalität zur Anzeige von Rohdaten und transformierten Daten
 
-3. **Dashboard-Erweiterungen:**
-   - Neue "System Status" Karte mit Echtzeitanzeige von CPU-, Speicher- und Festplattennutzung
-   - Grafische Darstellung der Systemleistung mit Hilfe von Gauges und Diagrammen
-   - "Top Tables" Karte zur Anzeige der größten Tabellen in allen verbundenen Datenbanken
-   - Zusammenfassung der gesamten Datenbankgröße und Tabellenanzahl
+3. **UI-Verbesserungen:**
+   - Unterstützung für das Ändern der Spaltenbreite durch Ziehen der Spaltenränder
+   - Unterstützung für das Umsortieren von Spalten durch Drag & Drop
+   - Verbesserte Darstellung von Zeitstempeln und Zeitdaten
+   - Konsistente Formatierung von numerischen Werten
 
-4. **Integration in die bestehende Architektur:**
-   - Node.js Backend als Proxy für Python-basierte Systemmetriken
-   - Nahtlose Integration in die Dashboard-Oberfläche
-   - Automatische Aktualisierung der Systemdaten alle 30 Sekunden
+Diese Verbesserungen adressieren folgende Probleme:
+- Fehlende oder falsch angezeigte Felder wie "time", "uptime" und "raw_uptime"
+- Inkorrekte Zahlenformatierung (Komma statt Punkt als Dezimaltrennzeichen)
+- Nicht funktionierende Spaltengrößenänderung und -neuanordnung
 
-5. **Technische Implementierungsdetails:**
-   - Verwendung von `psutil` in Python für die zuverlässige Erfassung von Systemmetriken
-   - In-Memory-Speicherung von Verlaufsdaten mit konfigurierbarer Beibehaltungsdauer (standardmäßig 60 Minuten)
-   - RESTful API mit JSON-Antworten für Frontend-Integration
+Die Änderungen stellen sicher, dass die Daten in der Mole Database Manager-Anwendung korrekt und konsistent mit den tatsächlichen Datenbankinhalten angezeigt werden, insbesondere für die PostgreSQL-Datenbanken wie "greencooling" und "greencooling-backup".
 
-Diese Erweiterungen bieten Administratoren einen umfassenden Überblick über die Systemleistung und ermöglichen eine bessere Überwachung der Datenbankgrößen und -nutzung. Die Implementierung wurde als Teil des Python-basierten `db-sync`-Dienstes realisiert, wodurch die bestehende Infrastruktur ohne zusätzliche Abhängigkeiten genutzt werden konnte.
+### Migration 007 - Database Synchronization UI Implementation (2024-10-17)
 
-```python
-# Beispiel-Code für die Systemmetriken-Sammlung
-metrics_history = {
-    'cpu': [],
-    'memory': []
-}
+In dieser Migration wurde die Benutzeroberfläche für die Datenbanksynchronisationsfunktion implementiert. Diese neue Funktionalität ermöglicht es Benutzern, Datenbanken zu synchronisieren und die Synchronisationseinstellungen über die Benutzeroberfläche zu verwalten. Folgende Änderungen wurden vorgenommen:
 
-def collect_metrics():
-    try:
-        cpu = psutil.cpu_percent(interval=0.1)
-        mem = psutil.virtual_memory().percent
-        timestamp = time.time() * 1000
-        
-        metrics_history['cpu'].append({'timestamp': timestamp, 'value': round(cpu, 1)})
-        metrics_history['memory'].append({'timestamp': timestamp, 'value': round(mem, 1)})
-    except Exception as e:
-        logger.error(f"Error collecting metrics: {str(e)}")
+1. **Frontend-UI-Erweiterungen:**
+   - Hinzufügung eines neuen "Sync" Tabs zur DatabaseDetails-Seite
+   - Implementierung einer DatabaseSyncTab-Komponente mit folgenden Elementen:
+     - Ein- und Ausschalten der Synchronisierung (Toggle-Switch)
+     - Frequenzauswahl via Dropdown-Menü (Stündlich, Täglich, Wöchentlich)
+     - "Sync Now" Button für sofortige manuelle Synchronisierung
+   - Integration eines Sync-Status-Indikators
+   - Anpassungen an das bestehende Tab-System für einheitliche Navigation
 
-# Scheduler für regelmäßige Metrik-Sammlung
-scheduler = BackgroundScheduler(daemon=True)
-scheduler.add_job(collect_metrics, 'interval', minutes=1, id='metric_collector')
-scheduler.start()
-```
+2. **Backend-Service-Erweiterungen:**
+   - Erweiterung des DatabaseService mit Methoden für Synchronisationsfunktionen:
+     - `getSyncSettings(databaseId)`: Abrufen der Synchronisationseinstellungen
+     - `updateSyncSettings(databaseId, settings)`: Aktualisieren der Synchronisationseinstellungen
+     - `triggerSync(databaseId)`: Manuelles Auslösen einer Synchronisation
+   - Vorbereitung für die Integration mit dem Python-basierten db-sync-Dienst
 
-### Migration 007 - System Performance Monitoring Flask Integration (2025-07-01)
+3. **Verbesserte Benutzerführung:**
+   - Informative Meldungen über den Synchronisationsstatus
+   - Fehlerbehandlung für fehlgeschlagene Synchronisationsversuche
+   - Visuelle Rückmeldung während laufender Synchronisationsvorgänge
 
-In dieser Migration wurde die Architektur des System-Performance-Monitoring-Dienstes verbessert, um Stabilität und Zuverlässigkeit zu erhöhen. Folgende Änderungen wurden vorgenommen:
+Diese Erweiterungen legen die Grundlage für eine vollständige Datenbanksynchronisationsfunktion, die es Benutzern ermöglicht, Daten zwischen verschiedenen Datenbanken automatisch oder manuell zu synchronisieren. Die Implementierung folgt dem bestehenden Architekturmuster mit einer klaren Trennung zwischen Frontend-UI und Backend-Services.
 
-1. **Gunicorn Integration für Python Flask-Service:**
-   - Umstellung des Python Flask-Anwendungsstarts auf Gunicorn WSGI-Server
-   - Verbesserung der Prozessverwaltung und Fehlererholung bei hoher Last
-   - Optimierte Worker-Konfiguration für bessere Performance
-   - Behebung von "Address already in use"-Konflikten zwischen Gunicorn und Flask
+Die vollständigen Endpunkte für die Synchronisations-API werden vom Node.js-Backend bereitgestellt und interagieren mit der `sync_tasks`-Tabelle und dem `db-sync`-Service, wie bereits in der Dokumentation beschrieben.
 
-2. **Backend API-Endpunkte-Behebung:**
-   - Korrektur der API-Endpunkte für System-Performance-Metriken:
-     - `/api/system/performance-history` funktioniert jetzt zuverlässig für historische Daten
-     - Behebung von 404-Fehlern bei Metrikanfragen
-     - Korrekte Bereitstellung von CPU, Speicher, Festplatten- und Swap-Nutzungsdaten
+### Version 0.6.0 (aktuell)
+- Implementierung der Datenbank-Synchronisationsfunktion:
+  - Neue UI-Komponenten für Synchronisationssteuerung
+  - "Sync" Tab in der Datenbankdetailansicht
+  - Backend-Service-Erweiterungen für Synchronisationsfunktionen
+  - Vorbereitung für die Integration mit dem Python-basierten db-sync-Dienst
+- UI-Verbesserungen:
+  - Verbesserte Benutzerführung bei der Datenbankinteraktion
+  - Visuelles Feedback für Synchronisationsaktionen
+  - Konsistente Benutzerführung durch alle Synchronisationsprozesse
+- Fehlerbehebungen:
+  - Korrektur des Sidebar-Toggle-Buttons
+  - Verbesserungen am Layout und der Navigation
+  - Übersetzung der deutschen Texte in Englisch
 
-3. **Frontend-Verbesserungen:**
-   - Korrektur der Systemstatus-Karte für vollständige Metrik-Anzeige:
-     - CPU-Auslastung mit verbesserter Aktualisierungsrate
-     - Speichernutzung mit korrekter Prozentanzeige
-     - Festplattennutzung mit sektoraler Darstellung
-     - Swap-Speicherstatus mit Warnfunktion bei hoher Auslastung
-   - Behebung der "Top Tables"-Kachel-Anzeige:
-     - Korrekte Anzeige der größten Tabellen über alle Datenbankverbindungen
-     - Verbessertes Größenformat mit menschenlesbaren Werten
-     - Zuverlässige Fehlerbehandlung für nicht erreichbare Datenbanken
-     - Sortierung nach tatsächlicher Tabellengröße statt Zeilenanzahl
+## Frontend-Komponenten Übersicht
 
-4. **UI-Optimierungen:**
-   - Behebung von unerwünschten Scrollbalken im Browser:
-     - Anpassung des CSS mit `overflow-y: hidden` für html und body Elemente
-     - Verbesserte Container-Höhenberechnung für verschiedene Bildschirmgrößen
-     - Optimierte Layout-Komponenten für konsistente Darstellung ohne Überlauf
+### Wichtige UI-Komponenten und ihre Dateipfade
 
-5. **Backend-Implementierungsdetails:**
-   - Verbesserung der Synchronisierung zwischen Node.js und Python-Diensten:
-     - Robustere Proxy-Konfiguration für API-Weiterleitungen
-     - Verbesserte Fehlerbehandlung mit detaillierten Fehlermeldungen
-     - Automatische Wiederverbindungslogik bei temporären Dienstausfällen
-   - Aktualisierung der Abhängigkeiten:
-     - Hinzufügung von Gunicorn zu Python-Requirements
-     - Optimierte Konfiguration im Docker-Entrypoint-Skript
+Um die Navigation im Codebase zu erleichtern, hier eine Übersicht der wichtigsten UI-Komponenten:
 
-6. **Verbesserung der Database Creation-Funktionalität:**
-   - Robuste Implementierung des Datenbankerstellen-Funktionalität:
-     - Vollständige Integration in die Backend-API mit dem Endpunkt `/api/databases/create-instance`
-     - Unterstützung für drei Datenbanktypen (PostgreSQL, MySQL, InfluxDB)
-     - Sichere Verbindung zu Datenbankadmin-Schnittstellen über umgebungsvariablen-gesteuerte Zugangsdaten
-     - Automatische Speicherung von neu erstellten Datenbanken als Verbindungen
-   - Verbessertes Frontend für Datenbankerstellung:
-     - Intuitive Stepper-basierte Benutzeroberfläche für schrittweise Datenbankerstellung
-     - Echtzeit-Validierung von Datenbankname und Benutzeranmeldedaten
-     - Verbesserte Fehlerbehandlung mit benutzerfreundlichen Meldungen
-     - Sofortige Navigation zur neuen Datenbank nach erfolgreicher Erstellung
-   - Verbesserte Sicherheitsmaßnahmen:
-     - Strenge Validierung und Bereinigung von Benutzereingaben
-     - Beschränkung auf sichere Zeichensätze für Datenbanknamen
-     - Isolierte Admin-Verbindungen mit minimalen Berechtigungen
-     - Detailliertes Logging von Datenbankoperationen
+1. **Hauptnavigation:**
+   - Seitenleiste: `/app/frontend/src/components/Sidebar.js`
+   - Hauptmenü: `/app/frontend/src/components/MainMenu.js`
+   - Burger-Menü-Button: `/app/frontend/src/components/Header.js`
 
-Diese Verbesserungen sorgen für eine stabilere Systemüberwachung, korrekte Anzeige aller Systemmetriken im Dashboard sowie eine deutlich verbesserte Datenbankerstellungsfunktion, die es Benutzern ermöglicht, schnell und unkompliziert neue Datenbanken zu erstellen und sofort mit ihnen zu arbeiten.
+2. **Datenbankansicht:**
+   - Datenbankverbindungsliste: `/app/frontend/src/components/DatabaseList.js`
+   - Verbindungsdetails: `/app/frontend/src/components/ConnectionDetails.js`
+   - Tabellenansicht: `/app/frontend/src/components/TableView.js`
+   - Abfrageeditor: `/app/frontend/src/components/QueryEditor.js`
 
-```bash
-# Beispiel der verbesserten Docker-Entrypoint-Konfiguration für Gunicorn
-#!/bin/bash
-set -e
+3. **Datenverwaltung:**
+   - Datenbankkontroller: `/app/backend/controllers/databaseController.js`
+   - Verbindungsservice: `/app/frontend/src/services/DatabaseService.js`
+   - Datenkonverter: `/app/frontend/src/utils/dataTypeUtils.js`
 
-# Starte Gunicorn mit der Flask-App
-exec gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 sync_manager:app
-```
-
-### Version 0.5.1 (aktuell)
-- Umfassende Verbesserungen der Systemüberwachung und Stabilität:
-  - Integration von Gunicorn als WSGI-Server für die Flask-Anwendung
-  - Behebung der Performance-Monitoring-Endpunkte:
-    - Korrekte Anzeige aller Systemmetriken (CPU, Speicher, Festplatte, Swap)
-    - Funktionierende historische Performance-Daten
-    - Verbesserte "Top Tables"-Darstellung mit korrekter Größensortierung
-  - Behebung von UI-Problemen:
-    - Entfernung unerwünschter Scrollbalken
-    - Bessere Responsive-Design-Anpassung
-    - Optimierte Container-Höhenberechnung
-  - Verbesserte Fehlerbehandlung und Logging
-  - Optimierte Proxy-Konfiguration zwischen Node.js und Python-Diensten
-  - Aktualisierung der Abhängigkeiten im Python-Service
-  - Vollständige Implementierung der Datenbankerstellungsfunktion:
-    - Native API-Integration für die Erstellung neuer Datenbanken direkt aus der Benutzeroberfläche
-    - Unterstützung für PostgreSQL, MySQL und InfluxDB (Buckets)
-    - Umfassende Validierung und Fehlerbehandlung
-    - Nahtlose Integration mit bestehenden Verbindungsfunktionen
-
-## Frontend-Komponenten
-
-### Hauptkomponenten
-
-1. **DatabasesList**: Zeigt eine Liste aller konfigurierten Datenbankverbindungen an
-   - Übersichtliche Darstellung aller Datenbankverbindungen als Karten
-   - Intelligentes Demo-Datenbankmanagement:
-     - Zeigt eine einzelne Demo-Datenbankverbindung für neue Benutzer
-     - Entfernt Demo-Datenbankverbindungen automatisch, sobald echte hinzugefügt werden
-     - Bringt Demo-Verbindung zurück, wenn alle echten Verbindungen gelöscht werden
-   - Filterfunktion zur schnellen Suche in Datenbankverbindungen
-   - Sortieroptionen nach Namen, Engine oder letztem Verbindungszeitpunkt
-   - Kontextmenü mit Optionen zum Bearbeiten und Löschen von Verbindungen
-   - Button zum Hinzufügen neuer Datenbankverbindungen
-   - Holt Datenbankverbindungen direkt vom Backend-API
-2. **DatabaseDetails**: Zeigt Details einer ausgewählten Datenbank (Tabellen, Struktur, usw.)
-   - Anzeige von Grundinformationen zur Datenbank (Engine, Host, Port, Benutzer)
-   - Tabellenansicht mit Übersicht aller Tabellen und Views
-   - Strukturansicht mit Detailinformationen zum Datenbankschema
-   - SQL-Query-Editor für die direkte Ausführung von SQL-Abfragen
-   - Responsive Benutzeroberfläche mit Material UI
-3. **DatabaseForm**: Formular zum Erstellen und Bearbeiten von Datenbankverbindungen
-   - Stepper-basierter Ansatz für eine übersichtliche Dateneingabe
-   - Verbindet zu bestehenden Datenbanken (lokal oder remote)
-   - Validierung der Verbindungsdaten durch Test-Verbindungsaufbau
-   - Unterstützung verschiedener Datenbanktypen (PostgreSQL, MySQL, SQLite)
-4. **DatabaseCreate**: Formular zur Erstellung neuer Datenbanken
-   - Ermöglicht das Erstellen neuer Datenbanken direkt aus der Web-Oberfläche
-   - Stepper-basierter Ansatz für eine übersichtliche Dateneingabe
-   - Unterstützung für verschiedene Datenbanktypen (PostgreSQL, MySQL, InfluxDB)
-   - Benötigt Administratorrechte auf dem Datenbankserver
-   - Speichert neu erstellte Datenbanken automatisch in der Verbindungsliste
-5. **QueryEditor**: SQL-Editor zum Ausführen von Abfragen
-   - Zwei Modi: Einfacher Modus und Experten-Modus
-   - Einfacher Modus: Benutzerfreundliche Oberfläche zur Tabellenverwaltung ohne SQL-Kenntnisse
-     - Visuelle Darstellung von Tabellen und Spalten
-     - Formular zum Erstellen neuer Tabellen mit Spalten-Definition
-     - Aktionen wie Tabelle löschen, Spalte hinzufügen
-   - Experten-Modus: Traditioneller SQL-Editor mit Syntax-Hervorhebung
-     - Direktes Schreiben und Ausführen von SQL-Befehlen
-     - Anzeige der Ergebnisse in tabellarischer Form
-     - Export-Möglichkeit für Ergebnisse
-6. **Settings**: Umfassende Einstellungsseite für die Anwendungskonfiguration
-   - Erscheinungsbild-Einstellungen (Dark Mode, Sprache, Schriftgröße)
-   - Benachrichtigungseinstellungen
-   - Datenbankeinstellungen (Standard-Datenbanktyp, Zeichensatz, Backup-Konfiguration)
-   - Synchronisierungseinstellungen für DB-Sync-Service
-   - Sicherheitseinstellungen (Passwort, Sitzungsverwaltung)
-   - Informationsbereich zur Anwendung
-7. **TableView**: Spezialisierte Ansicht für Tabellendaten mit erweiterten Funktionen
-   - Implementiert mit `@mui/x-data-grid` für eine moderne, leistungsfähige Tabellenansicht
-   - Server-seitige Paginierung für effiziente Anzeige großer Datensätze
-   - Dynamische Sortierung durch Klick auf Spaltenüberschriften
-   - Automatische Datentyperkennung für korrekte Spaltenformatierung
-   - Responsive Benutzeroberfläche mit Material UI
-   - Umfassende Toolbar mit Filterung, CSV-Export und Anzeigeoptionen
-   - Detaillierte Spalteninformationen als Tooltips (Datentyp, Nullable, etc.)
-   - Optimierte Datenabfragen durch parametrisierte API-Anfragen
-
-### Dashboard Komponente
-
-Das Dashboard bietet eine zentrale Übersicht über alle Datenbanken und Systemfunktionen:
-
-1. **Datenbank-Management**
-   - Statistik-Karte mit Gesamtzahl der konfigurierten Datenbanken
-   - Zwei-Button-Ansatz für Datenbankverwaltung:
-     - "Connect Database": Verbindet zu einer bestehenden Datenbank (lokaler oder Remote-Server)
-     - "Create Database": Erstellt eine neue Datenbank direkt aus der Web-Oberfläche
-   - Liste der zuletzt verwendeten Datenbanken mit Schnellzugriff
-
-2. **System-Informationen**
-   - Echtzeitstatistiken zu CPU-, Speicher- und Festplattennutzung
-   - Systemlaufzeit und Performance-Metriken
-   - Visuelle Darstellung der Ressourcennutzung mit Fortschrittsbalken
-
-3. **Registerkarten-Navigation**
-   - Übersicht: Kernstatistiken und Verbindungsinformationen
-   - Gesundheit: Status und Monitoring-Informationen zu Datenbanken
-   - Performance: Detaillierte Leistungsmetriken und Abfragestatistiken
-   - KI-Assistent: Natürlichsprachliche Datenbankabfragen und Analyse
-
-### KI-Assistent
-
-Der KI-Assistent ermöglicht die natürlichsprachliche Abfrage von Datenbanken und ist wie folgt implementiert:
-
-1. **AI Assistant Tab im Dashboard**
-   - Integriert in das Dashboard als separate Registerkarte
-   - Einfache Texteingabe für die Fragestellung
-   - Anzeige der KI-Antwort mit formatiertem Text
-   - Beispielabfragen zur Vereinfachung des Einstiegs
-
-2. **Backend-Endpunkt für KI-Abfragen**
-   - REST API Endpunkt unter `/api/ai/query`
-   - Verarbeitung der natürlichsprachlichen Eingabe
-   - Konvertierung in SQL oder andere datenbankspezifische Abfragen
-   - Ausführung der generierten Abfragen und Rückgabe strukturierter Ergebnisse
-
-3. **Verbesserte NL-zu-SQL Funktionalität** (Version 0.4.2)
-   - Vollständige Unterstützung für verschiedene Datenbanktypen:
-     - Erweiterte Muster-Erkennung für PostgreSQL-Datenbanken
-     - MySQL-spezifische Abfragemusterunterstützung
-     - SQLite-Unterstützung für lokale Datenbanken
-   - Intelligente Analyse der natürlichen Sprache:
-     - Erkennung von Datenbankabfragekontexten mit natürlicher Sprache
-     - Extraktion von Tabellennamen und Spalten aus natürlichersprachlichen Anfragen
-     - Kontextbasierte SQL-Generierung basierend auf der Datenbank-Engine
-   - Sample-Datenbank mit umfangreichen Beispieldaten:
-     - Vordefinierte Abfragen für bekannte Muster
-     - Generierung simulierter Antworten für konsistente Benutzererfahrung
-     - Automatische Fallback-Nutzung bei fehlender Datenbankangabe
-
-4. **Optimierte Datenbankabfrage-Ausführung** (Version 0.4.2)
-   - Engine-spezifische Verbindungslogik:
-     - Optimierte PostgreSQL-Verbindungen mit psycopg2
-     - Verbesserte MySQL-Verbindungen mit error-handling
-     - SQLite-Unterstützung für lokale Datenbanken
-   - Erweiterte Fehlerbehandlung und Logging:
-     - Detaillierte Fehlerprotokolle für Debugging
-     - Benutzerfreundliche Fehlermeldungen
-     - Konsistente Ergebnisformatierung für verschiedene Abfragetypen
-   - Optimierte Ergebnisdarstellung:
-     - Formatierte Ergebnisse für bessere Lesbarkeit
-     - Tabellarische Darstellung für mehrere Ergebniszeilen
-     - Spezielle Formatierung für aggregierte Ergebnisse (COUNT, AVG, MIN, MAX)
-
-5. **KI-Konfigurationsschnittstelle**
-   - Teil der Einstellungsseite
-   - Auswahl und Konfiguration verschiedener KI-Modelle:
-     - **OpenAI** (GPT-3.5, GPT-4) - erfordert API-Schlüssel
-     - **Hugging Face** - Auswahl aus verschiedenen offenen NLP-Modellen
-     - **Lokale Modelle** - Möglichkeit zur Ausführung lokaler Modelle für erhöhte Datensicherheit
-   - Einstellungen für Abfragegenauigkeit und -geschwindigkeit
-   - Möglichkeit, benutzerdefinierte Prompt-Vorlagen zu erstellen
-
-## Verwendete KI-Technologien
-
-Mole Database Manager unterstützt verschiedene KI-Technologien zur Datenabfrage:
-
-1. **OpenAI API** (GPT-Modelle)
-   - Standardoption für hochpräzise natürlichsprachliche Verarbeitung
-   - Fortgeschrittenes Verständnis komplexer Abfragen
-   - Erfordert einen gültigen OpenAI API-Schlüssel
-
-2. **Perplexity AI**
-   - Leistungsstarkes KI-Suchmodell für datenintensive Abfragen
-   - Hervorragend für analytische Aufgaben und komplexe Datenbankabfragen
-   - Effiziente Verarbeitung großer Datenmengen mit präzisen Ergebnissen
-   - Erfordert einen gültigen Perplexity API-Schlüssel
-
-3. **Hugging Face Transformers**
-   - Open-Source-Alternative für natürlichsprachliche Verarbeitung
-   - Unterstützung für verschiedene spezialisierte Modelle
-   - Geringere Anforderungen an API-Schlüssel (einige Modelle erfordern dennoch Authentifizierung)
-
-4. **LLama-basierte lokale Modelle**
-   - Vollständig lokale Ausführung für höhere Datensicherheit
-   - Geeignet für sensible Daten, die nicht an externe Dienste gesendet werden sollen
-   - Höhere Hardware-Anforderungen für die Ausführung
-
-5. **SQLPal (integriertes Spezialmodell)**
-   - Leichtgewichtiges, auf SQL-Abfragen spezialisiertes KI-Modell
-   - Optimiert für schnelle Antwortzeiten bei Standardabfragen
-   - Vollständig lokal ausführbar ohne externe Abhängigkeiten
-
-Die Auswahl und Konfiguration des KI-Modells erfolgt über die Einstellungsseite der Anwendung. Standardmäßig wird SQLPal verwendet, um ohne zusätzliche Konfiguration sofort betriebsbereit zu sein.
-
-## Änderungsprotokoll
-
-### Version 0.5.0 (aktuell)
-- Vollständige Integration eines KI-Assistenten mit umfassender Konfigurationsoberfläche:
-  - Benutzerfreundliche Konfiguration für API-Tokens und Modellauswahl
-  - Automatische Auswahl der KI mit SQLPal als Fallback-Modell 
-  - Backend-Integration mit Node.js- und Python-Komponenten:
-    - Node.js-Controller zur Verwaltung von Einstellungen (`aiController.js`)
-    - Python-Backend zur Ausführung der AI-Modelle
-    - Sichere Speicherung verschlüsselter API-Keys
-  - Erweiterte AI-Service-Komponente auf der Frontend-Seite
-  - Verbesserte KI-Antworten mit Anzeige des verwendeten Providers
-  - Anzeige der generierten SQL-Abfragen und Ergebnisdaten in Tabellenform
-  - Zukunftssicher durch einfache Erweiterbarkeit um weitere KI-Anbieter
-  - Anpassbare Einstellungen für SQL-Generierung und Abfrageparameter
-- Integration des axios-Pakets in die Backend-Abhängigkeiten
-  - Implementierung für HTTP-Anfragen zwischen Node.js-Backend und Python-Service
-  - Sichere Übertragung von KI-Einstellungen zwischen den Diensten
-- Verbesserung der Python-Containerumgebung:
-  - Umstellung auf Debian-basiertes Docker-Image für vollständige KI-Kompatibilität
-  - Integration von Rust und allen notwendigen Build-Tools für Tokenizers
-  - Vollständige Unterstützung für PyTorch und Hugging Face Transformers
-  - Sicherstellung der Kompatibilität aller KI-Modelle (lokal und remote)
-
-### Version 0.4.3 (in Entwicklung)
-- Behebung eines wichtigen Fehlers bei der Anzeige von Datenbankverbindungen:
-  - Korrektur der Navigation von der Datenbankübersicht zur Detailansicht mit erweitertem Routing-Format (`/database/id/:id`)
-  - Implementierung einer konsistenten URL-Struktur für Datenbankdetails
-  - Verbesserung der Datenbanksuche nach ID in der DatabaseDetails-Komponente
-  - Behebung der Konsistenzprobleme zwischen verschiedenen localStorage-Einträgen
-  - Hinzufügung einer verbesserten Synchronisierungsfunktion für localStorage-Datenbankinformationen:
-    - Zusammenführung von Daten zwischen `mole_real_databases` und `mole_database_connections`
-    - Automatische Synchronisierung bei App-Initialisierung
-    - Korrektes Speichern von Datenbanken beim Anklicken in der Liste
-  - Sicherstellung der korrekten Anzeige von echten Datenbankverbindungen anstelle von Sample-Daten
-  - Verbesserung des String-Vergleichs für Datenbank-IDs mit `toString()`-Konvertierung
-- API-URL-Verbesserungen:
-  - Dynamische Generierung der API-Basis-URL basierend auf dem aktuellen Hostnamen
-  - Verbesserung der Anwendungsportabilität zwischen verschiedenen Umgebungen
-  - Korrektur der API-Endpunkte für Datenbankschema und Abfrageausführung:
-    - Standardisierung der Pfade zu `/api/databases/:id/schema` und `/api/databases/:id/execute`
-    - Beseitigung inkonsistenter URL-Formate mit `/connections/`
-    - Einheitliche API-Struktur für verbesserte Code-Wartbarkeit und Fehlerbehebung
-  - Behebung kritischer Fehler bei Datenbankoperationen:
-    - Korrektur der API-Endpunkte für alle Datenbankaktionen (Speichern, Aktualisieren, Löschen)
-    - Konsistente Verwendung direkter API-Routen ohne `/connections/`-Segment
-    - Fixierung des Problems, dass gelöschte Datenbankverbindungen nach dem Neuladen wieder erscheinen
-    - Sicherstellung einer korrekten Datenpersistenz zwischen Frontend und Backend
-
-### Version 0.4.2 (in Entwicklung)
-- Umfangreiche Verbesserungen am KI-Assistenten:
-  - Vollständige Überarbeitung der natürlichsprachlichen Übersetzungsfunktion (`natural_language_to_sql`)
-  - Optimierte SQL-Abfrageausführung für verschiedene Datenbanktypen
-  - Verbesserte Fehlerbehandlung und Logging
-  - Intelligentere Erkennung von Abfragemustern in natürlicher Sprache
-  - Erweiterte Unterstützung für PostgreSQL, MySQL und SQLite Datenbanken
-  - Neue `get_sample_query_results` Funktion für konsistente Demo-Datenbankergebnisse
-  - Verbesserte Formatierung von KI-Antworten für bessere Lesbarkeit
-- API-Endpunkt-Überarbeitung:
-  - Modernisierte REST-API Struktur für `/api/ai/query`
-  - Verbesserte Parameter-Validierung
-  - Erweiterte Ergebnis-Rückgabestruktur mit formatierter Anzeige und Rohdaten
-  - Konsistente Fehlerbehandlung für Frontend-Integration
-
-### Version 0.4.1 (in Entwicklung)
-- Implementierung der neuen Datenbankerstellen-Funktionalität
-  - Neue DatabaseCreate-Komponente für die Erstellung eigener Datenbanken
-  - Klare Unterscheidung zwischen "Connect Database" und "Create Database" im Dashboard
-  - Unterstützung für die Erstellung von PostgreSQL, MySQL und InfluxDB Datenbanken
-  - API-Endpunkt für die Datenbankerstellen über create-database.php
-- Frontend-Verbesserungen für das Dashboard:
-  - Neu gestaltete Datenbankstatistik-Karte mit zwei-Button-Design
-  - Farbliche Unterscheidung zwischen Verbinden (blau) und Erstellen (grün)
-  - Verbesserte visuelle Hierarchie für wichtige Aktionen
-- Umstellung der Datenbankverbindungsspeicherung von JSON auf SQLite:
-  - Implementierung eines SQLite-Datenbankmodells zur Speicherung von Verbindungen
-  - Automatische Migration vorhandener Verbindungen aus JSON
-  - Verbesserte Datenpersistenz und -integrität
-  - Abwärtskompatibilität mit älteren API-Endpunkten
-  - Vorbereitung für erweiterte Abfrage- und Filtermöglichkeiten
-- Modernisierung der Datenbankarchitektur:
-  - Integration von Sequelize ORM für robuste Datenbankinteraktionen
-  - Implementierung eines Service-Layers für bessere Trennung der Zuständigkeiten
-  - Verbesserte Sicherheit durch Verschlüsselung sensibler Verbindungsdaten
-  - Unterstützung für mehrere Datenbanktypen mit einheitlicher API
-  - Verbesserte Fehlerbehandlung und Validierung
-
-### Version 0.4.0 (aktuell)
-- Integration eines KI-basierten Assistenten für natürlichsprachliche Datenbankabfragen
-  - Benutzer können in natürlicher Sprache Fragen zu ihren Daten stellen
-  - KI analysiert die Anfrage und erstellt automatisch passende Datenbankabfragen
-  - Unterstützung verschiedener Abfragetypen (Temperatur, Energieverbrauch, Nutzeraktivitäten, etc.)
-- Erweitertes Monitoring-Dashboard mit verbesserter Datenvisualisierung
-  - Neuer Gesundheitsbereich mit visuellen Indikatoren für Datenbankzustand
-  - Detaillierte Performance-Metriken für Abfragen und Transaktionen
-  - Überwachung von Lock-Konflikten und Index-Nutzung
-- Umfangreiche KI-Konfigurationsoptionen in den Einstellungen
-  - Auswahl verschiedener KI-Modelle (OpenAI, Hugging Face, lokale Modelle)
-  - Anpassbare Prompt-Vorlagen für spezifische Anwendungsfälle
-  - API-Schlüsselverwaltung für verschiedene KI-Provider
-
-### Version 0.3.1 (in Entwicklung)
-- Verbessertes Dark Theme mit konsistenterer Farbpalette und besserem Kontrast
-- Funktionale Implementierung der oberen Navigationsleisten-Buttons:
-  - Theme-Wechsler-Button für das Umschalten zwischen Hell- und Dunkel-Modus
-  - Benachrichtigungsmenü mit Anzeige aktueller Systemnachrichten
-  - Vereinfachte Navigation mit integriertem Settings-Zugriff im Profilmenü
-  - Vereinfachtes Profilmenü mit den Optionen "Profile", "Settings" und "Sign Out"
-- Neue E-Mail-Funktionalität:
-  - Konfigurierbare SMTP-Einstellungen für Benachrichtigungen
-  - E-Mail-Service zum Senden von Benachrichtigungen
-  - Testfunktionen für SMTP-Verbindungen
-  - Speicherung von SMTP-Konfigurationen
-  - Anpassbare E-Mail-Adresse für Benachrichtigungen im Profil
-- Verbesserte Profilseite mit integrierten Konto- und Sicherheitseinstellungen:
-  - Zusammenführung der Profil- und Kontofunktionen in einer übersichtlichen Oberfläche
-  - Umfassende Verwaltung persönlicher Informationen und Sicherheitseinstellungen
-- Erweiterte Benachrichtigungsfunktionen:
-  - Integration von E-Mail-Benachrichtigungen für wichtige Systemereignisse
-  - Konfigurierbare Benachrichtigungspräferenzen für verschiedene Ereignistypen
-  - Anpassbare E-Mail-Adresse für Benachrichtigungen
-  - Detaillierte Einstellungen für In-App und E-Mail-Benachrichtigungen
-- Verbesserte UI-Elemente mit konsistenten Schatten, Rändern und Hintergrundfarben
-- Bessere visuelle Hierarchie durch angepasste Kontraste und Farbakzente
-- Optimierung der Benutzeroberfläche für bessere Lesbarkeit und ergonomische Bedienung
-- Optimierte Datenbankverwaltung für bessere Benutzerfreundlichkeit:
-  - Reduzierung auf eine einzelne Demo-Datenbank für neue Benutzer
-  - Automatische Entfernung der Demo-Datenbank, sobald eine echte Datenbank hinzugefügt wird
-  - Verbesserte Kennzeichnung von Demo-Inhalten
-  - Verwendung von LocalStorage zur Persistierung von Datenbankverbindungen im Browser
-- Verbesserte Favicon-Integration für korrekte Darstellung im Browser
-
-### Version 0.3.0 (in Entwicklung)
-- Implementierung der neuen DatabaseDetails-Komponente für detaillierte Datenbankansicht
-- Hinzufügung einer umfassenden Settings-Seite mit Konfigurationsoptionen
-- Verbesserter SQL Editor mit zwei Modi:
-  - Einfacher Modus für Benutzer ohne SQL-Kenntnisse
-  - Experten-Modus für direktes SQL-Schreiben
-- Dark Mode als Standardthema für bessere Lesbarkeit und Augenkomfort
-- Verbesserte Navigation zwischen Datenbanken und Tabellen
-- Optimierte Routenstruktur für konsistente URL-Pfade
-- Entfernung der nicht implementierten Login-Komponente aus dem Routing
-- Behebung von Docker-Volumes-Problemen für zuverlässigere Datenbank-Container
-- Hinzufügung von client-seitiger Routing-Konfiguration für bessere Navigation
-- Verbesserte PostgreSQL-Unterstützung:
-  - Korrekte Verarbeitung von Tabellen- und Spaltennamen mit Bindestrichen
-  - Automatische Umschließung von Bezeichnern mit doppelten Anführungszeichen
-  - Robustes Fehlerhandling für komplexe Datenbankstrukturen
-
-### Version 0.2.0
-- Umstellung von Adminer auf moderne React-basierte Benutzeroberfläche
-- Implementierung von Material UI für einheitliches, modernes Design
-- Verbesserte Benutzererfahrung für Datenbankmanagement
-- Responsive Design für Desktop- und Mobile-Nutzung
-
-### Version 0.1.0
-- Erste Version mit Adminer als Web-UI
-- Grundlegende Funktionalität für Datenbankzugriff
-- Database Sync Service für die Datensynchronisierung 
-
-## Verzeichnis- und Dateistruktur
-
-Die Anwendung ist wie folgt strukturiert:
-
-```
-mole/
-├── mole.md                    # Projekt-Dokumentation
-├── build-log.txt              # Build-Protokoll
-├── docker-compose.yml         # Docker-Compose-Konfiguration
-├── README.md                  # Allgemeine Readme-Datei
-├── .cursor/                   # Cursor-Editor-Konfiguration
-│   └── rules/
-│       └── documentation.mdc  # Dokumentationsrichtlinien
-├── app/                       # Hauptverzeichnis für Anwendungscode
-│   ├── Dockerfile             # Docker-Konfiguration für die Hauptanwendung
-│   ├── react-ui/              # Frontend-Anwendung (React)
-│   │   ├── src/               # React-Quellcode
-│   │   │   ├── App.js         # Hauptkomponente der React-Anwendung
-│   │   │   ├── App.css        # Globale CSS-Stile
-│   │   │   ├── index.js       # Entry-Point der React-Anwendung
-│   │   │   ├── index.css      # Basis-CSS
-│   │   │   ├── routes.js      # Routing-Konfiguration
-│   │   │   ├── reportWebVitals.js # Performance-Messung
-│   │   │   ├── pages/         # Seitenkomponenten
-│   │   │   │   ├── Dashboard.js       # Dashboard-Hauptseite
-│   │   │   │   ├── DatabasesList.js   # Liste aller Datenbanken
-│   │   │   │   ├── DatabaseList.js    # Alternative Datenbankansicht
-│   │   │   │   ├── Databases.js       # Datenbankverwaltung
-│   │   │   │   ├── DatabaseDetails.js # Detailansicht einer Datenbank
-│   │   │   │   ├── DatabaseForm.js    # Formular für Datenbankbearbeitung
-│   │   │   │   ├── DatabaseCreate.js  # Datenbankerstellung (längere Form)
-│   │   │   │   ├── CreateDatabase.js  # Datenbankerstellung (kürzere Form)
-│   │   │   │   ├── TableView.js       # Tabellenansicht
-│   │   │   │   ├── TableList.js       # Liste von Tabellen
-│   │   │   │   ├── QueryEditor.js     # SQL-Abfrageeditor
-│   │   │   │   ├── Settings.js        # Einstellungsseite
-│   │   │   │   └── Profile.js         # Profilseite mit persönlichen Informationen und Kontoeinstellungen
-│   │   │   ├── components/    # Wiederverwendbare Komponenten
-│   │   │   │   ├── TopBar.js         # Obere Navigationsleiste
-│   │   │   │   ├── Sidebar.js        # Seitenleiste
-│   │   │   │   └── Navbar.js         # Navigationselement
-│   │   │   ├── services/      # Service-Komponenten
-│   │   │   │   ├── DatabaseService.js # Service für Datenbankverbindungsverwaltung
-│   │   │   │   ├── AuthService.js    # Authentifizierungsservice
-│   │   │   │   └── EmailService.js   # E-Mail-Service für Benachrichtigungen
-│   │   │   └── layouts/       # Layout-Komponenten
-│   │   │       └── DashboardLayout.js # Hauptlayout für Dashboard
-│   │   ├── public/            # Öffentliche Dateien
-│   │   │   ├── index.html     # HTML-Einstiegspunkt
-│   │   │   ├── manifest.json  # Web-App-Manifest
-│   │   │   ├── images/        # Bildressourcen
-│   │   │   │   ├── logo.png   # Anwendungslogo
-│   │   │   │   └── favicon.png # Favicon-Quellbild
-│   │   │   ├── favicon.ico    # Browser-Favicon
-│   │   │   └── robots.txt     # Robots.txt-Datei
-│   │   └── package.json       # NPM-Paket-Konfiguration
-│   ├── backend/               # Node.js-Backend mit Express
-│   │   ├── server.js          # Haupteinstiegspunkt für den Backend-Server
-│   │   ├── controllers/       # Controller für verschiedene Ressourcen
-│   │   │   ├── databaseController.js  # Controller für Datenbankverbindungsverwaltung
-│   │   │   ├── emailController.js     # Controller für E-Mail-Funktionalität
-│   │   │   └── authController.js      # Controller für Authentifizierung
-│   │   ├── models/            # Datenbankmodelle 
-│   │   │   ├── database.js            # SQLite-Datenbankverbindung und Initialisierung
-│   │   │   ├── DatabaseConnection.js  # ORM-Modell für Datenbankverbindungen
-│   │   │   └── Connection.js          # Alternativer Verbindungstyp
-│   │   ├── routes/            # API-Routen
-│   │   │   ├── databaseRoutes.js      # Routen für Datenbankoperationen 
-│   │   │   ├── emailRoutes.js         # Routen für E-Mail-Funktionalität
-│   │   │   └── authRoutes.js          # Routen für Authentifizierung
-│   │   ├── services/          # Backend-Services
-│   │   │   └── databaseService.js     # Service für Datenbankoperationen
-│   │   ├── utils/             # Hilfsfunktionen
-│   │   │   └── encryptionUtil.js      # Ver- und Entschlüsselungsfunktionen
-│   │   └── data/              # Datendateien für die Persistenzschicht
-│   │       └── database_connections.json # Gespeicherte Datenbankverbindungen
-│   ├── themes/                # Theme-Definitionen (Verzeichnis für zukünftige Nutzung)
-│   ├── db-sync/               # Datenbank-Synchronisierungsdienst
-│   │   ├── Dockerfile         # Docker-Konfiguration für Sync-Service
-│   │   ├── requirements.txt   # Python-Abhängigkeiten
-│   │   ├── sync_manager.py    # Hauptpython-Skript für Synchronisierung
-│   │   ├── sync.sh            # Shell-Skript für Sync-Initialisierung
-│   │   ├── entrypoint.sh      # Docker-Entrypoint
-│   │   ├── config/            # Konfigurationen für Sync-Service
-│   │   │   └── sync.yml       # YAML-Konfigurationsdatei
-│   │   ├── logs/              # Log-Dateien
-│   │   └── scripts/           # Hilfsskripte
-│   │       ├── postgresql_sync.sh # PostgreSQL-spezifisches Sync-Skript
-│   │       └── mysql_sync.sh      # MySQL-spezifisches Sync-Skript
-│   └── db-creation/           # Datenbankerstellungsskripte
-│       └── create-database.php # PHP-Skript zur Datenbankerstellung
-```
-
-Diese Struktur zeigt die Organisation des Projekts mit Fokus auf eine klare Trennung der Komponenten:
-
-1. **Frontend (react-ui)**: Enthält die React-basierte Benutzeroberfläche mit Seiten, Komponenten und Layouts.
-2. **Backend (Node.js)**: Enthält den Express-basierten API-Server mit Controllern, Modellen und Routen.
-3. **Sync-Service (db-sync)**: Enthält den Python-basierten Synchronisierungsdienst mit Konfigurationen und Skripten.
-4. **Datenbank-Hilfsmittel (db-creation)**: Enthält Skripte zur Datenbankerstellung und -verwaltung.
-5. **Konfiguration und Dokumentation**: Enthält Docker-Compose, Dokumentationsdateien und Konfigurationen.
-
-Die Struktur ermöglicht eine klare Trennung der Verantwortlichkeiten und erleichtert die Wartung und Erweiterung der Anwendung. 
+Diese Übersicht soll helfen, schnell die relevanten Dateien für bestimmte UI-Elemente oder Funktionalitäten zu finden, ohne den gesamten Codebase durchsuchen zu müssen.
 
 ## Frontend-Services
 
@@ -1082,3 +604,55 @@ Die Hauptmethoden umfassen:
 - `getDatabaseSchema(id)`: Ruft das Schema einer verbundenen Datenbank ab
 - `executeQuery(id, query)`: Führt eine SQL-Abfrage gegen eine verbundene Datenbank aus
 - `getTableData(id, tableName, params)`: Lädt paginierte Tabellendaten mit Sortierung
+
+### Synchronisation API Endpoints (via Node.js Backend)
+
+Diese Endpunkte werden vom Node.js-Backend bereitgestellt, um Synchronisationseinstellungen zu verwalten und Aufgaben zu triggern. Sie interagieren intern mit der `sync_tasks`-Tabelle und dem `db-sync`-Service.
+
+| Methode | Pfad                                   | Beschreibung                                        |
+|---------|----------------------------------------|-----------------------------------------------------|
+| GET     | `/api/sync/:databaseId/settings`       | Ruft die Synchronisationseinstellungen für eine DB ab |
+| PUT     | `/api/sync/:databaseId/settings`       | Aktualisiert die Synchronisationseinstellungen      |
+| POST    | `/api/sync/:databaseId/trigger`        | Stößt eine manuelle Synchronisation an               |
+
+#### Hinweise zur Implementierung:
+
+*   **`PUT /api/sync/:databaseId/settings`:**
+    *   Akzeptiert `{ enabled: boolean, schedule: string, target_connection_id: number | "__CREATE_NEW__" }` im Body.
+    *   Wenn `target_connection_id` auf `"__CREATE_NEW__"` gesetzt ist, versucht der Controller, intern den Endpunkt `POST /api/databases/create-instance` aufzurufen, um eine neue Zieldatenbank zu erstellen. Der Name der neuen Datenbank wird automatisch basierend auf dem Namen der Quelldatenbank generiert (z.B. `source_name_sync_copy_timestamp`). Die Engine wird von der Quelle übernommen. Die Verbindungsdetails für die neue Verbindung (Benutzer/Passwort) müssen im `create-instance`-Payload angegeben werden (aktuell hardcoded Platzhalter, sollten konfigurierbar sein oder von der Quelle übernommen werden, falls sinnvoll).
+    *   Die ID der neu erstellten Verbindung wird dann als `target_connection_id` in der `sync_tasks`-Tabelle gespeichert. Die ID wird auch im Response Body als `newTargetId` zurückgegeben.
+    *   Wenn ein Task für die `source_connection_id` bereits existiert, wird er aktualisiert. Ansonsten wird ein neuer Task erstellt (nur wenn `enabled: true` und eine gültige `target_connection_id` (Zahl oder neu erstellt) vorhanden ist).
+*   **`POST /api/sync/:databaseId/trigger`:**
+    *   Liest den zugehörigen Task aus `sync_tasks`.
+    *   Ruft die Verbindungsdetails für Quelle und Ziel ab.
+    *   Sendet die Task-ID, Quell-/Ziel-Verbindungsdetails (inkl. entschlüsseltem Passwort) und die zu synchronisierenden Tabellen (aus `sync_tasks.tables`) im Body einer **`POST /trigger_sync`** Anfrage an den Python `db-sync`-Service (Standard-URL: `http://db-sync:5000`).
+    *   Der Python-Service startet die Synchronisation in einem Hintergrundthread und gibt einen "Accepted"-Status zurück.
+
+### Migration 009 - Database Synchronization UI Implementation (2024-10-17)
+
+In dieser Migration wurde die Benutzeroberfläche für die Datenbanksynchronisationsfunktion implementiert. Diese neue Funktionalität ermöglicht es Benutzern, Datenbanken zu synchronisieren und die Synchronisationseinstellungen über die Benutzeroberfläche zu verwalten. Folgende Änderungen wurden vorgenommen:
+
+1. **Frontend-UI-Erweiterungen:**
+   - Hinzufügung eines neuen "Sync" Tabs zur DatabaseDetails-Seite
+   - Implementierung einer DatabaseSyncTab-Komponente mit folgenden Elementen:
+     - Ein- und Ausschalten der Synchronisierung (Toggle-Switch)
+     - Frequenzauswahl via Dropdown-Menü (Stündlich, Täglich, Wöchentlich)
+     - "Sync Now" Button für sofortige manuelle Synchronisierung
+   - Integration eines Sync-Status-Indikators
+   - Anpassungen an das bestehende Tab-System für einheitliche Navigation
+
+2. **Backend-Service-Erweiterungen:**
+   - Erweiterung des DatabaseService mit Methoden für Synchronisationsfunktionen:
+     - `getSyncSettings(databaseId)`: Abrufen der Synchronisationseinstellungen
+     - `updateSyncSettings(databaseId, settings)`: Aktualisieren der Synchronisationseinstellungen
+     - `triggerSync(databaseId)`: Manuelles Auslösen einer Synchronisation
+   - Vorbereitung für die Integration mit dem Python-basierten db-sync-Dienst
+
+3. **Verbesserte Benutzerführung:**
+   - Informative Meldungen über den Synchronisationsstatus
+   - Fehlerbehandlung für fehlgeschlagene Synchronisationsversuche
+   - Visuelle Rückmeldung während laufender Synchronisationsvorgänge
+
+Diese Erweiterungen legen die Grundlage für eine vollständige Datenbanksynchronisationsfunktion, die es Benutzern ermöglicht, Daten zwischen verschiedenen Datenbanken automatisch oder manuell zu synchronisieren. Die Implementierung folgt dem bestehenden Architekturmuster mit einer klaren Trennung zwischen Frontend-UI und Backend-Services.
+
+Die vollständigen Endpunkte für die Synchronisations-API werden vom Node.js-Backend bereitgestellt und interagieren mit der `sync_tasks`-Tabelle und dem `db-sync`-Service, wie bereits in der Dokumentation beschrieben.

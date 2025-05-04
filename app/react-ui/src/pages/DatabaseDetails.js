@@ -46,10 +46,12 @@ import {
   ViewModule as TableIcon,
   TableChart as StructureIcon,
   Code as QueryIcon,
-  PlayArrow as RunIcon
+  PlayArrow as RunIcon,
+  Sync as SyncIcon
 } from '@mui/icons-material';
 import DatabaseService from '../services/DatabaseService';
 import { generateMockTables, generateMockStructure } from '../utils/mockData'; // Import mock data functions
+import DatabaseSyncTab from '../components/DatabaseSyncTab'; 
 
 // Styled components
 const RootStyle = (theme) => ({
@@ -66,8 +68,8 @@ const ContentCard = (theme) => ({
 const DatabaseDetails = () => {
   const theme = useTheme();
   const navigate = useNavigate();
-  // dbName from the route /database/id/:dbName actually contains the ID
-  const { dbName: databaseId } = useParams(); 
+  // Extract the 'id' parameter directly from the route /database/id/:id
+  const { id: databaseId } = useParams(); 
   
   console.log('DatabaseDetails ID from params:', databaseId);
   
@@ -475,6 +477,7 @@ const DatabaseDetails = () => {
           <Tab icon={<TableIcon />} label="Tables" />
           <Tab icon={<StructureIcon />} label="Structure" />
           <Tab icon={<QueryIcon />} label="SQL Query" />
+          <Tab icon={<SyncIcon />} label="Sync" />
         </Tabs>
         
         {/* Tables Tab */}
@@ -775,6 +778,12 @@ const DatabaseDetails = () => {
             )}
           </Box>
         )}
+
+        {/* Sync Tab Content */}
+        {activeTab === 3 && (
+          <DatabaseSyncTab databaseId={databaseId} databaseInfo={database} />
+        )}
+
       </Paper>
       
       {/* Delete Database Dialog */}

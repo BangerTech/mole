@@ -593,67 +593,24 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
-      {/* Synchronization Tab */}
+      {/* Synchronization Tab Placeholder */}
       <TabPanel value={activeTab} index={3}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              Synchronization Settings
+              Synchronization Task Overview
             </Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch 
-                      checked={autoSync} 
-                      onChange={() => setAutoSync(!autoSync)}
-                      color="primary"
-                    />
-                  }
-                  label="Automatic Synchronization"
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Automatically synchronizes your databases at regular intervals.
-                </Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Synchronization Interval (Hours)
-                </Typography>
-                <Slider
-                  value={syncInterval}
-                  onChange={(e, newValue) => setSyncInterval(newValue)}
-                  step={1}
-                  min={1}
-                  max={48}
-                  valueLabelDisplay="auto"
-                  marks={[
-                    { value: 1, label: '1h' },
-                    { value: 12, label: '12h' },
-                    { value: 24, label: '24h' },
-                    { value: 48, label: '48h' },
-                  ]}
-                  disabled={!autoSync}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Conflict Resolution
-                </Typography>
-                <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
-                  <InputLabel>Strategy for Conflicts</InputLabel>
-                  <Select
-                    defaultValue="ask"
-                    label="Strategy for Conflicts"
-                  >
-                    <MenuItem value="ask">Ask</MenuItem>
-                    <MenuItem value="source">Prefer Source</MenuItem>
-                    <MenuItem value="target">Prefer Target</MenuItem>
-                    <MenuItem value="newer">Prefer Newer</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
+            <Typography variant="body2" color="text.secondary">
+              This section will provide an overview of all configured database synchronization tasks.
+              You can manage individual task settings within the detail view of each database connection.
+            </Typography>
+            {/* TODO: Implement table/list view of sync tasks from API */}
+            <Box sx={{ mt: 3, p: 3, border: '1px dashed', borderColor: 'divider', borderRadius: 1, textAlign: 'center' }}>
+              <Typography variant="subtitle1">Coming Soon</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Display list of active sync jobs here (e.g., source, target, schedule, status).
+              </Typography>
+            </Box>
           </CardContent>
         </SettingCard>
       </TabPanel>

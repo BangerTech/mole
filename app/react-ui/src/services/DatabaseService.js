@@ -10,6 +10,19 @@ const getApiBaseUrl = () => {
 // API Base URL - dynamically determined
 const API_URL = getApiBaseUrl();
 
+// Helper to get base URL for different services if needed
+const getServiceBaseUrl = (service) => {
+    const hostname = window.location.hostname;
+    const port = 3001; // Assuming backend runs on 3001
+    switch (service) {
+        case 'sync':
+            return `http://${hostname}:${port}/api/sync`;
+        case 'databases':
+        default:
+            return `http://${hostname}:${port}/api/databases`;
+    }
+};
+
 /**
  * Service for database connection management
  * Relies solely on the backend API.
@@ -21,7 +34,8 @@ class DatabaseService {
    */
   async getDatabaseConnections() {
     try {
-      const response = await axios.get(`${API_URL}`);
+      const apiUrl = getServiceBaseUrl('databases');
+      const response = await axios.get(apiUrl);
       return response.data;
     } catch (error) {
       console.error('Error fetching connections from API:', error);
@@ -36,7 +50,8 @@ class DatabaseService {
    */
   async getConnectionById(id) {
     try {
-      const response = await axios.get(`${API_URL}/${id}`);
+      const apiUrl = `${getServiceBaseUrl('databases')}/${id}`;
+      const response = await axios.get(apiUrl);
       return response.data;
     } catch (error) {
       console.error(`Error fetching connection ${id} from API:`, error);
@@ -51,7 +66,8 @@ class DatabaseService {
    */
   async saveConnection(connection) {
     try {
-      const response = await axios.post(`${API_URL}`, connection);
+      const apiUrl = getServiceBaseUrl('databases');
+      const response = await axios.post(apiUrl, connection);
       return response.data;
     } catch (error) {
       console.error('Error saving connection to API:', error);
@@ -67,7 +83,8 @@ class DatabaseService {
    */
   async updateConnection(id, connection) {
     try {
-      const response = await axios.put(`${API_URL}/${id}`, connection);
+      const apiUrl = `${getServiceBaseUrl('databases')}/${id}`;
+      const response = await axios.put(apiUrl, connection);
       return response.data;
     } catch (error) {
       console.error(`Error updating connection ${id} in API:`, error);
@@ -82,7 +99,8 @@ class DatabaseService {
    */
   async deleteConnection(id) {
     try {
-      const response = await axios.delete(`${API_URL}/${id}`);
+      const apiUrl = `${getServiceBaseUrl('databases')}/${id}`;
+      const response = await axios.delete(apiUrl);
       return response.data;
     } catch (error) {
       console.error(`Error deleting connection ${id} from API:`, error);
@@ -98,7 +116,7 @@ class DatabaseService {
   async testConnection(connectionData) {
     try {
       console.log('Testing connection with data:', connectionData);
-      const testApiUrl = `${API_URL.replace('/databases', '')}/databases/test`; 
+      const testApiUrl = `${getServiceBaseUrl('databases')}/test`; 
       console.log('Test API URL:', testApiUrl);
       const response = await axios.post(testApiUrl, connectionData);
       console.log('Test connection response:', response.data);
@@ -122,7 +140,7 @@ class DatabaseService {
   async getDatabaseSchema(id) {
     try {
       console.log('Fetching schema for database ID:', id);
-      const apiUrl = `${API_URL}/${id}/schema`;
+      const apiUrl = `${getServiceBaseUrl('databases')}/${id}/schema`;
       console.log('API URL used:', apiUrl);
       const response = await axios.get(apiUrl);
       console.log('Schema response:', response.data);
@@ -149,7 +167,7 @@ class DatabaseService {
   async executeQuery(id, query) {
     try {
       console.log('Executing query for database ID:', id);
-      const apiUrl = `${API_URL}/${id}/execute`;
+      const apiUrl = `${getServiceBaseUrl('databases')}/${id}/execute`;
       console.log('API URL used:', apiUrl);
       const response = await axios.post(apiUrl, { query });
       console.log('Query execution response:', response.data);
@@ -172,7 +190,7 @@ class DatabaseService {
    */
   async getDatabaseHealth(id) {
     // Use the API_URL constant, adjusting the path as needed
-    const healthApiUrl = `${API_URL}/${id}/health`; 
+    const healthApiUrl = `${getServiceBaseUrl('databases')}/${id}/health`; 
     console.log(`Fetching health for database ID: ${id}`);
     console.log(`API URL used: ${healthApiUrl}`);
     try {
@@ -204,7 +222,7 @@ class DatabaseService {
   async getTableData(id, tableName, params) {
     // Encode table name in case it has special characters
     const encodedTableName = encodeURIComponent(tableName);
-    const apiUrl = `${API_URL}/${id}/tables/${encodedTableName}/data`;
+    const apiUrl = `${getServiceBaseUrl('databases')}/${id}/tables/${encodedTableName}/data`;
     console.log(`Fetching data for table: ${tableName}`, params);
     console.log(`API URL used: ${apiUrl}`);
     try {
@@ -235,7 +253,7 @@ class DatabaseService {
    * @returns {Promise<Object>} Promise resolving to { success: boolean, message?: string }.
    */
   async createTable(id, tableDefinition) {
-    const apiUrl = `${API_URL}/${id}/tables`;
+    const apiUrl = `${getServiceBaseUrl('databases')}/${id}/tables`;
     console.log(`Creating table for DB ID: ${id}`, tableDefinition);
     console.log(`API URL used: ${apiUrl}`);
     try {
@@ -257,7 +275,7 @@ class DatabaseService {
    */
   async deleteTable(id, tableName) {
     const encodedTableName = encodeURIComponent(tableName);
-    const apiUrl = `${API_URL}/${id}/tables/${encodedTableName}`;
+    const apiUrl = `${getServiceBaseUrl('databases')}/${id}/tables/${encodedTableName}`;
     console.log(`Deleting table: ${tableName} for DB ID: ${id}`);
     console.log(`API URL used: ${apiUrl}`);
     try {
@@ -277,9 +295,9 @@ class DatabaseService {
    * @returns {Promise<Array>} Promise resolving to an array of top table objects.
    */
   async getTopTables(limit = 10) {
-    const apiUrl = `${API_URL}/top-tables`;
+    const apiUrl = `${getServiceBaseUrl('databases')}/top-tables`;
     try {
-      const response = await axios.get(apiUrl, { params: { limit } });
+      const response = await axios.get(apiUrl);
       return response.data?.topTables || []; // Return the topTables array
     } catch (error) {
       console.error('Error fetching top tables:', error);
@@ -293,7 +311,7 @@ class DatabaseService {
    * @returns {Promise<Object>} Promise resolving to { success, sizeBytes, sizeFormatted, message? }.
    */
   async getStorageInfo(id) {
-    const apiUrl = `${API_URL}/${id}/storage-info`;
+    const apiUrl = `${getServiceBaseUrl('databases')}/${id}/storage-info`;
     console.log(`Fetching storage info for DB ID: ${id}`);
     console.log(`API URL used: ${apiUrl}`);
     try {
@@ -318,7 +336,7 @@ class DatabaseService {
    * @returns {Promise<Object>} Promise resolving to { success, activeTransactions, totalCommits, totalRollbacks, message? }.
    */
   async getTransactionStats(id) {
-    const apiUrl = `${API_URL}/${id}/transaction-stats`;
+    const apiUrl = `${getServiceBaseUrl('databases')}/${id}/transaction-stats`;
     console.log(`Fetching transaction stats for DB ID: ${id}`);
     console.log(`API URL used: ${apiUrl}`);
     try {
@@ -335,6 +353,65 @@ class DatabaseService {
         totalCommits: 0,
         totalRollbacks: 0
       };
+    }
+  }
+
+  // Helper to get Axios config with auth (if implemented in AuthService or interceptor)
+  // For now, just return empty object, assuming Axios interceptor handles auth
+  getAuthConfig() {
+      // Example if AuthService provides token:
+      // const token = AuthService.getToken();
+      // if (token) {
+      //     return { headers: { Authorization: `Bearer ${token}` } };
+      // }
+      return {}; // Assume interceptor handles it
+  }
+
+  // --- Synchronization Methods (Using Axios) ---
+
+  async getSyncSettings(databaseId) {
+    // Use the /api/sync endpoint
+    const url = `${getServiceBaseUrl('sync')}/${databaseId}/settings`;
+    console.log(`[DatabaseService] GET ${url}`);
+    try {
+      // Use axios and assume auth is handled by interceptor
+      const response = await axios.get(url, this.getAuthConfig());
+      return response.data; // Assuming API returns { enabled: boolean, schedule: string, last_sync: string | null, target_connection_id: number | null }
+    } catch (error) {
+      console.error('Error fetching sync settings:', error);
+      // Rethrow a more informative error if possible
+      const message = error.response?.data?.message || error.message || 'Failed to fetch sync settings.';
+      throw new Error(message);
+    }
+  }
+
+  async updateSyncSettings(databaseId, settings) {
+    // Use the /api/sync endpoint
+    const url = `${getServiceBaseUrl('sync')}/${databaseId}/settings`;
+    console.log(`[DatabaseService] PUT ${url}`, settings);
+    try {
+      // Use axios and assume auth is handled by interceptor
+      const response = await axios.put(url, settings, this.getAuthConfig());
+      return response.data; // Assuming API returns { success: boolean, message: string, newTargetId?: number }
+    } catch (error) {
+      console.error('Error updating sync settings:', error);
+      const message = error.response?.data?.message || error.message || 'Failed to update sync settings.';
+      throw new Error(message);
+    }
+  }
+
+  async triggerSync(databaseId) {
+    // Use the /api/sync endpoint
+    const url = `${getServiceBaseUrl('sync')}/${databaseId}/trigger`;
+    console.log(`[DatabaseService] POST ${url}`);
+    try {
+      // Use axios and assume auth is handled by interceptor
+      const response = await axios.post(url, {}, this.getAuthConfig()); // Empty payload for trigger
+      return response.data; // Assuming API returns { success: boolean, message: string }
+    } catch (error) {
+      console.error('Error triggering sync:', error);
+      const message = error.response?.data?.message || error.message || 'Failed to trigger sync.';
+      throw new Error(message);
     }
   }
 }

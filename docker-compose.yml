@@ -57,9 +57,13 @@ services:
       - "5000:5000"
     environment:
       - SYNC_INTERVAL=86400
+      # Add PYTHONUNBUFFERED to see logs immediately
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./app/db-sync/config:/app/config
       - ./app/db-sync/logs:/app/logs
+      # Mount the backend data volume to access mole.db
+      - backend_data:/app/backend/data
     networks:
       - mole-network
 

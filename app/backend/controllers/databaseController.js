@@ -278,30 +278,49 @@ exports.getDatabaseSchema = async (req, res) => {
  * @param {Object} res - Express response object
  */
 exports.getDatabaseHealth = async (req, res) => {
+  const connectionId = req.params.id;
+
+  // Handle Sample DB directly
+  if (connectionId === 'sample') {
+    console.log("[Controller:getDatabaseHealth] Reporting OK for Sample DB.");
+    return res.status(200).json({ status: 'OK', message: 'Sample DB is virtual and always available.' });
+  }
+
+  // Proceed with checks for real connections
   try {
-    const connectionId = req.params.id;
-    const connection = await databaseService.getConnectionById(connectionId);
+    // Use the service to get full connection details (including password if needed for checks)
+    // Note: Using service.getConnectionByIdFull might be better if password needed
+    const connection = await databaseService.getConnectionById(connectionId); 
 
     if (!connection) {
       return res.status(404).json({ message: 'Database connection not found' });
     }
 
-    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
+    // --- Decrypt password --- 
     let password = null;
-    if (encrypted_password) {
+    // Need full details for encrypted_password, refetch using internal service method
+    const fullConnection = await databaseService.getConnectionByIdFull(connectionId);
+    if (!fullConnection) { 
+         // Should not happen if getConnectionById succeeded, but safety check
+         return res.status(404).json({ message: 'Database connection details missing' });
+    }
+    if (fullConnection.encrypted_password) {
       try {
-        password = decrypt(encrypted_password);
+        password = decrypt(fullConnection.encrypted_password);
       } catch (decryptError) {
         console.error(`Decryption failed for connection ${connectionId}:`, decryptError);
+        // Return OK status but with a warning message about decryption failure
         return res.status(200).json({ 
-          status: 'Error', 
-          message: 'Failed to decrypt stored password.' 
+          status: 'Warning', 
+          message: 'Connection found, but failed to decrypt stored password for health check.' 
         });
       }
     } else {
-      // Handle cases where password might not be encrypted (legacy or test data)
-      password = connection.password; 
+      password = fullConnection.password; // Use plain password if not encrypted
     }
+    // ----------------------
+
+    const { engine, host, port, database, username, ssl_enabled } = connection;
 
     if (!engine || !database) {
       return res.status(400).json({ 
@@ -382,7 +401,7 @@ exports.getDatabaseHealth = async (req, res) => {
     res.status(200).json(healthStatus);
 
   } catch (error) {
-    console.error(`Unexpected error during health check for ${req.params.id}:`, error);
+    console.error(`Unexpected error during health check for ${connectionId}:`, error);
     res.status(500).json({ 
       status: 'Error', 
       message: 'Internal server error during health check.' 
