@@ -1352,4 +1352,287 @@ exports.insertTableRow = async (req, res) => {
   }
 };
 
+/**
+ * Add a new column to a specific table
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.addColumnToTable = async (req, res) => {
+  const { id: connectionId, tableName } = req.params;
+  const { name: columnName, type: columnType, nullable, defaultValue } = req.body; // Column definition from request body
+
+  // --- Basic Input Validation ---
+  if (!columnName || !/^[a-zA-Z0-9_]+$/.test(columnName)) {
+    return res.status(400).json({ success: false, message: 'Invalid column name. Use only letters, numbers, and underscores.' });
+  }
+  if (!columnType) { // Add more robust type validation/whitelisting as needed
+    return res.status(400).json({ success: false, message: 'Column type is required.' });
+  }
+  // Example: Whitelist allowed types (should match frontend options)
+  const allowedTypes = ['INT', 'VARCHAR(255)', 'TEXT', 'DATE', 'TIMESTAMP', 'BOOLEAN', 'DECIMAL(10,2)'];
+  if (!allowedTypes.includes(columnType.toUpperCase())) {
+      return res.status(400).json({ success: false, message: `Invalid or unsupported column type: ${columnType}` });
+  }
+  if (typeof nullable === 'undefined') {
+      return res.status(400).json({ success: false, message: 'Nullable property is required (true or false).' });
+  }
+
+  let client;
+  try {
+    const connection = await databaseService.getConnectionById(connectionId);
+    if (!connection) {
+      return res.status(404).json({ success: false, message: 'Database connection not found' });
+    }
+
+    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
+    let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
+
+    let alterTableSql = '';
+    let columnDefinitionSql = '';
+
+    // Construct column definition part (common for both PG and MySQL with slight variations)
+    if (engine.toLowerCase() === 'mysql') {
+      columnDefinitionSql = `\`${columnName}\` ${columnType.toUpperCase()}`;
+      columnDefinitionSql += nullable ? ' NULL' : ' NOT NULL';
+      if (typeof defaultValue !== 'undefined' && defaultValue !== null) {
+        // For MySQL, strings need to be escaped and quoted, numbers can be direct
+        if (typeof defaultValue === 'string') {
+          columnDefinitionSql += ` DEFAULT \'${mysql.escape(defaultValue).slice(1, -1)}\'`; // mysql.escape adds its own quotes, remove them and add ours
+        } else {
+          columnDefinitionSql += ` DEFAULT ${defaultValue}`;
+        }
+      }
+      alterTableSql = `ALTER TABLE \`${tableName}\` ADD COLUMN ${columnDefinitionSql};`;
+      client = await mysql.createConnection({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectTimeout: 10000 });
+    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+      columnDefinitionSql = `\"${columnName}\" ${columnType.toUpperCase()}`;
+      columnDefinitionSql += nullable ? ' NULL' : ' NOT NULL';
+      if (typeof defaultValue !== 'undefined' && defaultValue !== null) {
+        // For PostgreSQL, use escapeLiteral for string defaults
+        // Need a temporary client to use escapeLiteral if the main client isn't connected yet for this specific operation
+        const tempPool = new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 5000 });
+        const tempClient = await tempPool.connect();
+        try {
+            if (typeof defaultValue === 'string') {
+                columnDefinitionSql += ` DEFAULT ${tempClient.escapeLiteral(defaultValue)}`;
+            } else { // Numbers, booleans
+                columnDefinitionSql += ` DEFAULT ${defaultValue}`;
+            }
+        } finally {
+            tempClient.release();
+            await tempPool.end();
+        }
+      }
+      alterTableSql = `ALTER TABLE public.\"${tableName}\" ADD COLUMN ${columnDefinitionSql};`;
+      const pool = new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 });
+      client = await pool.connect();
+    } else {
+      return res.status(400).json({ success: false, message: `ALTER TABLE ADD COLUMN not supported for engine: ${engine}` });
+    }
+
+    console.log(`Executing Add Column (${engine}):`, alterTableSql);
+    try {
+      await client.query(alterTableSql);
+      res.status(200).json({ success: true, message: `Column "${columnName}" added successfully to table "${tableName}".` });
+    } catch (execError) {
+      console.error(`Error executing ADD COLUMN for table "${tableName}":`, execError);
+      res.status(500).json({ success: false, message: `Failed to add column "${columnName}" to table "${tableName}".`, error: execError.message, code: execError.code });
+    } finally {
+      if (client) {
+        if (engine.toLowerCase() === 'mysql') await client.end();
+        else if (client.release) client.release();
+      }
+    }
+  } catch (error) {
+    console.error(`Error adding column to table ${tableName}:`, error);
+    if (client && engine.toLowerCase() !== 'mysql' && client.release) {
+        client.release();
+    }
+    res.status(500).json({ success: false, message: 'Internal server error adding column.', error: error.message });
+  }
+};
+
+/**
+ * Delete a column from a specific table
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.deleteColumnFromTable = async (req, res) => {
+  const { id: connectionId, tableName, columnName } = req.params;
+
+  // --- Basic Input Validation ---
+  if (!columnName || !/^[a-zA-Z0-9_]+$/.test(columnName)) {
+    return res.status(400).json({ success: false, message: 'Invalid column name provided for deletion.' });
+  }
+  if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
+    return res.status(400).json({ success: false, message: 'Invalid table name.' });
+  }
+
+  let client;
+  try {
+    const connection = await databaseService.getConnectionById(connectionId);
+    if (!connection) {
+      return res.status(404).json({ success: false, message: 'Database connection not found' });
+    }
+
+    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
+    let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
+
+    let alterTableSql = '';
+
+    if (engine.toLowerCase() === 'mysql') {
+      alterTableSql = `ALTER TABLE \`${tableName}\` DROP COLUMN \`${columnName}\`;`;
+      client = await mysql.createConnection({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectTimeout: 10000 });
+    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+      alterTableSql = `ALTER TABLE public.\"${tableName}\" DROP COLUMN \"${columnName}\";`;
+      const pool = new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 });
+      client = await pool.connect();
+    } else {
+      return res.status(400).json({ success: false, message: `ALTER TABLE DROP COLUMN not supported for engine: ${engine}` });
+    }
+
+    console.log(`Executing Drop Column (${engine}):`, alterTableSql);
+    try {
+      await client.query(alterTableSql);
+      res.status(200).json({ success: true, message: `Column "${columnName}" deleted successfully from table "${tableName}".` });
+    } catch (execError) {
+      console.error(`Error executing DROP COLUMN for table "${tableName}":`, execError);
+      // Check for common errors like column not existing
+      let userMessage = `Failed to delete column "${columnName}" from table "${tableName}".`;
+      if (execError.code === 'ER_BAD_FIELD_ERROR' || execError.code === '42703') { // MySQL: ER_BAD_FIELD_ERROR, PG: 42703 (undefined_column)
+        userMessage = `Column "${columnName}" does not exist in table "${tableName}".`;
+      }
+      res.status(500).json({ success: false, message: userMessage, error: execError.message, code: execError.code });
+    } finally {
+      if (client) {
+        if (engine.toLowerCase() === 'mysql') await client.end();
+        else if (client.release) client.release();
+      }
+    }
+  } catch (error) {
+    console.error(`Error deleting column from table ${tableName}:`, error);
+    if (client && engine.toLowerCase() !== 'mysql' && client.release) {
+        client.release();
+    }
+    res.status(500).json({ success: false, message: 'Internal server error deleting column.', error: error.message });
+  }
+};
+
+/**
+ * Edit an existing column in a specific table
+ * Supports changing type, nullability, and default value.
+ * Renaming is more complex and might need a separate handler or careful syntax.
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.editColumnInTable = async (req, res) => {
+  const { id: connectionId, tableName, columnName } = req.params;
+  const { newName, newType, newNullable, newDefault, dropDefault } = req.body; // Properties to change
+
+  // --- Basic Input Validation ---
+  if (!columnName || !/^[a-zA-Z0-9_]+$/.test(columnName)) {
+    return res.status(400).json({ success: false, message: 'Invalid current column name.' });
+  }
+  if (newName && !/^[a-zA-Z0-9_]+$/.test(newName)) {
+    return res.status(400).json({ success: false, message: 'Invalid new column name.' });
+  }
+  if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
+    return res.status(400).json({ success: false, message: 'Invalid table name.' });
+  }
+  // At least one modifiable property must be present
+  if (typeof newName === 'undefined' && typeof newType === 'undefined' && typeof newNullable === 'undefined' && typeof newDefault === 'undefined' && typeof dropDefault === 'undefined') {
+    return res.status(400).json({ success: false, message: 'No column modification specified.' });
+  }
+  const allowedTypes = ['INT', 'VARCHAR(255)', 'TEXT', 'DATE', 'TIMESTAMP', 'BOOLEAN', 'DECIMAL(10,2)'];
+  if (newType && !allowedTypes.includes(newType.toUpperCase())) {
+      return res.status(400).json({ success: false, message: `Invalid or unsupported new column type: ${newType}` });
+  }
+
+  let client;
+  try {
+    const connection = await databaseService.getConnectionById(connectionId);
+    if (!connection) {
+      return res.status(404).json({ success: false, message: 'Database connection not found' });
+    }
+
+    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
+    let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
+
+    let alterClauses = [];
+
+    if (engine.toLowerCase() === 'mysql') {
+      client = await mysql.createConnection({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectTimeout: 10000 });
+      let columnDefinition = `\`${newName || columnName}\` ${newType ? newType.toUpperCase() : ''}`;
+      
+      if (newNullable !== undefined) {
+        columnDefinition += newNullable ? ' NULL' : ' NOT NULL';
+      }
+      if (dropDefault) {
+        columnDefinition += ` DEFAULT NULL`; // Or another way to remove default, depending on exact need / existing default
+      } else if (typeof newDefault !== 'undefined' && newDefault !== null) {
+        if (typeof newDefault === 'string') {
+          columnDefinition += ` DEFAULT '${mysql.escape(newDefault).slice(1, -1)}'`;
+        } else {
+          columnDefinition += ` DEFAULT ${newDefault}`;
+        }
+      }
+      alterClauses.push(`CHANGE COLUMN \`${columnName}\` ${columnDefinition}`);
+    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+      client = await new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 }).connect();
+      if (newType) {
+        // PostgreSQL might need USING clause for type conversion if data exists
+        alterClauses.push(`ALTER COLUMN "${columnName}" TYPE ${newType.toUpperCase()}`); // Add USING old_column::new_type if needed
+      }
+      if (newNullable !== undefined) {
+        alterClauses.push(newNullable ? `ALTER COLUMN "${columnName}" DROP NOT NULL` : `ALTER COLUMN "${columnName}" SET NOT NULL`);
+      }
+      if (dropDefault) {
+        alterClauses.push(`ALTER COLUMN "${columnName}" DROP DEFAULT`);
+      } else if (typeof newDefault !== 'undefined' && newDefault !== null) {
+        let defaultValStr = '';
+        if (typeof newDefault === 'string') {
+            defaultValStr = client.escapeLiteral(newDefault);
+        } else { // Numbers, booleans
+            defaultValStr = newDefault.toString();
+        }
+        alterClauses.push(`ALTER COLUMN "${columnName}" SET DEFAULT ${defaultValStr}`);
+      }
+      if (newName && newName !== columnName) {
+        alterClauses.push(`RENAME COLUMN "${columnName}" TO "${newName}"`);
+      }
+    } else {
+      return res.status(400).json({ success: false, message: `ALTER TABLE operations not fully supported for engine: ${engine}` });
+    }
+
+    if (alterClauses.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid column alterations found for the given engine.' });
+    }
+
+    // Execute alter clauses sequentially (important for PostgreSQL)
+    console.log(`Executing Edit Column (${engine}):`);
+    try {
+      for (const clause of alterClauses) {
+        const fullSql = engine.toLowerCase() === 'mysql' ? `ALTER TABLE \`${tableName}\` ${clause};` : `ALTER TABLE public."${tableName}" ${clause};`;
+        console.log(fullSql);
+        await client.query(fullSql);
+      }
+      res.status(200).json({ success: true, message: `Column "${columnName}" in table "${tableName}" modified successfully.` });
+    } catch (execError) {
+      console.error(`Error executing ALTER TABLE for column "${columnName}" in table "${tableName}":`, execError);
+      res.status(500).json({ success: false, message: `Failed to modify column "${columnName}".`, error: execError.message, code: execError.code });
+    } finally {
+      if (client) {
+        if (engine.toLowerCase() === 'mysql') await client.end();
+        else if (client.release) client.release();
+      }
+    }
+  } catch (error) {
+    console.error(`Error editing column ${columnName} in table ${tableName}:`, error);
+    if (client && engine.toLowerCase() !== 'mysql' && client.release) {
+        client.release();
+    }
+    res.status(500).json({ success: false, message: 'Internal server error editing column.', error: error.message });
+  }
+};
+
 // ... rest of the controller ... 

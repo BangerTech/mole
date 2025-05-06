@@ -475,6 +475,81 @@ class DatabaseService {
   }
   
   // --- End Placeholders --- 
+
+  /**
+   * Adds a new column to a specific table.
+   * @param {string|number} databaseId - The ID of the database connection.
+   * @param {string} tableName - The name of the table.
+   * @param {object} columnDefinition - Object containing column details (name, type, nullable, defaultValue).
+   * @returns {Promise<Object>} Promise resolving to { success: boolean, message?: string }.
+   */
+  async addColumn(databaseId, tableName, columnDefinition) {
+    const encodedTableName = encodeURIComponent(tableName);
+    const apiUrl = `${getServiceBaseUrl('databases')}/${databaseId}/tables/${encodedTableName}/columns`;
+    console.log(`[DatabaseService] Adding column to ${tableName} for DB ID ${databaseId}:`, columnDefinition);
+    console.log(`API URL used: ${apiUrl}`);
+    try {
+      const response = await axios.post(apiUrl, columnDefinition, this.getAuthConfig());
+      console.log('Add column response:', response.data);
+      return response.data; // Expected: { success: true, message: '...' }
+    } catch (error) {
+      console.error(`Error adding column to ${tableName}:`, error);
+      const message = error.response?.data?.message || error.message || 'Network or API error adding column.';
+      const errorCode = error.response?.data?.code;
+      return { success: false, message: message, code: errorCode, error: error.response?.data?.error };
+    }
+  }
+
+  /**
+   * Deletes a specific column from a table.
+   * @param {string|number} databaseId - The ID of the database connection.
+   * @param {string} tableName - The name of the table.
+   * @param {string} columnName - The name of the column to delete.
+   * @returns {Promise<Object>} Promise resolving to { success: boolean, message?: string }.
+   */
+  async deleteColumn(databaseId, tableName, columnName) {
+    const encodedTableName = encodeURIComponent(tableName);
+    const encodedColumnName = encodeURIComponent(columnName); // Also encode column name
+    const apiUrl = `${getServiceBaseUrl('databases')}/${databaseId}/tables/${encodedTableName}/columns/${encodedColumnName}`;
+    console.log(`[DatabaseService] Deleting column ${columnName} from ${tableName} for DB ID ${databaseId}`);
+    console.log(`API URL used: ${apiUrl}`);
+    try {
+      const response = await axios.delete(apiUrl, this.getAuthConfig());
+      console.log('Delete column response:', response.data);
+      return response.data; // Expected: { success: true, message: '...' }
+    } catch (error) {
+      console.error(`Error deleting column ${columnName} from ${tableName}:`, error);
+      const message = error.response?.data?.message || error.message || 'Network or API error deleting column.';
+      const errorCode = error.response?.data?.code;
+      return { success: false, message: message, code: errorCode, error: error.response?.data?.error };
+    }
+  }
+
+  /**
+   * Edits an existing column in a table.
+   * @param {string|number} databaseId - The ID of the database connection.
+   * @param {string} tableName - The name of the table.
+   * @param {string} columnName - The current name of the column to edit.
+   * @param {object} changes - Object containing the changes (e.g., { newName, newType, newNullable, newDefault, dropDefault }).
+   * @returns {Promise<Object>} Promise resolving to { success: boolean, message?: string }.
+   */
+  async editColumn(databaseId, tableName, columnName, changes) {
+    const encodedTableName = encodeURIComponent(tableName);
+    const encodedColumnName = encodeURIComponent(columnName);
+    const apiUrl = `${getServiceBaseUrl('databases')}/${databaseId}/tables/${encodedTableName}/columns/${encodedColumnName}`;
+    console.log(`[DatabaseService] Editing column ${columnName} in ${tableName} for DB ID ${databaseId}:`, changes);
+    console.log(`API URL used: ${apiUrl}`);
+    try {
+      const response = await axios.put(apiUrl, changes, this.getAuthConfig());
+      console.log('Edit column response:', response.data);
+      return response.data; // Expected: { success: true, message: '...' }
+    } catch (error) {
+      console.error(`Error editing column ${columnName} in ${tableName}:`, error);
+      const message = error.response?.data?.message || error.message || 'Network or API error editing column.';
+      const errorCode = error.response?.data?.code;
+      return { success: false, message: message, code: errorCode, error: error.response?.data?.error };
+    }
+  }
 }
 
 // Singleton instance

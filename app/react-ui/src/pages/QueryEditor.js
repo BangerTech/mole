@@ -149,6 +149,30 @@ export default function QueryEditor() {
   // Snackbar state
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
 
+  // State for Add Column Dialog
+  const [openAddColumnDialog, setOpenAddColumnDialog] = useState(false);
+  const [newColumnDetails, setNewColumnDetails] = useState({
+    name: '',
+    type: 'VARCHAR(255)', // Default type
+    nullable: true,
+    defaultValue: ''
+  });
+
+  // State for Delete Column Dialog
+  const [openDeleteColumnDialog, setOpenDeleteColumnDialog] = useState(false);
+  const [columnToDelete, setColumnToDelete] = useState(null);
+
+  // State for Edit Column Dialog
+  const [openEditColumnDialog, setOpenEditColumnDialog] = useState(false);
+  const [columnToEdit, setColumnToEdit] = useState(null); // Stores the original column object
+  const [editColumnDetails, setEditColumnDetails] = useState({ // Stores the potentially modified values
+    newName: '',
+    newType: '',
+    newNullable: true,
+    newDefault: '',
+    dropDefault: false // Option to explicitly drop default
+  });
+
   // Fetch available database connections and set default
   useEffect(() => {
     const fetchConnections = async () => {
@@ -778,6 +802,172 @@ export default function QueryEditor() {
   };
   // --- END ADDED --- 
 
+  // --- Add Column Dialog Handlers ---
+  const handleOpenAddColumnDialog = () => {
+    setNewColumnDetails({ name: '', type: 'VARCHAR(255)', nullable: true, defaultValue: '' }); // Reset form
+    setOpenAddColumnDialog(true);
+  };
+
+  const handleCloseAddColumnDialog = () => {
+    setOpenAddColumnDialog(false);
+  };
+
+  const handleNewColumnDetailChange = (field, value) => {
+    setNewColumnDetails(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleConfirmAddColumn = async () => {
+    if (!database || !database.id || !selectedTable || !newColumnDetails.name.trim() || !newColumnDetails.type) {
+      setSnackbar({ open: true, message: 'Column name and type are required.', severity: 'warning' });
+      return;
+    }
+    // Basic validation for column name (similar to backend)
+    if (!/^[a-zA-Z0-9_]+$/.test(newColumnDetails.name)) {
+        setSnackbar({ open: true, message: 'Invalid column name. Use only letters, numbers, and underscores.', severity: 'warning' });
+        return;
+    }
+
+    const columnDefinition = {
+      name: newColumnDetails.name,
+      type: newColumnDetails.type,
+      nullable: newColumnDetails.nullable,
+      // Only include defaultValue if it's not an empty string
+      ...(newColumnDetails.defaultValue.trim() !== '' && { defaultValue: newColumnDetails.defaultValue.trim() })
+    };
+
+    setLoading(true); // Use main loading or a specific one for this operation
+    try {
+      const result = await DatabaseService.addColumn(database.id, selectedTable, columnDefinition);
+      if (result.success) {
+        setSnackbar({ open: true, message: result.message || 'Column added successfully!', severity: 'success' });
+        handleCloseAddColumnDialog();
+        // Refresh table structure and potentially table list if schema details are re-fetched broadly
+        await handleTableClick(selectedTable); // Re-fetches structure and data preview
+      } else {
+        setSnackbar({ open: true, message: result.message || 'Failed to add column.', severity: 'error' });
+      }
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'An unexpected error occurred while adding column.', severity: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+  // --- End Add Column Dialog Handlers ---
+
+  // --- Delete Column Dialog Handlers ---
+  const handleOpenDeleteColumnDialog = (colName) => {
+    setColumnToDelete(colName);
+    setOpenDeleteColumnDialog(true);
+  };
+
+  const handleCloseDeleteColumnDialog = () => {
+    setOpenDeleteColumnDialog(false);
+    setColumnToDelete(null);
+  };
+
+  const handleConfirmDeleteColumn = async () => {
+    if (!database || !database.id || !selectedTable || !columnToDelete) {
+      setSnackbar({ open: true, message: 'Cannot delete column: missing context.', severity: 'error' });
+      handleCloseDeleteColumnDialog();
+      return;
+    }
+
+    setLoading(true); // Or a specific loading state
+    try {
+      const result = await DatabaseService.deleteColumn(database.id, selectedTable, columnToDelete);
+      if (result.success) {
+        setSnackbar({ open: true, message: result.message || `Column '${columnToDelete}' deleted successfully.`, severity: 'success' });
+        await handleTableClick(selectedTable); // Refresh structure
+      } else {
+        setSnackbar({ open: true, message: result.message || `Failed to delete column '${columnToDelete}'.`, severity: 'error' });
+      }
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'An unexpected error occurred.', severity: 'error' });
+    } finally {
+      setLoading(false);
+      handleCloseDeleteColumnDialog();
+    }
+  };
+  // --- End Delete Column Dialog Handlers ---
+
+  // --- Edit Column Dialog Handlers ---
+  const handleOpenEditColumnDialog = (column) => {
+    if (!column) return;
+    setColumnToEdit(column); // Store the original column data
+    setEditColumnDetails({ // Pre-fill the form with current values
+      newName: column.name,
+      newType: column.type?.toUpperCase(), // Use current type
+      newNullable: column.nullable, // Use current nullability
+      newDefault: column.default !== null && column.default !== undefined ? String(column.default) : '', // Use current default
+      dropDefault: false // Default is not to drop
+    });
+    setOpenEditColumnDialog(true);
+  };
+
+  const handleCloseEditColumnDialog = () => {
+    setOpenEditColumnDialog(false);
+    setColumnToEdit(null);
+    setEditColumnDetails({ newName: '', newType: '', newNullable: true, newDefault: '', dropDefault: false }); // Reset form
+  };
+
+  const handleEditColumnDetailChange = (field, value) => {
+    setEditColumnDetails(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleConfirmEditColumn = async () => {
+    if (!database || !database.id || !selectedTable || !columnToEdit || !editColumnDetails.newName?.trim() || !editColumnDetails.newType) {
+      setSnackbar({ open: true, message: 'Cannot modify column: missing context or required fields (name, type). ', severity: 'error' });
+      return;
+    }
+    // Basic validation for new column name
+    if (!/^[a-zA-Z0-9_]+$/.test(editColumnDetails.newName)) {
+        setSnackbar({ open: true, message: 'Invalid new column name. Use only letters, numbers, and underscores.', severity: 'warning' });
+        return;
+    }
+
+    // Construct the changes object based on what actually changed
+    const changes = {};
+    if (editColumnDetails.newName !== columnToEdit.name) {
+      changes.newName = editColumnDetails.newName;
+    }
+    if (editColumnDetails.newType?.toUpperCase() !== columnToEdit.type?.toUpperCase()) {
+      changes.newType = editColumnDetails.newType;
+    }
+    if (editColumnDetails.newNullable !== columnToEdit.nullable) {
+      changes.newNullable = editColumnDetails.newNullable;
+    }
+    // Handle default value changes carefully
+    const currentDefault = columnToEdit.default !== null && columnToEdit.default !== undefined ? String(columnToEdit.default) : '';
+    if (editColumnDetails.dropDefault) {
+      changes.dropDefault = true;
+    } else if (editColumnDetails.newDefault !== currentDefault) {
+      changes.newDefault = editColumnDetails.newDefault; // Send the new default value (empty string means set to NULL effectively if allowed)
+    }
+
+    if (Object.keys(changes).length === 0) {
+      setSnackbar({ open: true, message: 'No changes detected for the column.', severity: 'info' });
+      handleCloseEditColumnDialog();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await DatabaseService.editColumn(database.id, selectedTable, columnToEdit.name, changes);
+      if (result.success) {
+        setSnackbar({ open: true, message: result.message || `Column '${columnToEdit.name}' updated successfully.`, severity: 'success' });
+        handleCloseEditColumnDialog();
+        await handleTableClick(selectedTable); // Refresh structure
+      } else {
+        setSnackbar({ open: true, message: result.message || `Failed to update column '${columnToEdit.name}'.`, severity: 'error' });
+      }
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message || 'An unexpected error occurred while updating column.', severity: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+  // --- End Edit Column Dialog Handlers ---
+
   // Render logic needs to be adapted for Expert Mode only
   if (loading && !database) { // Show loading only during initial connection fetch
     return (
@@ -1046,7 +1236,20 @@ export default function QueryEditor() {
             {editorMode === 'simple' && selectedTable && (
                 <Paper sx={{ p: 2, mt: editorMode === 'expert' ? 0 : 2, flexGrow: 1, overflow: 'auto' }}> {/* Add margin top only in simple mode */} 
                   <Box sx={{ mb: 4 }}> {/* Add margin bottom */} 
-                      <Typography variant="subtitle1" gutterBottom>Structure</Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="subtitle1" gutterBottom>Structure</Typography>
+                        {!database?.isSample && selectedTable && (
+                          <Button 
+                            size="small" 
+                            startIcon={<AddIcon />}
+                            onClick={handleOpenAddColumnDialog}
+                            sx={{ mb: 1, textTransform: 'none' }}
+                            disabled={loading} // Disable if any loading is happening
+                          >
+                            Add Column
+                          </Button>
+                        )}
+                      </Box>
                       {simpleModeLoading && <CircularProgress size={24} sx={{ mt: 2 }} />} 
                       {simpleModeError && <Alert severity="warning" sx={{ mt: 2 }}>{simpleModeError}</Alert>} 
                       {!simpleModeLoading && !simpleModeError && tableStructure.length > 0 && (
@@ -1067,7 +1270,33 @@ export default function QueryEditor() {
                               {/* Iterate over the array of column definition objects */}
                               {tableStructure.map((column, index) => (
                                 <TableRow key={`structure-col-${index}`}>
-                                  <TableCell>{column.name}</TableCell>
+                                  <TableCell>
+                                    {column.name}
+                                    {!database?.isSample && selectedTable && (
+                                      <Tooltip title={`Edit column ${column.name}`}>
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => handleOpenEditColumnDialog(column)} // Pass the whole column object
+                                          sx={{ ml: 1, p: 0.25 }}
+                                          disabled={loading}
+                                        >
+                                          <EditIcon fontSize="inherit" color="action" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
+                                    {!database?.isSample && selectedTable && (
+                                      <Tooltip title={`Delete column ${column.name}`}>
+                                        <IconButton 
+                                          size="small" 
+                                          onClick={() => handleOpenDeleteColumnDialog(column.name)} 
+                                          sx={{ ml: 1, p: 0.25 }} // Smaller padding
+                                          disabled={loading} // Disable if any loading is happening
+                                        >
+                                          <DeleteIcon fontSize="inherit" color="action" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
+                                  </TableCell>
                                   <TableCell>{column.type}</TableCell>
                                   <TableCell>{column.nullable ? 'YES' : 'NO'}</TableCell>
                                   <TableCell>{column.default !== null && column.default !== undefined ? String(column.default) : 'NULL'}</TableCell>
@@ -1343,6 +1572,162 @@ export default function QueryEditor() {
            </Button>
          </DialogActions>
        </Dialog>
+
+      {/* Add Column Dialog */} 
+      <Dialog open={openAddColumnDialog} onClose={handleCloseAddColumnDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Add New Column to {selectedTable}</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Define the properties for the new column.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Column Name"
+            fullWidth
+            variant="outlined"
+            value={newColumnDetails.name}
+            onChange={(e) => handleNewColumnDetailChange('name', e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+            <InputLabel>Data Type</InputLabel>
+            <Select
+              value={newColumnDetails.type}
+              label="Data Type"
+              onChange={(e) => handleNewColumnDetailChange('type', e.target.value)}
+            >
+              <MenuItem value="INT">INT</MenuItem>
+              <MenuItem value="VARCHAR(255)">VARCHAR(255)</MenuItem>
+              <MenuItem value="TEXT">TEXT</MenuItem>
+              <MenuItem value="DATE">DATE</MenuItem>
+              <MenuItem value="TIMESTAMP">TIMESTAMP</MenuItem>
+              <MenuItem value="BOOLEAN">BOOLEAN</MenuItem>
+              <MenuItem value="DECIMAL(10,2)">DECIMAL(10,2)</MenuItem>
+              {/* Add other types as supported by your backend validation */}
+            </Select>
+          </FormControl>
+          <TextField
+            margin="dense"
+            label="Default Value (optional)"
+            fullWidth
+            variant="outlined"
+            value={newColumnDetails.defaultValue}
+            onChange={(e) => handleNewColumnDetailChange('defaultValue', e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={newColumnDetails.nullable}
+                onChange={(e) => handleNewColumnDetailChange('nullable', e.target.checked)}
+              />
+            }
+            label="Allow NULL values"
+            sx={{ mb: 2 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={handleCloseAddColumnDialog}>Cancel</Button>
+          <Button onClick={handleConfirmAddColumn} variant="contained" disabled={loading || !newColumnDetails.name.trim() || !newColumnDetails.type}>
+            {loading ? <CircularProgress size={20}/> : 'Add Column'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Column Confirmation Dialog */} 
+      <Dialog open={openDeleteColumnDialog} onClose={handleCloseDeleteColumnDialog} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center' }}>
+            <WarningIcon color="error" sx={{ mr: 1 }} /> Delete Column
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete the column <strong>{columnToDelete}</strong> from table <strong>{selectedTable}</strong>? 
+            This action cannot be undone and might result in data loss if the column contains data.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={handleCloseDeleteColumnDialog}>Cancel</Button>
+          <Button onClick={handleConfirmDeleteColumn} variant="contained" color="error" disabled={loading}>
+            {loading ? <CircularProgress size={20}/> : 'Delete Column'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Column Dialog */} 
+      <Dialog open={openEditColumnDialog} onClose={handleCloseEditColumnDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit Column '{columnToEdit?.name}' in {selectedTable}</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Modify the properties for the column. Note: Data type changes might fail if incompatible with existing data.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Column Name"
+            fullWidth
+            variant="outlined"
+            value={editColumnDetails.newName}
+            onChange={(e) => handleEditColumnDetailChange('newName', e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+            <InputLabel>Data Type</InputLabel>
+            <Select
+              value={editColumnDetails.newType}
+              label="Data Type"
+              onChange={(e) => handleEditColumnDetailChange('newType', e.target.value)}
+            >
+              {/* Same types as Add Column dialog */}
+              <MenuItem value="INT">INT</MenuItem>
+              <MenuItem value="VARCHAR(255)">VARCHAR(255)</MenuItem>
+              <MenuItem value="TEXT">TEXT</MenuItem>
+              <MenuItem value="DATE">DATE</MenuItem>
+              <MenuItem value="TIMESTAMP">TIMESTAMP</MenuItem>
+              <MenuItem value="BOOLEAN">BOOLEAN</MenuItem>
+              <MenuItem value="DECIMAL(10,2)">DECIMAL(10,2)</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            margin="dense"
+            label={`Default Value (Current: ${columnToEdit?.default ?? 'NULL'})`}
+            helperText={editColumnDetails.dropDefault ? "Default value will be dropped." : "Leave blank to set no default (or NULL if allowed)."}
+            fullWidth
+            variant="outlined"
+            value={editColumnDetails.newDefault}
+            onChange={(e) => handleEditColumnDetailChange('newDefault', e.target.value)}
+            sx={{ mb: 1 }} // Reduced margin bottom
+            disabled={editColumnDetails.dropDefault}
+          />
+          <FormControlLabel
+              control={
+                  <Switch
+                      checked={editColumnDetails.dropDefault}
+                      onChange={(e) => handleEditColumnDetailChange('dropDefault', e.target.checked)}
+                      size="small"
+                  />
+              }
+              label="Drop existing default value"
+              sx={{ mb: 2, display: 'block' }} // Ensure it takes block display
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={editColumnDetails.newNullable}
+                onChange={(e) => handleEditColumnDetailChange('newNullable', e.target.checked)}
+              />
+            }
+            label="Allow NULL values"
+            sx={{ mb: 2 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={handleCloseEditColumnDialog}>Cancel</Button>
+          <Button onClick={handleConfirmEditColumn} variant="contained" disabled={loading || !editColumnDetails.newName?.trim() || !editColumnDetails.newType}>
+            {loading ? <CircularProgress size={20}/> : 'Save Changes'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Add Snackbar for feedback */}
       <Snackbar 

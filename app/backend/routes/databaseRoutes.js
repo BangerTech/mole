@@ -37,6 +37,15 @@ router.post('/:id/tables', databaseController.createTable);
 // Insert a new row into a table
 router.post('/:id/tables/:tableName/rows', databaseController.insertTableRow);
 
+// Add a new column to a table
+router.post('/:id/tables/:tableName/columns', databaseController.addColumnToTable);
+
+// Edit an existing column in a table
+router.put('/:id/tables/:tableName/columns/:columnName', databaseController.editColumnInTable);
+
+// Delete a column from a table
+router.delete('/:id/tables/:tableName/columns/:columnName', databaseController.deleteColumnFromTable);
+
 // Delete a table
 router.delete('/:id/tables/:tableName', databaseController.deleteTable);
 
