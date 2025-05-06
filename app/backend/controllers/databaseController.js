@@ -476,46 +476,38 @@ exports.executeQuery = async (req, res) => {
       const client = await pool.connect();
       
       try {
-        // Define orderByClause BEFORE using it in dataQuery
-        const orderByClause = sortByClean ? `ORDER BY "${sortByClean}" ${sortOrderClean}` : ''; // Quote sortBy field
-        
-        // Data Query - Use the decoded table name directly. Select columns explicitly if needed.
-        // Remove COALESCE to return actual NULL values. Quote identifiers properly.
-        const dataQuery = `SELECT * FROM public."${decodedTableName}" ${orderByClause} LIMIT $1 OFFSET $2`;
-        console.log('[getTableData] PostgreSQL Data Query:', dataQuery, [limitNum, offset]); // DEBUG
-        const dataResult = await client.query(dataQuery, [limitNum, offset]);
-        rows = dataResult.rows;
+        // Execute the user's query directly
+        // IMPORTANT: Sanitize or parameterize user input if it were used here!
+        // But for simple query execution, we pass it directly
+        const result = await client.query(query); // Use the 'query' argument passed in
 
-        // --- Log RAW first row data ---
-        if (rows.length > 0) {
-          console.log('[getTableData RAW Row 0]:', rows[0]); 
-        }
-        // --- End Log RAW ---
+        // Extract columns and rows from the result
+        const columns = result.fields ? result.fields.map(field => field.name) : [];
+        const rows = result.rows;
 
-        // Columns (extract from result fields)
-        if (dataResult.fields) {
-            columns = dataResult.fields.map(field => field.name);
-        } else if (rows.length > 0) {
-             columns = Object.keys(rows[0]);
-        } else {
-            // If no rows, try getting columns from schema (less efficient)
-            const colsInfo = await client.query(`
-              SELECT column_name 
-              FROM information_schema.columns 
-              WHERE table_schema = 'public' AND table_name = $1 
-              ORDER BY ordinal_position;`, [decodedTableName]);
-            columns = colsInfo.rows.map(r => r.column_name);
-        }
+        // Determine affected rows for non-SELECT queries
+        const affectedRows = result.rowCount !== null ? result.rowCount : 0;
 
-        // Count Query - Use decoded table name directly
-        const countQuery = `SELECT COUNT(*) as count FROM ${decodedTableName}`;
-        console.log('[getTableData] PostgreSQL Count Query:', countQuery); // DEBUG
-        const countResult = await client.query(countQuery);
-        totalRowCount = parseInt(countResult.rows[0].count, 10);
+        // ---> MOVED: Release client, end pool, and send response AFTER successful execution <---
+        client.release();
+        // Consider if pool should be ended per query or kept alive
+        // Ending the pool per query might be less efficient but simpler for now
+        await pool.end(); 
+
+        res.status(200).json({
+          success: true,
+          columns,
+          rows,
+          affectedRows, // Include affected rows count
+          message: `Query executed successfully.` // Simplified message
+        });
+        // ---> END MOVED <---
 
       } catch (queryError) {
-        client.release();
-        await pool.end();
+        // ---> REMOVED redundant release/end from catch block as it's handled above now <---
+        // client.release(); 
+        // await pool.end(); 
+        // ---------------------------------------------------------------------------------
         
         // Detaillierte Fehlerinformationen für besseres Debugging
         console.error('PostgreSQL query error:', queryError);
@@ -580,8 +572,11 @@ exports.getTableData = async (req, res) => {
   const pageNum = parseInt(page, 10);
   const limitNum = parseInt(limit, 10);
   const sortOrderClean = sortOrder?.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-  const sortByClean = sortBy && /^[a-zA-Z0-9_]+$/.test(sortBy) ? sortBy : 'time';
-  const finalSortOrder = sortBy ? sortOrderClean : 'DESC';
+  
+  // Only use sortBy if it's a valid string, otherwise, no default sort column.
+  const sortByClean = (sortBy && typeof sortBy === 'string' && /^[a-zA-Z0-9_]+$/.test(sortBy)) ? sortBy : null;
+  // If sortByClean is null, finalSortOrder is irrelevant for building the clause.
+  const finalSortOrder = sortOrderClean; 
   
   if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
       console.error(`[getTableData] Invalid pagination params: page=${page}, limit=${limit}`); // DEBUG
@@ -640,8 +635,8 @@ exports.getTableData = async (req, res) => {
       client = mysqlConnection; // Assign to general client
 
       try {
-        // Construct ORDER BY clause
-        const orderByClause = sortByClean ? `ORDER BY \\\`${sortByClean}\\\` ${finalSortOrder}` : ''; // Use backticks for MySQL
+        // Construct ORDER BY clause only if sortByClean is valid
+        const orderByClause = sortByClean ? `ORDER BY \`${sortByClean}\` ${finalSortOrder}` : ''; // Use backticks for MySQL
         
         // Data Query
         const dataQuery = `SELECT * FROM ${safeTableName} ${orderByClause} LIMIT ? OFFSET ?`;
@@ -684,6 +679,7 @@ exports.getTableData = async (req, res) => {
 
       try {
         // Define orderByClause BEFORE using it in dataQuery
+        // Construct ORDER BY clause only if sortByClean is valid
         const orderByClause = sortByClean ? `ORDER BY "${sortByClean}" ${finalSortOrder}` : ''; // Quote sortBy field
         
         // Data Query - Use the decoded table name directly. Select columns explicitly if needed.
@@ -714,8 +710,8 @@ exports.getTableData = async (req, res) => {
             columns = colsInfo.rows.map(r => r.column_name);
         }
 
-        // Count Query - Use decoded table name directly
-        const countQuery = `SELECT COUNT(*) as count FROM ${decodedTableName}`;
+        // Count Query - Use decoded table name directly, but ensure it's quoted for PostgreSQL
+        const countQuery = `SELECT COUNT(*) as count FROM public."${decodedTableName}"`; // Corrected: Added public schema and quotes
         console.log('[getTableData] PostgreSQL Count Query:', countQuery); // DEBUG
         const countResult = await client.query(countQuery);
         totalRowCount = parseInt(countResult.rows[0].count, 10);
@@ -802,17 +798,17 @@ exports.createTable = async (req, res) => {
   if (!columns || !Array.isArray(columns) || columns.length === 0) {
     return res.status(400).json({ success: false, message: 'Invalid or empty columns definition.' });
   }
-  // Basic validation for column names and types (add more as needed)
   for (const col of columns) {
      if (!col.name || !/^[a-zA-Z0-9_]+$/.test(col.name)) {
          return res.status(400).json({ success: false, message: `Invalid column name: ${col.name}` });
      }
-     // Whitelist allowed types or add more robust validation
-     const allowedTypes = ['INT', 'VARCHAR(255)', 'TEXT', 'DATE', 'TIMESTAMP', 'BOOLEAN', 'DECIMAL(10,2)'];
+     const allowedTypes = ['INT', 'VARCHAR(255)', 'TEXT', 'DATE', 'TIMESTAMP', 'BOOLEAN', 'DECIMAL(10,2)', 'SERIAL']; // Added SERIAL as an allowed type
      if (!col.type || !allowedTypes.includes(col.type.toUpperCase())) {
           return res.status(400).json({ success: false, message: `Invalid or unsupported column type: ${col.type}` });
      }
   }
+
+  let mainClient; // Renamed to avoid conflict, will hold MySQL connection or PG Pool client
 
   try {
     const connection = await databaseService.getConnectionById(connectionId);
@@ -824,73 +820,75 @@ exports.createTable = async (req, res) => {
     let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
     
     let createTableSql = '';
-    let client; // Pool client or MySQL connection
 
-    // --- Construct Engine-Specific CREATE TABLE SQL --- 
     if (engine.toLowerCase() === 'mysql') {
         const columnDefs = columns.map(col => {
-            let def = `\\\`${col.name}\\\` ${col.type}`;
+            let def = `\`${col.name}\` ${col.type}`;
             def += col.nullable ? ' NULL' : ' NOT NULL';
             if (col.default) def += ` DEFAULT ${mysql.escape(col.default)}`; // Escape default value
             if (col.isPrimary) def += ' PRIMARY KEY';
             if (col.autoIncrement && col.type.toUpperCase() === 'INT') def += ' AUTO_INCREMENT';
             return def;
-        }).join(',\\n  ');
-        createTableSql = `CREATE TABLE \\\`${tableName}\\\` (\\n  ${columnDefs}\\n);`;
+        }).join(',\n  ');
+        createTableSql = `CREATE TABLE \`${tableName}\` (\n  ${columnDefs}\n);`;
         
-        client = await mysql.createConnection({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectTimeout: 10000 });
+        mainClient = await mysql.createConnection({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectTimeout: 10000 });
 
     } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
-        const columnDefs = columns.map(col => {
-            // Use SERIAL for INT PRIMARY KEY AUTOINCREMENT
-            let type = col.type;
-            if (col.isPrimary && col.autoIncrement && col.type.toUpperCase() === 'INT') {
-                type = 'SERIAL';
-            } 
-            let def = `\\\"${col.name}\\\" ${type}`;
-            if (col.isPrimary && type !== 'SERIAL') def += ' PRIMARY KEY'; // Add PK only if not SERIAL
-            def += col.nullable ? ' NULL' : ' NOT NULL';
-            if (col.default) def += ` DEFAULT ${client.escapeLiteral(col.default)}`; // Use client.escapeLiteral if available
-            // PostgreSQL doesn't have AUTO_INCREMENT keyword like MySQL, handled by SERIAL
-            return def;
-        }).join(',\\n  ');
-         createTableSql = `CREATE TABLE public.\\\"${tableName}\\\" (\\n  ${columnDefs}\\n);`; // Assume public schema
-
-         const pool = new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 });
-         client = await pool.connect();
-
+        const pool = new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 });
+        mainClient = await pool.connect(); // Connect before mapping columns
+        try {
+            const columnDefPromises = columns.map(async col => { // map callback is now async
+                let type = col.type.toUpperCase(); // Normalize type
+                if (col.isPrimary && col.autoIncrement && type === 'INT') {
+                    type = 'SERIAL';
+                } 
+                let def = `"${col.name}" ${type}`;
+                if (col.isPrimary && type !== 'SERIAL') def += ' PRIMARY KEY'; // Add PK only if not SERIAL
+                def += col.nullable ? ' NULL' : ' NOT NULL';
+                if (col.default) {
+                    def += ` DEFAULT ${mainClient.escapeLiteral(col.default)}`; // Use the established mainClient
+                }
+                return def;
+            });
+            const columnDefs = (await Promise.all(columnDefPromises)).join(',\n  ');
+            createTableSql = `CREATE TABLE public."${tableName}" (\n  ${columnDefs}\n);`; // Assume public schema
+        } finally {
+            // Release client only if CREATE TABLE fails before execution, or if it's not used further.
+            // Actual release is in the main finally block after query execution.
+        }
     } else {
         return res.status(400).json({ success: false, message: `CREATE TABLE not supported for engine: ${engine}` });
     }
 
-    // --- Execute CREATE TABLE --- 
     console.log(`Executing Create Table (${engine}):`, createTableSql);
     try {
       if (engine.toLowerCase() === 'mysql') {
-         await client.query(createTableSql);
+         await mainClient.query(createTableSql);
       } else {
-         await client.query(createTableSql);
+         await mainClient.query(createTableSql);
       }
-      res.status(201).json({ success: true, message: `Table \"${tableName}\" created successfully.` });
+      res.status(201).json({ success: true, message: `Table "${tableName}" created successfully.` });
     } catch (execError) {
         console.error('Error executing CREATE TABLE:', execError);
-        // Provide more specific error message if possible
-        let userMessage = `Failed to create table \"${tableName}\".`;
-        if (execError.message.includes('already exists') || execError.code === 'ER_TABLE_EXISTS_ERROR') {
-            userMessage = `Table \"${tableName}\" already exists.`;
+        let userMessage = `Failed to create table "${tableName}".`;
+        if (execError.message.includes('already exists') || execError.code === 'ER_TABLE_EXISTS_ERROR' || (execError.code === '42P07' /* PostgreSQL duplicate_table */)) {
+            userMessage = `Table "${tableName}" already exists.`;
         }
-        res.status(409).json({ success: false, message: userMessage, error: execError.message }); // 409 Conflict
+        res.status(409).json({ success: false, message: userMessage, error: execError.message, code: execError.code });
     } finally {
-         // --- Close Connection --- 
-        if (client) {
-            if (engine.toLowerCase() === 'mysql') await client.end();
-            else client.release(); // Release PG client back to pool
-            // We might not need pool.end() here if we reuse the pool
+        if (mainClient) {
+            if (engine.toLowerCase() === 'mysql') await mainClient.end();
+            else if (mainClient.release) mainClient.release(); // Release PG client back to pool
         }
     }
 
   } catch (error) {
     console.error(`Error creating table ${tableName}:`, error);
+    // Ensure client is released if error happens before the main finally block
+    if (mainClient && engine.toLowerCase() !== 'mysql' && mainClient.release) {
+        mainClient.release();
+    }
     res.status(500).json({ success: false, message: 'Internal server error creating table.', error: error.message });
   }
 };
@@ -903,14 +901,14 @@ exports.createTable = async (req, res) => {
 exports.deleteTable = async (req, res) => {
   const { id: connectionId, tableName } = req.params;
 
-  // Basic validation for table name
   if (!tableName) {
      return res.status(400).json({ success: false, message: 'Table name is required.' });
   }
-  // Basic defense against unintended targets - adjust whitelist/blacklist as needed
-  if (!/^[a-zA-Z0-9_\-]+$/.test(tableName)) { // Allow hyphen
+  if (!/^[a-zA-Z0-9_\-]+$/.test(tableName)) {
      return res.status(400).json({ success: false, message: 'Invalid table name format.' });
   }
+  
+  let client; // For MySQL connection or PG Pool client
 
   try {
     const connection = await databaseService.getConnectionById(connectionId);
@@ -922,21 +920,18 @@ exports.deleteTable = async (req, res) => {
     let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
     
     let dropTableSql = '';
-    let client;
 
-    // Construct engine-specific DROP TABLE SQL (with proper quoting)
     if (engine.toLowerCase() === 'mysql') {
-       dropTableSql = `DROP TABLE IF EXISTS \\\`${tableName}\\\``; 
+       dropTableSql = `DROP TABLE IF EXISTS \`${tableName}\``; 
        client = await mysql.createConnection({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectTimeout: 10000 });
     } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
-       dropTableSql = `DROP TABLE IF EXISTS public.\\\"${tableName}\\\"`; // Assume public schema
+       dropTableSql = `DROP TABLE IF EXISTS public."${tableName}"`;
        const pool = new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 });
        client = await pool.connect();
     } else {
         return res.status(400).json({ success: false, message: `DROP TABLE not supported for engine: ${engine}` });
     }
 
-    // Execute DROP TABLE
     console.log(`Executing Drop Table (${engine}):`, dropTableSql);
     try {
       if (engine.toLowerCase() === 'mysql') {
@@ -944,19 +939,22 @@ exports.deleteTable = async (req, res) => {
       } else {
          await client.query(dropTableSql);
       }
-      res.status(200).json({ success: true, message: `Table \"${tableName}\" deleted successfully.` });
+      res.status(200).json({ success: true, message: `Table "${tableName}" deleted successfully.` });
     } catch (execError) {
        console.error('Error executing DROP TABLE:', execError);
-       res.status(500).json({ success: false, message: `Failed to delete table \"${tableName}\".`, error: execError.message });
+       res.status(500).json({ success: false, message: `Failed to delete table "${tableName}".`, error: execError.message });
     } finally {
         if (client) {
             if (engine.toLowerCase() === 'mysql') await client.end();
-            else client.release();
+            else if (client.release) client.release();
         }
     }
 
   } catch (error) {
     console.error(`Error deleting table ${tableName}:`, error);
+    if (client && engine.toLowerCase() !== 'mysql' && client.release) {
+        client.release();
+    }
     res.status(500).json({ success: false, message: 'Internal server error deleting table.', error: error.message });
   }
 };
@@ -1057,19 +1055,15 @@ exports.getTopTables = async (req, res) => {
  * @param {Object} res - Express response object
  */
 exports.createDatabaseInstance = async (req, res) => {
-  // Extract details provided by the user for the connection entry
   const { engine: userEngineChoice, name: connectionName, host: userHost, port: userPort, username: connectionUser, password: connectionPassword, ssl_enabled: userSslEnabled, notes: userNotes } = req.body;
-  // Use the connection name as the database/bucket name to be created
   const dbNameToCreate = connectionName;
 
   console.log(`[createDatabaseInstance] Request received: Engine=${userEngineChoice}, Name=${dbNameToCreate}`);
 
-  // --- Input Validation --- 
-  if (!userEngineChoice || !dbNameToCreate || !connectionUser) { // Password can be empty
+  if (!userEngineChoice || !dbNameToCreate || !connectionUser) {
     console.error('[createDatabaseInstance] Missing required fields in request body (engine, name, username are required).');
     return res.status(400).json({ success: false, message: 'Missing required fields: engine, name, username are required.' });
   }
-  // Strict validation for database/bucket name (alphanumeric + underscore ONLY)
   if (!/^[a-zA-Z0-9_]+$/.test(dbNameToCreate)) {
     console.error(`[createDatabaseInstance] Invalid database/bucket name format: ${dbNameToCreate}`);
     return res.status(400).json({ success: false, message: 'Invalid database name. Use only letters, numbers, and underscores.' });
@@ -1077,11 +1071,10 @@ exports.createDatabaseInstance = async (req, res) => {
 
   let creationSuccess = false;
   let creationMessage = '';
+  let adminClient; // For PG or MySQL admin operations
 
-  // --- Database/Bucket Creation Logic --- 
-  try { // Outer try block for the creation process
+  try {
     if (userEngineChoice.toLowerCase() === 'postgresql') {
-      // Read PG Admin credentials and target from ENV vars
       const pgAdminUser = process.env.DB_CREATE_PG_USER || 'postgres';
       const pgAdminPassword = process.env.DB_CREATE_PG_PASSWORD;
       const pgHost = process.env.DB_CREATE_PG_HOST || 'mole-postgres';
@@ -1093,31 +1086,28 @@ exports.createDatabaseInstance = async (req, res) => {
 
       const pool = new Pool({
         host: pgHost, port: pgPort, user: pgAdminUser, password: pgAdminPassword,
-        database: 'postgres', // Connect to default db to create a new one
+        database: 'postgres',
         connectionTimeoutMillis: 10000
       });
-      const client = await pool.connect();
+      adminClient = await pool.connect();
       console.log(`[createDatabaseInstance] Connected to PG admin@${pgHost} to check/create ${dbNameToCreate}`);
       try {
-        const checkRes = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbNameToCreate]);
+        const checkRes = await adminClient.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbNameToCreate]);
         if (checkRes.rowCount > 0) {
           creationSuccess = true;
           creationMessage = `PostgreSQL database '${dbNameToCreate}' already exists.`;
           console.log(creationMessage);
         } else {
-          // Since dbNameToCreate is validated, we can use it directly. PG identifiers are often case-insensitive unless quoted.
-          // Using standard double quotes for safety, although potentially unnecessary for validated names.
-          await client.query(`CREATE DATABASE \\\"${dbNameToCreate}\\\"` );
+          await adminClient.query(`CREATE DATABASE "${dbNameToCreate}"`); // Corrected quoting
           creationSuccess = true;
           creationMessage = `PostgreSQL database '${dbNameToCreate}' created successfully.`;
           console.log(creationMessage);
         }
       } finally {
-        client.release();
-        await pool.end();
+        if (adminClient) adminClient.release();
+        await pool.end(); // End the admin pool
       }
     } else if (userEngineChoice.toLowerCase() === 'mysql') {
-      // Read MySQL Admin credentials and target from ENV vars
       const mysqlAdminUser = process.env.DB_CREATE_MYSQL_USER || 'root';
       const mysqlAdminPassword = process.env.DB_CREATE_MYSQL_PASSWORD;
       const mysqlHost = process.env.DB_CREATE_MYSQL_HOST || 'mole-mysql';
@@ -1127,19 +1117,18 @@ exports.createDatabaseInstance = async (req, res) => {
         throw new Error('MySQL admin password (DB_CREATE_MYSQL_PASSWORD) not configured.');
       }
 
-      const connection = await mysql.createConnection({
+      adminClient = await mysql.createConnection({
           host: mysqlHost, port: mysqlPort, user: mysqlAdminUser, password: mysqlAdminPassword,
           connectTimeout: 10000
       });
       console.log(`[createDatabaseInstance] Connected to MySQL admin@${mysqlHost} to check/create ${dbNameToCreate}`);
       try {
-        // Use CREATE DATABASE IF NOT EXISTS. Backticks are standard for MySQL identifiers.
-        await connection.query(`CREATE DATABASE IF NOT EXISTS \\\`${dbNameToCreate}\\\``);
+        await adminClient.query(`CREATE DATABASE IF NOT EXISTS \`${dbNameToCreate}\``); // Corrected quoting
         creationSuccess = true;
         creationMessage = `MySQL database '${dbNameToCreate}' created or already exists.`;
         console.log(creationMessage);
       } finally {
-          await connection.end();
+          if (adminClient) await adminClient.end();
       }
     } else if (userEngineChoice.toLowerCase() === 'influxdb') {
       // Read InfluxDB config from ENV vars
@@ -1274,6 +1263,92 @@ exports.getDatabaseTransactionStats = async (req, res) => {
       success: false, 
       message: error.message || 'Internal server error fetching transaction stats.' 
     });
+  }
+};
+
+/**
+ * Insert a new row into a specific table
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.insertTableRow = async (req, res) => {
+  const { id: connectionId, tableName } = req.params;
+  const rowData = req.body; // Expects an object like { column1: value1, column2: value2 }
+
+  if (!rowData || typeof rowData !== 'object' || Object.keys(rowData).length === 0) {
+    return res.status(400).json({ success: false, message: 'Row data is required and must be a non-empty object.' });
+  }
+  // Further validation: ensure tableName is valid (e.g., /^[a-zA-Z0-9_]+$/)
+  if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
+      return res.status(400).json({ success: false, message: 'Invalid table name.' });
+  }
+
+  let client;
+  try {
+    const connection = await databaseService.getConnectionById(connectionId);
+    if (!connection) {
+      return res.status(404).json({ success: false, message: 'Database connection not found' });
+    }
+
+    const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
+    let password = encrypted_password ? decrypt(encrypted_password) : connection.password;
+
+    const columns = Object.keys(rowData);
+    const values = columns.map(col => rowData[col]);
+
+    let insertSql = '';
+    let placeholderChar = '?'; // Default for MySQL parameterization
+
+    if (engine.toLowerCase() === 'mysql') {
+      const columnNames = columns.map(col => `\`${col}\``).join(', ');
+      const valuePlaceholders = columns.map(() => placeholderChar).join(', ');
+      insertSql = `INSERT INTO \`${tableName}\` (${columnNames}) VALUES (${valuePlaceholders})`;
+      client = await mysql.createConnection({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectTimeout: 10000 });
+    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+      placeholderChar = '$'; // PostgreSQL uses $1, $2, etc.
+      const columnNames = columns.map(col => `"${col}"`).join(', ');
+      const valuePlaceholders = columns.map((_, i) => `${placeholderChar}${i + 1}`).join(', ');
+      // Assuming public schema, and table name is already validated (no need to re-quote tableName here for PG)
+      // However, `tableName` in the route might be case sensitive, and it was created quoted.
+      // So, we should quote it here to match.
+      insertSql = `INSERT INTO public."${tableName}" (${columnNames}) VALUES (${valuePlaceholders})`;
+      const pool = new Pool({ host, port, database, user: username, password, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 });
+      client = await pool.connect();
+    } else {
+      return res.status(400).json({ success: false, message: `INSERT INTO not supported for engine: ${engine}` });
+    }
+
+    console.log(`Executing Insert Row (${engine}):`, insertSql, values);
+    try {
+      let result;
+      if (engine.toLowerCase() === 'mysql') {
+        [result] = await client.execute(insertSql, values); // Use execute for parameterized queries
+      } else {
+        result = await client.query(insertSql, values); // pg library handles parameterization
+      }
+      // MySQL result: { affectedRows: 1, insertId: X, ... }
+      // PostgreSQL result: { command: 'INSERT', rowCount: 1, ... }
+      const affectedRows = result.affectedRows || result.rowCount || 0;
+      if (affectedRows > 0) {
+        res.status(201).json({ success: true, message: `Row inserted successfully into "${tableName}".`, affectedRows });
+      } else {
+        res.status(400).json({ success: false, message: `Failed to insert row into "${tableName}". No rows affected.` });
+      }
+    } catch (execError) {
+      console.error(`Error executing INSERT INTO for table "${tableName}":`, execError);
+      res.status(500).json({ success: false, message: `Failed to insert row into "${tableName}".`, error: execError.message, code: execError.code });
+    } finally {
+      if (client) {
+        if (engine.toLowerCase() === 'mysql') await client.end();
+        else if (client.release) client.release();
+      }
+    }
+  } catch (error) {
+    console.error(`Error inserting row into table ${tableName}:`, error);
+    if (client && engine.toLowerCase() !== 'mysql' && client.release) {
+        client.release();
+    }
+    res.status(500).json({ success: false, message: 'Internal server error inserting row.', error: error.message });
   }
 };
 

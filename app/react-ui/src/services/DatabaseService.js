@@ -414,6 +414,67 @@ class DatabaseService {
       throw new Error(message);
     }
   }
+
+  // --- Placeholders for Row Operations --- 
+  
+  /**
+   * Inserts a new row into a table.
+   * @param {string|number} databaseId - The ID of the database connection.
+   * @param {string} tableName - The name of the table.
+   * @param {object} rowData - An object where keys are column names and values are the data to insert.
+   * @returns {Promise<object>} - The result from the API (e.g., { success: boolean, message: string, affectedRows?: number }).
+   */
+  async insertRow(databaseId, tableName, rowData) {
+    const encodedTableName = encodeURIComponent(tableName);
+    const apiUrl = `${getServiceBaseUrl('databases')}/${databaseId}/tables/${encodedTableName}/rows`;
+    console.log(`[DatabaseService] Inserting row into ${tableName} for DB ID ${databaseId}:`, rowData);
+    console.log(`API URL used: ${apiUrl}`);
+    try {
+      const response = await axios.post(apiUrl, rowData, this.getAuthConfig());
+      console.log('Insert row response:', response.data);
+      return response.data; // Expected: { success: true, message: '...', affectedRows: 1 }
+    } catch (error) {
+      console.error(`Error inserting row into ${tableName}:`, error);
+      const message = error.response?.data?.message || error.message || 'Network or API error inserting row.';
+      const errorCode = error.response?.data?.code; // Include error code if backend provides it
+      return { success: false, message: message, code: errorCode, error: error.response?.data?.error };
+    }
+  }
+
+  /**
+   * Updates an existing row in a table.
+   * @param {string|number} databaseId - The ID of the database connection.
+   * @param {string} tableName - The name of the table.
+   * @param {object} primaryKeyData - An object identifying the row, likely containing primary key column(s) and values.
+   * @param {object} rowData - An object containing the updated column data.
+   * @returns {Promise<object>} - The result from the API.
+   */
+  async updateRow(databaseId, tableName, primaryKeyData, rowData) {
+    console.log('DatabaseService.updateRow called:', { databaseId, tableName, primaryKeyData, rowData });
+    // TODO: Implement actual API call. Needs careful handling of primary keys.
+    // Might need a specific endpoint like PUT /api/databases/:id/tables/:tableName/rows/:pkValue or pass PK in body/params.
+    // const endpoint = `/databases/${databaseId}/tables/${encodeURIComponent(tableName)}/rows`; // Needs PK info
+    // return this.request(endpoint, { method: 'PUT', body: { primaryKey: primaryKeyData, updates: rowData } });
+    return Promise.resolve({ success: false, message: 'Update Row API call not implemented yet (needs PK handling).' }); // Placeholder
+  }
+
+  /**
+   * Deletes a row from a table.
+   * @param {string|number} databaseId - The ID of the database connection.
+   * @param {string} tableName - The name of the table.
+   * @param {object} primaryKeyData - An object identifying the row, likely containing primary key column(s) and values.
+   * @returns {Promise<object>} - The result from the API.
+   */
+  async deleteRow(databaseId, tableName, primaryKeyData) {
+    console.log('DatabaseService.deleteRow called:', { databaseId, tableName, primaryKeyData });
+    // TODO: Implement actual API call. Needs careful handling of primary keys.
+    // Might need a specific endpoint like DELETE /api/databases/:id/tables/:tableName/rows/:pkValue or pass PK in body/params.
+    // const endpoint = `/databases/${databaseId}/tables/${encodeURIComponent(tableName)}/rows`; // Needs PK info
+    // return this.request(endpoint, { method: 'DELETE', body: { primaryKey: primaryKeyData } });
+    return Promise.resolve({ success: false, message: 'Delete Row API call not implemented yet (needs PK handling).' }); // Placeholder
+  }
+  
+  // --- End Placeholders --- 
 }
 
 // Singleton instance

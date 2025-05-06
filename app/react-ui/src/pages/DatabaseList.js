@@ -46,7 +46,8 @@ import {
   PostAdd as PostAddIcon,
   Link as LinkIcon,
   CloudOff as CloudOffIcon,
-  Dns as DnsIcon
+  Dns as DnsIcon,
+  AddCircleOutline as AddCircleOutlineIcon
 } from '@mui/icons-material';
 import databaseService from '../services/DatabaseService';
 import { formatBytes } from '../utils/formatUtils';
@@ -235,6 +236,15 @@ const DatabaseList = () => {
               sx={{ borderRadius: 20, textTransform: 'none', fontWeight: 500 }}
             >
               Add Connection
+            </Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<AddCircleOutlineIcon />}
+              onClick={() => navigate('/databases/new')}
+              sx={{ borderRadius: 20, textTransform: 'none', fontWeight: 500 }}
+            >
+              Create Database
             </Button>
         </Box>
       </Box>

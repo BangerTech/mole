@@ -2413,12 +2413,10 @@ def trigger_sync_endpoint():
         logger.error(f"Failed to start sync thread for task {task_id}: {e}")
         return jsonify({"error": "Failed to start synchronization process."}), 500
 
-if __name__ == "__main__":
-    # Old initialization logic (if any)
-    # sync_manager = DatabaseSync()
-    # sync_manager.run() # This blocks if run directly
-    
-    # Run Flask app (Gunicorn handles this in production via docker-compose)
-    logger.info("Starting Flask server for sync service API")
-    # Ensure host is 0.0.0.0 to be accessible outside container
-    app.run(host='0.0.0.0', port=5000, debug=False) 
+if __name__ == '__main__':
+    # This block should ideally not run when using Gunicorn
+    # Gunicorn imports the 'app' object directly
+    print("Starting Flask server for sync service API")
+    # Comment out the direct app.run() call to avoid port conflict with Gunicorn
+    # app.run(host='0.0.0.0', port=5000, debug=False) 
+    print("NOTE: app.run() is commented out. Gunicorn should be serving the application.")

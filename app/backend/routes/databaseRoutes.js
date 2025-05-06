@@ -34,6 +34,9 @@ router.get('/:id/tables/:tableName/data', databaseController.getTableData);
 // Create a new table
 router.post('/:id/tables', databaseController.createTable);
 
+// Insert a new row into a table
+router.post('/:id/tables/:tableName/rows', databaseController.insertTableRow);
+
 // Delete a table
 router.delete('/:id/tables/:tableName', databaseController.deleteTable);
 
