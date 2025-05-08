@@ -21,6 +21,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import random
 import threading # Import threading
+import sqlite3    # <--- ADDED IMPORT
 
 # AI model dependencies
 import openai
@@ -386,120 +387,162 @@ echo "Sync completed!"
         
         logger.info(f"MySQL sync completed for {name}")
     
-    def _sync_postgresql_to_postgresql(self, name: str, source: Dict, target: Dict, options: Dict):
-        """Sync from PostgreSQL to PostgreSQL"""
-        logger.info(f"Performing PostgreSQL to PostgreSQL sync for {name}")
+    def _sync_postgresql_to_postgresql(self, name: str, source: Dict, target: Dict, options: Dict) -> Tuple[str, str, int]:
+        """Syncs data from a source PostgreSQL DB to a target PostgreSQL DB.
+        Uses pg_dump with custom format (-Fc) and pg_restore.
+        Uses admin credentials for DB creation/ownership and target user for restore.
+        """
+        logger.info(f"[TASK {name}] Performing PostgreSQL to PostgreSQL sync (using pg_restore)...")
         
-        script_path = os.path.join(SCRIPTS_DIR, "postgresql_sync.sh")
+        # Admin credentials from environment
+        tgt_admin_user = os.getenv('DEFAULT_PG_ADMIN_USER', 'postgres') 
+        tgt_admin_pass = os.getenv('DEFAULT_PG_ADMIN_PASSWORD', '')
+
+        # Target user credentials from payload
+        tgt_user = target['username']
+        tgt_pass = target.get('password', '')
+        tgt_host = target['host']
+        tgt_port = str(target['port'])
+        tgt_db_name = target['database']
+
+        dump_file = f"/tmp/pg_dump_task_{name}_{datetime.now().strftime('%Y%m%d%H%M%S')}.dump" # Use .dump extension for custom format
+        rows_synced = 0 # pg_dump/restore doesn't easily report rows
+
+        # --- Prepare pg_dump command --- 
+        pg_dump_cmd = ['pg_dump']
+        pg_dump_cmd.extend(['--host', source['host']])
+        pg_dump_cmd.extend(['--port', str(source['port'])])
+        pg_dump_cmd.extend(['--username', source['username']])
+        pg_dump_cmd.extend(['--dbname', source['database']])
+        # Use custom format (-Fc) instead of plain SQL
+        pg_dump_cmd.extend(['--format=custom', '--file', dump_file]) 
+        pg_dump_cmd.extend(['--no-owner', '--no-acl']) # --no-comments not applicable for custom format
+        # Exclude TimescaleDB internal schemas to avoid permission errors on restore
+        pg_dump_cmd.extend(['--exclude-schema=_timescaledb_internal'])
+        pg_dump_cmd.extend(['--exclude-schema=_timescaledb_catalog'])
+        pg_dump_cmd.extend(['--exclude-schema=_timescaledb_config'])
+        pg_dump_cmd.extend(['--exclude-schema=timescaledb_information'])
         
-        # Create the script if it doesn't exist
-        if not os.path.exists(script_path):
-            with open(script_path, "w") as f:
-                f.write("""#!/bin/bash
-set -e
-
-# PostgreSQL sync script
-SRC_HOST="$1"
-SRC_PORT="$2"
-SRC_USER="$3"
-SRC_PASS="$4"
-SRC_DB="$5"
-TGT_HOST="$6"
-TGT_PORT="$7"
-TGT_USER="$8"
-TGT_PASS="$9"
-TGT_DB="${10}"
-TABLES_ONLY="${11}"
-TABLES_EXCLUDE="${12}"
-STRUCTURE_ONLY="${13}"
-DROP_TARGET="${14}"
-
-# Temp file for dump
-DUMP_FILE="/tmp/pg_dump_${SRC_DB}.sql"
-
-# Export options
-EXPORT_OPTS="--no-owner --no-acl"
-
-if [ "$STRUCTURE_ONLY" = "true" ]; then
-    EXPORT_OPTS="$EXPORT_OPTS --schema-only"
-fi
-
-# Set up environment for source connection
-export PGPASSWORD=$SRC_PASS
-
-# Table filtering for PostgreSQL
-TABLE_ARGS=""
-if [ ! -z "$TABLES_ONLY" ]; then
-    for table in $(echo $TABLES_ONLY | tr ',' ' '); do
-        TABLE_ARGS="$TABLE_ARGS -t $table"
-    done
-fi
-
-if [ ! -z "$TABLES_EXCLUDE" ]; then
-    for table in $(echo $TABLES_EXCLUDE | tr ',' ' '); do
-        TABLE_ARGS="$TABLE_ARGS -T $table"
-    done
-fi
-
-echo "Exporting from source database..."
-pg_dump -h $SRC_HOST -p $SRC_PORT -U $SRC_USER $EXPORT_OPTS $TABLE_ARGS $SRC_DB > $DUMP_FILE
-
-# Set up environment for target connection
-export PGPASSWORD=$TGT_PASS
-
-# If drop target is enabled, drop the database and recreate it
-if [ "$DROP_TARGET" = "true" ]; then
-    echo "Dropping target database..."
-    psql -h $TGT_HOST -p $TGT_PORT -U $TGT_USER -c "DROP DATABASE IF EXISTS $TGT_DB;" postgres
-    psql -h $TGT_HOST -p $TGT_PORT -U $TGT_USER -c "CREATE DATABASE $TGT_DB;" postgres
-fi
-
-echo "Importing to target database..."
-psql -h $TGT_HOST -p $TGT_PORT -U $TGT_USER -d $TGT_DB -f $DUMP_FILE
-
-echo "Cleaning up..."
-rm -f $DUMP_FILE
-
-echo "Sync completed!"
-""")
-            os.chmod(script_path, 0o755)
+        if options.get('structure_only'):
+            pg_dump_cmd.append('--schema-only')
         
-        # Get source and target connection details
-        src_host = source.get("host", "localhost")
-        src_port = source.get("port", 5432)
-        src_user = source.get("user", "postgres")
-        src_pass = source.get("password", "")
-        src_db = source.get("database", "")
+        tables_only = options.get('tables_only')
+        if tables_only and isinstance(tables_only, list) and len(tables_only) > 0:
+            for table_item in tables_only:
+                pg_dump_cmd.extend(['--table', table_item])
+        elif tables_only and isinstance(tables_only, str) and tables_only.strip(): # Handle comma-separated string if necessary
+            for table_item in tables_only.split(','):
+                pg_dump_cmd.extend(['--table', table_item.strip()])
+
+        # --- Prepare psql command for admin user (maintenance on 'postgres' db) ---
+        psql_admin_maintenance_cmd_base = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_admin_user, '--dbname', 'postgres']
         
-        tgt_host = target.get("host", "localhost")
-        tgt_port = target.get("port", 5432)
-        tgt_user = target.get("user", "postgres")
-        tgt_pass = target.get("password", "")
-        tgt_db = target.get("database", "")
+        # --- Prepare psql command for admin user (operations on target db) ---
+        psql_admin_target_db_cmd_base = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_admin_user, '--dbname', tgt_db_name]
+
+        # --- Set environment variables for passwords --- 
+        source_env = os.environ.copy()
+        source_env['PGPASSWORD'] = source.get('password', '')
         
-        # Get options
-        tables_only = ",".join(options.get("tables_only", []))
-        tables_exclude = ",".join(options.get("tables_exclude", []))
-        structure_only = "true" if options.get("structure_only", False) else "false"
-        drop_target = "true" if options.get("drop_target_first", False) else "false"
+        target_admin_env = os.environ.copy()
+        target_admin_env['PGPASSWORD'] = tgt_admin_pass
         
-        # Run the script
-        cmd = [
-            script_path, 
-            src_host, str(src_port), src_user, src_pass, src_db,
-            tgt_host, str(tgt_port), tgt_user, tgt_pass, tgt_db,
-            tables_only, tables_exclude, structure_only, drop_target
-        ]
-        
-        logger.info(f"Running PostgreSQL sync command for {name}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if result.returncode != 0:
-            logger.error(f"PostgreSQL sync failed for {name}: {result.stderr}")
-            raise Exception(f"PostgreSQL sync failed: {result.stderr}")
-        
-        logger.info(f"PostgreSQL sync completed for {name}")
-    
+        target_user_env = os.environ.copy()
+        target_user_env['PGPASSWORD'] = tgt_pass
+
+        try:
+            # --- Target DB Preparation (as Admin) ---
+            if options.get('drop_target_first'):
+                logger.info(f"[TASK {name}] Dropping target database '{tgt_db_name}' (as admin)...")
+                drop_cmd = psql_admin_maintenance_cmd_base + ['-c', f'DROP DATABASE IF EXISTS "{tgt_db_name}";']
+                subprocess.run(drop_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+                
+                logger.info(f"[TASK {name}] Recreating target database '{tgt_db_name}' with owner '{tgt_user}' (as admin)...")
+                create_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
+                subprocess.run(create_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+            else:
+                logger.info(f"[TASK {name}] Ensuring target database '{tgt_db_name}' exists (as admin)...")
+                try:
+                    create_if_not_exists_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
+                    subprocess.run(create_if_not_exists_cmd, capture_output=True, text=True, env=target_admin_env) 
+                except subprocess.CalledProcessError as cpe:
+                     if "already exists" not in cpe.stderr: 
+                         raise
+                     logger.info(f"[TASK {name}] Target database '{tgt_db_name}' already exists.")
+
+            logger.info(f"[TASK {name}] Setting owner of 'public' schema in '{tgt_db_name}' to '{tgt_user}' (as admin)...")
+            alter_schema_cmd = psql_admin_target_db_cmd_base + ['-c', f'ALTER SCHEMA public OWNER TO "{tgt_user}";']
+            subprocess.run(alter_schema_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+            # --- End Target DB Preparation ---
+
+            # --- Schema Cleaning and Extension Creation (as Target User - BEFORE restore) ---
+            logger.info(f"[TASK {name}] Cleaning public schema in '{tgt_db_name}' (as target user '{tgt_user}')...")
+            # Use psql_user_cmd_base requires defining it again based on target_user_env
+            psql_user_cmd_base = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_user, '--dbname', tgt_db_name] 
+            clean_schema_cmd = psql_user_cmd_base + ['-c', f'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public AUTHORIZATION "{tgt_user}";']
+            subprocess.run(clean_schema_cmd, capture_output=True, text=True, env=target_user_env, check=True)
+            
+            logger.info(f"[TASK {name}] Creating TimescaleDB extension in '{tgt_db_name}' (as target user '{tgt_user}')...")
+            create_extension_cmd = psql_user_cmd_base + ['-c', "CREATE EXTENSION IF NOT EXISTS timescaledb SCHEMA public;"]
+            subprocess.run(create_extension_cmd, capture_output=True, text=True, env=target_user_env, check=True)
+            # --- End Schema Cleaning/Extension ---
+            
+            # --- Run pg_dump from source (Keep) --- 
+            logger.info(f"[TASK {name}] Exporting source database '{source['database']}' (using pg_dump -Fc)...")
+            logger.debug(f"[TASK {name}] Running pg_dump command: {' '.join(pg_dump_cmd)}")
+            dump_result = subprocess.run(pg_dump_cmd, capture_output=True, text=True, env=source_env, check=True)
+            logger.info(f"[TASK {name}] pg_dump completed.")
+            if dump_result.stderr:
+                logger.info(f"[TASK {name}] pg_dump stderr: {dump_result.stderr}")
+
+            # --- Run pg_restore to import into target (as Target User) --- 
+            logger.info(f"[TASK {name}] Importing into target database '{tgt_db_name}' (using pg_restore as target user '{tgt_user}')...")
+            # Use pg_restore with the custom format dump file
+            pg_restore_cmd = [
+                'pg_restore',
+                '--host', tgt_host,
+                '--port', tgt_port,
+                '--username', tgt_user,
+                '--dbname', tgt_db_name,
+                #'--clean',                # Ensure clean flag is NOT active
+                '--no-owner',             # Don't restore original ownership
+                '--disable-triggers',     # Disable triggers during data load
+                # '-v',                   # Uncomment for verbose debugging
+                dump_file                 # Input dump file
+            ]
+                
+            logger.debug(f"[TASK {name}] Running pg_restore command: {' '.join(pg_restore_cmd)}")
+            import_result = subprocess.run(pg_restore_cmd, capture_output=True, text=True, env=target_user_env, check=True)
+            logger.info(f"[TASK {name}] pg_restore import completed.")
+            # pg_restore typically logs errors/warnings to stderr
+            if import_result.stdout:
+                logger.debug(f"[TASK {name}] pg_restore import stdout: {import_result.stdout}")
+            if import_result.stderr:
+                logger.info(f"[TASK {name}] pg_restore import stderr: {import_result.stderr}")
+
+            return "success", "PostgreSQL sync completed successfully.", rows_synced
+
+        except subprocess.CalledProcessError as e:
+            error_message = (f"Sync process failed with exit code {e.returncode}.\n"
+                             f"Command: {' '.join(e.cmd)}\n"
+                             f"Stderr: {e.stderr}\n"
+                             f"Stdout: {e.stdout}")
+            logger.error(f"[TASK {name}] {error_message}")
+            return "error", error_message, rows_synced
+        except Exception as e:
+            error_message = f"An unexpected error occurred during PostgreSQL sync: {str(e)}"
+            logger.error(f"[TASK {name}] {error_message}", exc_info=True)
+            return "error", error_message, rows_synced
+        finally:
+            # --- Clean up dump file --- 
+            if os.path.exists(dump_file):
+                try:
+                    # Temporarily comment out removal for debugging
+                    # os.remove(dump_file)
+                    logger.info(f"[TASK {name}] Keeping dump file for debugging: {dump_file}")
+                except OSError as e:
+                    logger.error(f"[TASK {name}] Error removing dump file {dump_file}: {e}")
+
     def _sync_influxdb_to_influxdb(self, name: str, source: Dict, target: Dict, options: Dict):
         """Sync from InfluxDB to InfluxDB"""
         logger.info(f"Performing InfluxDB to InfluxDB sync for {name}")
@@ -2293,11 +2336,25 @@ def perform_database_sync(task_details: Dict):
 # --- Specific Sync Implementations --- 
 
 def sync_postgresql_to_postgresql(task_id: int, source: Dict, target: Dict, options: Dict) -> Tuple[str, str, int]:
-    """Syncs data from a source PostgreSQL DB to a target PostgreSQL DB using pg_dump and psql."""
-    logger.info(f"[TASK {task_id}] Performing PostgreSQL to PostgreSQL sync...")
+    """Syncs data from a source PostgreSQL DB to a target PostgreSQL DB.
+    Uses pg_dump with custom format (-Fc) and pg_restore.
+    Uses admin credentials for DB creation/ownership and target user for restore.
+    """
+    logger.info(f"[TASK {task_id}] Performing PostgreSQL to PostgreSQL sync (using pg_restore)...")
     
-    dump_file = f"/tmp/pg_dump_{task_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.sql"
-    rows_synced = 0 # pg_dump doesn't easily report rows
+    # Admin credentials from environment
+    tgt_admin_user = os.getenv('DEFAULT_PG_ADMIN_USER', 'postgres') 
+    tgt_admin_pass = os.getenv('DEFAULT_PG_ADMIN_PASSWORD', '')
+
+    # Target user credentials from payload
+    tgt_user = target['username']
+    tgt_pass = target.get('password', '')
+    tgt_host = target['host']
+    tgt_port = str(target['port'])
+    tgt_db_name = target['database']
+
+    dump_file = f"/tmp/pg_dump_task_{task_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.dump" # Use .dump extension
+    rows_synced = 0 
     
     # --- Prepare pg_dump command --- 
     pg_dump_cmd = ['pg_dump']
@@ -2305,66 +2362,113 @@ def sync_postgresql_to_postgresql(task_id: int, source: Dict, target: Dict, opti
     pg_dump_cmd.extend(['--port', str(source['port'])])
     pg_dump_cmd.extend(['--username', source['username']])
     pg_dump_cmd.extend(['--dbname', source['database']])
-    pg_dump_cmd.extend(['--file', dump_file])
-    pg_dump_cmd.extend(['--no-owner', '--no-acl']) # Options for cleaner import
+    # Use custom format (-Fc) instead of plain SQL
+    pg_dump_cmd.extend(['--format=custom', '--file', dump_file]) 
+    pg_dump_cmd.extend(['--no-owner', '--no-acl'])
+    # Exclude TimescaleDB internal schemas
+    pg_dump_cmd.extend(['--exclude-schema=_timescaledb_internal'])
+    pg_dump_cmd.extend(['--exclude-schema=_timescaledb_catalog'])
+    pg_dump_cmd.extend(['--exclude-schema=_timescaledb_config'])
+    pg_dump_cmd.extend(['--exclude-schema=timescaledb_information'])
+    
     if options.get('structure_only'):
         pg_dump_cmd.append('--schema-only')
-    # Handle specific tables
+    
     tables_only = options.get('tables_only')
-    if tables_only and isinstance(tables_only, list):
-        for table in tables_only:
-            pg_dump_cmd.extend(['--table', table]) # Use repeated -t flag
+    if tables_only and isinstance(tables_only, list) and len(tables_only) > 0:
+        for table_item in tables_only:
+            pg_dump_cmd.extend(['--table', table_item])
+    elif tables_only and isinstance(tables_only, str) and tables_only.strip(): 
+        for table_item in tables_only.split(','):
+            pg_dump_cmd.extend(['--table', table_item.strip()])
 
-    # --- Prepare psql command --- 
-    psql_cmd = ['psql']
-    psql_cmd.extend(['--host', target['host']])
-    psql_cmd.extend(['--port', str(target['port'])])
-    psql_cmd.extend(['--username', target['username']])
-    psql_cmd.extend(['--dbname', target['database']])
-    psql_cmd.extend(['--file', dump_file])
-    psql_cmd.extend(['--single-transaction']) # Run import in a single transaction
+    # --- Prep Admin Commands (Keep) ---
+    psql_admin_maintenance_cmd_base = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_admin_user, '--dbname', 'postgres']
+    psql_admin_target_db_cmd_base = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_admin_user, '--dbname', tgt_db_name]
 
-    # --- Set environment variables for passwords --- 
+    # --- Set Env Vars (Keep) ---
     source_env = os.environ.copy()
     source_env['PGPASSWORD'] = source.get('password', '')
-    target_env = os.environ.copy()
-    target_env['PGPASSWORD'] = target.get('password', '')
+    target_admin_env = os.environ.copy()
+    target_admin_env['PGPASSWORD'] = tgt_admin_pass
+    target_user_env = os.environ.copy()
+    target_user_env['PGPASSWORD'] = tgt_pass
 
     try:
-        # --- Drop and Recreate Target DB if specified --- 
+        # --- Target DB Preparation (as Admin) (Keep) ---
         if options.get('drop_target_first'):
-            logger.info(f"[TASK {task_id}] Dropping and recreating target database '{target['database']}'...")
-            # Connect to 'postgres' db to drop/create the target db
-            drop_cmd = ['psql', '--host', target['host'], '--port', str(target['port']), '--username', target['username'], '--dbname', 'postgres', '-c', f"DROP DATABASE IF EXISTS \"{target['database']}\";"]
-            create_cmd = ['psql', '--host', target['host'], '--port', str(target['port']), '--username', target['username'], '--dbname', 'postgres', '-c', f"CREATE DATABASE \"{target['database']}\";"]
-            
-            logger.debug(f"[TASK {task_id}] Running drop command: {' '.join(drop_cmd)}")
-            drop_result = subprocess.run(drop_cmd, capture_output=True, text=True, env=target_env, check=True)
-            logger.info(f"[TASK {task_id}] Drop DB output: {drop_result.stdout}")
-            
-            logger.debug(f"[TASK {task_id}] Running create command: {' '.join(create_cmd)}")
-            create_result = subprocess.run(create_cmd, capture_output=True, text=True, env=target_env, check=True)
-            logger.info(f"[TASK {task_id}] Create DB output: {create_result.stdout}")
+            logger.info(f"[TASK {task_id}] Dropping target database '{tgt_db_name}' (as admin)...")
+            drop_cmd = psql_admin_maintenance_cmd_base + ['-c', f'DROP DATABASE IF EXISTS "{tgt_db_name}";']
+            subprocess.run(drop_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+            logger.info(f"[TASK {task_id}] Recreating target database '{tgt_db_name}' with owner '{tgt_user}' (as admin)...")
+            create_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
+            subprocess.run(create_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+        else:
+            logger.info(f"[TASK {task_id}] Ensuring target database '{tgt_db_name}' exists (as admin)...")
+            try:
+                create_if_not_exists_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
+                subprocess.run(create_if_not_exists_cmd, capture_output=True, text=True, env=target_admin_env)
+            except subprocess.CalledProcessError as cpe:
+                if "already exists" not in cpe.stderr:
+                    raise
+                logger.info(f"[TASK {task_id}] Target database '{tgt_db_name}' already exists.")
+        logger.info(f"[TASK {task_id}] Setting owner of 'public' schema in '{tgt_db_name}' to '{tgt_user}' (as admin)...")
+        alter_schema_cmd = psql_admin_target_db_cmd_base + ['-c', f'ALTER SCHEMA public OWNER TO "{tgt_user}";']
+        subprocess.run(alter_schema_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+        # --- End Target DB Preparation ---
 
-        # --- Run pg_dump --- 
-        logger.info(f"[TASK {task_id}] Exporting source database...")
+        # --- Schema Cleaning and Extension Creation (as Target User - BEFORE restore) ---
+        logger.info(f"[TASK {task_id}] Cleaning public schema in '{tgt_db_name}' (as target user '{tgt_user}')...")
+        # Use psql_user_cmd_base requires defining it again based on target_user_env
+        psql_user_cmd_base = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_user, '--dbname', tgt_db_name] 
+        clean_schema_cmd = psql_user_cmd_base + ['-c', f'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public AUTHORIZATION "{tgt_user}";']
+        subprocess.run(clean_schema_cmd, capture_output=True, text=True, env=target_user_env, check=True)
+        
+        logger.info(f"[TASK {task_id}] Creating TimescaleDB extension in '{tgt_db_name}' (as target user '{tgt_user}')...")
+        create_extension_cmd = psql_user_cmd_base + ['-c', "CREATE EXTENSION IF NOT EXISTS timescaledb SCHEMA public;"]
+        subprocess.run(create_extension_cmd, capture_output=True, text=True, env=target_user_env, check=True)
+        # --- End Schema Cleaning/Extension ---
+        
+        # --- Run pg_dump from source (Keep) --- 
+        logger.info(f"[TASK {task_id}] Exporting source database '{source['database']}' (using pg_dump -Fc)...")
         logger.debug(f"[TASK {task_id}] Running pg_dump command: {' '.join(pg_dump_cmd)}")
         dump_result = subprocess.run(pg_dump_cmd, capture_output=True, text=True, env=source_env, check=True)
         logger.info(f"[TASK {task_id}] pg_dump completed.")
-        logger.debug(f"[TASK {task_id}] pg_dump stderr: {dump_result.stderr}") # pg_dump often logs progress to stderr
+        if dump_result.stderr:
+            logger.info(f"[TASK {task_id}] pg_dump stderr: {dump_result.stderr}")
 
-        # --- Run psql --- 
-        logger.info(f"[TASK {task_id}] Importing into target database...")
-        logger.debug(f"[TASK {task_id}] Running psql command: {' '.join(psql_cmd)}")
-        import_result = subprocess.run(psql_cmd, capture_output=True, text=True, env=target_env, check=True)
-        logger.info(f"[TASK {task_id}] psql import completed.")
-        logger.debug(f"[TASK {task_id}] psql output: {import_result.stdout}")
-        logger.debug(f"[TASK {task_id}] psql stderr: {import_result.stderr}")
+        # --- Run pg_restore to import into target (as Target User) --- 
+        logger.info(f"[TASK {task_id}] Importing into target database '{tgt_db_name}' (using pg_restore as target user '{tgt_user}')...")
+        # Use pg_restore with the custom format dump file
+        pg_restore_cmd = [
+            'pg_restore',
+            '--host', tgt_host,
+            '--port', tgt_port,
+            '--username', tgt_user,
+            '--dbname', tgt_db_name,
+            #'--clean',                # Ensure clean flag is NOT active
+            '--no-owner',             # Don't restore original ownership
+            '--disable-triggers',     # Disable triggers during data load
+            # '-v',                   # Uncomment for verbose debugging
+            dump_file                 # Input dump file
+        ]
+                
+        logger.debug(f"[TASK {task_id}] Running pg_restore command: {' '.join(pg_restore_cmd)}")
+        import_result = subprocess.run(pg_restore_cmd, capture_output=True, text=True, env=target_user_env, check=True)
+        logger.info(f"[TASK {task_id}] pg_restore import completed.")
+        # pg_restore typically logs errors/warnings to stderr
+        if import_result.stdout:
+            logger.debug(f"[TASK {task_id}] pg_restore import stdout: {import_result.stdout}")
+        if import_result.stderr:
+            logger.info(f"[TASK {task_id}] pg_restore import stderr: {import_result.stderr}")
 
         return "success", "PostgreSQL sync completed successfully.", rows_synced
 
     except subprocess.CalledProcessError as e:
-        error_message = f"Sync process failed with exit code {e.returncode}.\nCommand: {e.cmd}\nStderr: {e.stderr}\nStdout: {e.stdout}"
+        error_message = (f"Sync process failed with exit code {e.returncode}.\n"
+                         f"Command: {' '.join(e.cmd)}\n"
+                         f"Stderr: {e.stderr}\n"
+                         f"Stdout: {e.stdout}")
         logger.error(f"[TASK {task_id}] {error_message}")
         return "error", error_message, rows_synced
     except Exception as e:
@@ -2375,14 +2479,12 @@ def sync_postgresql_to_postgresql(task_id: int, source: Dict, target: Dict, opti
         # --- Clean up dump file --- 
         if os.path.exists(dump_file):
             try:
-                os.remove(dump_file)
-                logger.info(f"[TASK {task_id}] Cleaned up dump file: {dump_file}")
+                # os.remove(dump_file)
+                logger.info(f"[TASK {task_id}] Keeping dump file for debugging: {dump_file}")
             except OSError as e:
                 logger.error(f"[TASK {task_id}] Error removing dump file {dump_file}: {e}")
 
-# ... (Placeholder functions for MySQL sync, Generic sync etc.) ...
-
-# --- Flask Routes --- 
+# ... (rest of file) ...
 
 @app.route('/trigger_sync', methods=['POST'])
 def trigger_sync_endpoint():

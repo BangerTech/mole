@@ -45,18 +45,10 @@ export default function DatabaseCreate() {
   const [formData, setFormData] = useState({
     name: '',
     engine: 'PostgreSQL',
-    host: 'localhost',
-    port: '5432',
     username: '',
     password: '',
     notes: ''
   });
-
-  const defaultPorts = {
-    PostgreSQL: '5432',
-    MySQL: '3306',
-    InfluxDB: '8086'
-  };
 
   const getApiBaseUrl = () => {
     const hostname = window.location.hostname;
@@ -75,10 +67,7 @@ export default function DatabaseCreate() {
     });
 
     if (name === 'engine') {
-      setFormData(prev => ({
-        ...prev,
-        port: defaultPorts[value]
-      }));
+      // No need to update port when engine changes anymore
     }
   };
 
@@ -97,8 +86,6 @@ export default function DatabaseCreate() {
     const createData = {
       engine: formData.engine,
       name: formData.name,
-      host: formData.host,
-      port: formData.port,
       username: formData.username,
       password: formData.password,
       notes: formData.notes,
@@ -152,7 +139,10 @@ export default function DatabaseCreate() {
       case 0:
         return formData.engine !== '';
       case 1:
-        return formData.name && formData.username;
+        if (!formData.name || !formData.username) {
+          return false;
+        }
+        return true;
       case 2:
         return true;
       default:
@@ -217,28 +207,7 @@ export default function DatabaseCreate() {
             />
             <TextField
               fullWidth
-              label="Host (for Mole to connect)"
-              name="host"
-              value={formData.host}
-              onChange={handleInputChange}
-              placeholder={formData.engine === 'InfluxDB' ? 'mole-influxdb' : (formData.engine === 'MySQL' ? 'mole-mysql' : 'mole-postgres')}
-              required
-              helperText="Hostname or IP address Mole should use to connect to this DB."
-            />
-            <TextField
-              fullWidth
-              label="Port (for Mole to connect)"
-              name="port"
-              value={formData.port}
-              onChange={handleInputChange}
-              placeholder={defaultPorts[formData.engine]}
-              required
-              type="number"
-              helperText="Port Mole should use to connect to this DB."
-            />
-            <TextField
-              fullWidth
-              label="Username (for connecting)"
+              label="Username (for connecting to new DB)"
               name="username"
               value={formData.username}
               onChange={handleInputChange}
@@ -247,13 +216,14 @@ export default function DatabaseCreate() {
             />
             <TextField
               fullWidth
-              label="Password (for connecting)"
+              label="Password (for connecting to new DB)"
               name="password"
               type="password"
               value={formData.password}
               onChange={handleInputChange}
               helperText="Password you will use to connect to the new DB."
             />
+
             <TextField
               fullWidth
               label="Notes (Optional)"
@@ -294,14 +264,6 @@ export default function DatabaseCreate() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">Connection Name:</Typography>
                   <Typography variant="body2" fontWeight={500}>{formData.name}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">Connection Host:</Typography>
-                  <Typography variant="body2" fontWeight={500}>{formData.host}</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2" color="text.secondary">Connection Port:</Typography>
-                  <Typography variant="body2" fontWeight={500}>{formData.port}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2" color="text.secondary">Connection Username:</Typography>

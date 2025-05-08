@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import SyncIcon from '@mui/icons-material/Sync';
 import DatabaseService from '../services/DatabaseService';
+import { formatDistanceToNow } from 'date-fns'; // Import date-fns for relative time
 
 const CREATE_NEW_TARGET_VALUE = "__CREATE_NEW__"; // Constant for special value
 
@@ -41,6 +42,11 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
   const [selectedTargetId, setSelectedTargetId] = useState(''); // Store the ID or special value
   const [isLoadingTargets, setIsLoadingTargets] = useState(false);
 
+  // New state for last log status
+  const [lastLogStatus, setLastLogStatus] = useState(null);
+  const [lastLogMessage, setLastLogMessage] = useState(null);
+  const [lastLogTimestamp, setLastLogTimestamp] = useState(null);
+
   // Load initial state from API
   useEffect(() => {
     const loadData = async () => {
@@ -50,6 +56,9 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
       setSettingsError(null);
       setAvailableTargets([]);
       setSelectedTargetId('');
+      setLastLogStatus(null); // Reset log status
+      setLastLogMessage(null);
+      setLastLogTimestamp(null);
 
       try {
         // Fetch current settings
@@ -58,8 +67,11 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
         setIsSyncEnabled(fetchedSettings.enabled || false);
         setSyncFrequency(fetchedSettings.schedule || 'never');
         setLastSyncTime(fetchedSettings.last_sync ? new Date(fetchedSettings.last_sync).toLocaleString() : 'Never');
-        // Set the currently selected target ID if it exists
         setSelectedTargetId(fetchedSettings.target_connection_id || '');
+        // Store last log info
+        setLastLogStatus(fetchedSettings.last_log_status);
+        setLastLogMessage(fetchedSettings.last_log_message);
+        setLastLogTimestamp(fetchedSettings.last_log_timestamp);
 
         // Fetch all connections to populate the target dropdown
         console.log("Fetching available target connections...");
@@ -79,19 +91,15 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
     loadData();
   }, [databaseId]);
 
-  const updateSettings = async (newSettings) => {
+  // Refactored: Accepts explicit target ID
+  const updateSettings = async (settingsUpdate) => {
+    const { enabled, schedule, targetId } = settingsUpdate;
     if (!databaseId) return;
-    // Ensure we are sending the correct value for target ID (or the special string)
-    const currentTargetValue = selectedTargetId;
-    // Only proceed if enabling with a target OR creating new OR disabling
-    if (!newSettings.enabled && currentTargetValue === CREATE_NEW_TARGET_VALUE) {
-        console.log("Disabling sync, no need to create target.");
-        // If disabling while create new was selected, just send disabled state
-         const payload = { enabled: false, schedule: newSettings.schedule, target_connection_id: null };
-         // ... proceed with API call below ...
-    } else if (newSettings.enabled && !currentTargetValue) {
-        setSettingsError("Please select a target database or choose to create a new one.");
-        return; // Don't call API if enabled without any target selection
+    
+    // Validation: If enabling, a target must be provided
+    if (enabled && !targetId) {
+      setSettingsError("Please select a target database or choose to create a new one when enabling sync.");
+      return; 
     }
 
     setIsUpdatingSettings(true);
@@ -99,24 +107,18 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
     setSyncSuccess(null); 
     try {
       const payload = { 
-        enabled: newSettings.enabled,
-        schedule: newSettings.schedule,
-        // Send the selected ID or the special string, or null if disabling
-        target_connection_id: newSettings.enabled ? currentTargetValue : null 
+        enabled: enabled, // Use passed-in value
+        schedule: schedule, // Use passed-in value
+        target_connection_id: targetId || null // Use explicitly passed target ID
       };
       console.log("Updating settings with payload:", payload);
       const result = await DatabaseService.updateSyncSettings(databaseId, payload);
       setSyncSuccess(result.message || 'Synchronization settings saved successfully.'); 
       
-      // Important: If a new DB was created, the backend should ideally return 
-      // the new connection ID. We might need to refresh available targets 
-      // and set the selectedTargetId to the new ID here.
-      // For now, just show success.
-      if (currentTargetValue === CREATE_NEW_TARGET_VALUE && result.newTargetId) {
+      // Handle new target creation response (if applicable)
+      if (targetId === CREATE_NEW_TARGET_VALUE && result.newTargetId) {
           console.log("Backend created new target with ID:", result.newTargetId);
-          // TODO: Refresh target list and select the new one?
-          // setSelectedTargetId(result.newTargetId);
-          // loadTargets(); // Need a separate function to reload targets
+          // Consider refreshing target list and selecting the new one
       }
 
     } catch (error) {
@@ -130,29 +132,39 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
   const handleEnableChange = (event) => {
     const newEnabledState = event.target.checked;
     setIsSyncEnabled(newEnabledState);
-    // Update settings immediately
-    updateSettings({ enabled: newEnabledState, schedule: syncFrequency });
+    // Pass the *current* selectedTargetId state
+    updateSettings({ 
+      enabled: newEnabledState, 
+      schedule: syncFrequency, 
+      targetId: selectedTargetId // Explicitly pass current state value
+    });
   };
 
   const handleFrequencyChange = (event) => {
     const newFrequency = event.target.value;
     setSyncFrequency(newFrequency);
-    // Update settings only if enabled and a target is somehow selected (ID or create)
+    // Only update if enabled AND a target is selected (state check is okay here)
     if (isSyncEnabled && selectedTargetId) { 
-        updateSettings({ enabled: isSyncEnabled, schedule: newFrequency });
+        // Pass the *current* selectedTargetId state
+        updateSettings({ 
+            enabled: isSyncEnabled, 
+            schedule: newFrequency, 
+            targetId: selectedTargetId // Explicitly pass current state value
+        });
     }
   };
 
   const handleTargetChange = (event) => {
       const newTargetValue = event.target.value;
       setSelectedTargetId(newTargetValue);
-      // If sync is already enabled, update settings immediately with the new target/option
-      if (isSyncEnabled && newTargetValue) {
-          setSettingsError(null); 
-          updateSettings({ enabled: isSyncEnabled, schedule: syncFrequency }); // Let updateSettings read selectedTargetId
-      } else if (isSyncEnabled && !newTargetValue) {
-           setSettingsError("Sync is enabled but no target is selected. Settings not saved.");
-      }
+      setSettingsError(null); 
+      
+      // Always call updateSettings, passing the *new* target value directly
+      updateSettings({ 
+        enabled: isSyncEnabled,      // Keep current enabled state
+        schedule: syncFrequency,    // Keep current frequency
+        targetId: newTargetValue  // Explicitly pass the NEW value
+      }); 
   };
 
   const handleManualSync = async () => {
@@ -183,7 +195,7 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
       // Now trigger the actual sync (backend uses the target ID stored in the task)
       console.log("Triggering sync...");
       const result = await DatabaseService.triggerSync(databaseId);
-      setSyncSuccess(result.message || 'Manual synchronization triggered successfully.');
+      setSyncSuccess(result.message || `Synchronization started in background for task ${databaseId}.`);
     } catch (error) {
       console.error("Manual sync error:", error);
       setSyncError(error.message || 'Failed to start manual sync.');
@@ -215,9 +227,23 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
       <Typography variant="h6" gutterBottom>Synchronization Settings</Typography>
       
       {/* Display Last Sync Status */}
-      <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-        Last Synced: {lastSyncTime}
+      <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+        Last Successful Sync: {lastSyncTime}
       </Typography>
+
+      {/* Display Status of Last Attempt */} 
+      {lastLogStatus && lastLogTimestamp && (
+        <Alert 
+          severity={lastLogStatus === 'success' ? 'info' : 'warning'} 
+          sx={{ mb: 3 }} 
+          icon={false} // Remove default icon for cleaner look
+        >
+          <Typography variant="body2">
+            <strong>Last Attempt ({formatDistanceToNow(new Date(lastLogTimestamp), { addSuffix: true })}):</strong> 
+            {lastLogStatus === 'success' ? 'Completed successfully.' : `Failed - ${lastLogMessage || 'Unknown error'}`}
+          </Typography>
+        </Alert>
+      )}
 
       {/* Show indicator while updating settings */}
       {isUpdatingSettings && <LinearProgress sx={{ mb: 2 }} />}

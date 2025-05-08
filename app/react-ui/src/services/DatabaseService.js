@@ -369,49 +369,107 @@ class DatabaseService {
 
   // --- Synchronization Methods (Using Axios) ---
 
+  /**
+   * Get sync settings for a specific database ID.
+   * @param {string} databaseId 
+   * @returns {Promise<object>} Sync settings object
+   */
   async getSyncSettings(databaseId) {
-    // Use the /api/sync endpoint
     const url = `${getServiceBaseUrl('sync')}/${databaseId}/settings`;
-    console.log(`[DatabaseService] GET ${url}`);
     try {
-      // Use axios and assume auth is handled by interceptor
       const response = await axios.get(url, this.getAuthConfig());
-      return response.data; // Assuming API returns { enabled: boolean, schedule: string, last_sync: string | null, target_connection_id: number | null }
+      return response.data;
     } catch (error) {
-      console.error('Error fetching sync settings:', error);
-      // Rethrow a more informative error if possible
-      const message = error.response?.data?.message || error.message || 'Failed to fetch sync settings.';
-      throw new Error(message);
+      console.error(`Error fetching sync settings for DB ${databaseId}:`, error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || 'Failed to fetch sync settings');
     }
   }
 
+  /**
+   * Update sync settings for a specific database ID.
+   * @param {string} databaseId 
+   * @param {object} settings - { enabled: boolean, schedule: string, target_connection_id: number | string }
+   * @returns {Promise<object>} Response data from backend
+   */
   async updateSyncSettings(databaseId, settings) {
-    // Use the /api/sync endpoint
     const url = `${getServiceBaseUrl('sync')}/${databaseId}/settings`;
-    console.log(`[DatabaseService] PUT ${url}`, settings);
     try {
-      // Use axios and assume auth is handled by interceptor
       const response = await axios.put(url, settings, this.getAuthConfig());
-      return response.data; // Assuming API returns { success: boolean, message: string, newTargetId?: number }
+      return response.data;
     } catch (error) {
-      console.error('Error updating sync settings:', error);
-      const message = error.response?.data?.message || error.message || 'Failed to update sync settings.';
-      throw new Error(message);
+      console.error(`Error updating sync settings for DB ${databaseId}:`, error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || 'Failed to update sync settings');
     }
   }
 
+  /**
+   * Trigger a manual sync for a specific database ID.
+   * @param {string} databaseId 
+   * @returns {Promise<object>} Response data from backend
+   */
   async triggerSync(databaseId) {
-    // Use the /api/sync endpoint
     const url = `${getServiceBaseUrl('sync')}/${databaseId}/trigger`;
     console.log(`[DatabaseService] POST ${url}`);
     try {
-      // Use axios and assume auth is handled by interceptor
-      const response = await axios.post(url, {}, this.getAuthConfig()); // Empty payload for trigger
-      return response.data; // Assuming API returns { success: boolean, message: string }
+      const response = await axios.post(url, {}, this.getAuthConfig());
+      return response.data;
     } catch (error) {
-      console.error('Error triggering sync:', error);
-      const message = error.response?.data?.message || error.message || 'Failed to trigger sync.';
-      throw new Error(message);
+      console.error('Error triggering sync:', error.response?.data || error.message);
+      if (error.response?.status === 404 && error.response?.data?.message?.includes('No sync task configured')) {
+        throw new Error('No sync task configured for this database.');
+      }
+      throw new Error(error.response?.data?.message || 'Failed to trigger sync');
+    }
+  }
+
+  /**
+   * Get all configured sync tasks for the overview page.
+   * @returns {Promise<object>} Object containing success status and tasks array
+   */
+  async getAllSyncTasks() {
+    const url = `${getServiceBaseUrl('sync')}/tasks`;
+    console.log(`[DatabaseService] GET ${url}`);
+    try {
+      const response = await axios.get(url, this.getAuthConfig());
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching all sync tasks:', error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || 'Failed to fetch sync tasks');
+    }
+  }
+
+  /**
+   * Update specific fields of a sync task by its ID.
+   * @param {number|string} taskId The ID of the sync task.
+   * @param {object} updates Object containing fields to update (e.g., { enabled: boolean, schedule: string }).
+   * @returns {Promise<object>} Response data from backend.
+   */
+  async updateSyncTask(taskId, updates) {
+    const url = `${getServiceBaseUrl('sync')}/tasks/${taskId}`; // Use new /tasks/:taskId endpoint
+    console.log(`[DatabaseService] PUT ${url}`, updates);
+    try {
+      const response = await axios.put(url, updates, this.getAuthConfig());
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating sync task ${taskId}:`, error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || 'Failed to update sync task');
+    }
+  }
+
+  /**
+   * Delete a specific sync task by its ID.
+   * @param {number|string} taskId The ID of the sync task.
+   * @returns {Promise<object>} Response data from backend.
+   */
+  async deleteSyncTask(taskId) {
+    const url = `${getServiceBaseUrl('sync')}/tasks/${taskId}`; // Use new /tasks/:taskId endpoint
+    console.log(`[DatabaseService] DELETE ${url}`);
+    try {
+      const response = await axios.delete(url, this.getAuthConfig());
+      return response.data;
+    } catch (error) {
+      console.error(`Error deleting sync task ${taskId}:`, error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || 'Failed to delete sync task');
     }
   }
 

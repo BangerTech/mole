@@ -30,7 +30,19 @@ import {
   ListItemIcon,
   ListItemText,
   CircularProgress,
-  Snackbar
+  Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -47,11 +59,15 @@ import {
   Key as KeyIcon,
   Help as HelpIcon,
   Email as EmailIcon,
-  Check as CheckIcon
+  Check as CheckIcon,
+  ToggleOn as ToggleOnIcon,
+  ToggleOff as ToggleOffIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import EmailService from '../services/EmailService';
 import AIService from '../services/AIService';
+import DatabaseService from '../services/DatabaseService';
 
 // Styled Components
 const StyledTab = styled(Tab)(({ theme }) => ({
@@ -124,6 +140,12 @@ export default function Settings() {
     message: '',
     severity: 'info'
   });
+  const [syncTasks, setSyncTasks] = useState([]);
+  const [loadingSyncTasks, setLoadingSyncTasks] = useState(false);
+  const [errorSyncTasks, setErrorSyncTasks] = useState(null);
+  const [taskBeingProcessed, setTaskBeingProcessed] = useState(null);
+  const [confirmDeleteDialogOpen, setConfirmDeleteDialogOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
 
   // Handle tab selection from URL query parameters
   useEffect(() => {
@@ -308,6 +330,81 @@ export default function Settings() {
     
     loadSmtpSettings();
   }, []);
+
+  // Function to fetch sync tasks
+  const fetchSyncTasks = async () => {
+    setLoadingSyncTasks(true);
+    setErrorSyncTasks(null);
+    try {
+      const data = await DatabaseService.getAllSyncTasks(); // Assuming method exists
+      if (data.success) {
+        setSyncTasks(data.tasks);
+      } else {
+        throw new Error(data.message || 'Failed to fetch sync tasks');
+      }
+    } catch (error) {
+      console.error('Error fetching sync tasks:', error);
+      setErrorSyncTasks(error.message || 'Could not load synchronization tasks.');
+      setSyncTasks([]); // Clear tasks on error
+    } finally {
+      setLoadingSyncTasks(false);
+    }
+  };
+
+  // Fetch sync tasks when the sync tab becomes active
+  useEffect(() => {
+    if (activeTab === 3) { // Index of Synchronization tab
+      fetchSyncTasks();
+    }
+  }, [activeTab]);
+
+  // --- Sync Task Action Handlers ---
+
+  const handleToggleSyncTask = async (taskId, currentEnabledStatus) => {
+    setTaskBeingProcessed(taskId);
+    setSnackbar({ open: false, message: '', severity: 'info' }); // Close previous snackbar
+    try {
+      const updates = { enabled: !currentEnabledStatus };
+      await DatabaseService.updateSyncTask(taskId, updates);
+      setSnackbar({ open: true, message: `Sync task ${currentEnabledStatus ? 'disabled' : 'enabled'} successfully.`, severity: 'success' });
+      fetchSyncTasks(); // Refresh the list
+    } catch (error) {
+      console.error(`Error toggling sync task ${taskId}:`, error);
+      setSnackbar({ open: true, message: error.message || 'Failed to update task status.', severity: 'error' });
+    } finally {
+      setTaskBeingProcessed(null);
+    }
+  };
+
+  const openDeleteConfirmDialog = (task) => {
+    setTaskToDelete(task);
+    setConfirmDeleteDialogOpen(true);
+  };
+
+  const closeDeleteConfirmDialog = () => {
+    setTaskToDelete(null);
+    setConfirmDeleteDialogOpen(false);
+  };
+
+  const handleDeleteSyncTask = async () => {
+    if (!taskToDelete) return;
+    const taskId = taskToDelete.task_id;
+    setTaskBeingProcessed(taskId);
+    closeDeleteConfirmDialog();
+    setSnackbar({ open: false, message: '', severity: 'info' });
+    try {
+      await DatabaseService.deleteSyncTask(taskId);
+      setSnackbar({ open: true, message: 'Sync task deleted successfully.', severity: 'success' });
+      fetchSyncTasks(); // Refresh the list
+    } catch (error) {
+      console.error(`Error deleting sync task ${taskId}:`, error);
+      setSnackbar({ open: true, message: error.message || 'Failed to delete task.', severity: 'error' });
+    } finally {
+      setTaskBeingProcessed(null);
+    }
+  };
+  
+  // --- End Sync Task Action Handlers ---
 
   return (
     <Box sx={{ py: 3, px: { xs: 2, md: 3 } }}>
@@ -593,24 +690,109 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
-      {/* Synchronization Tab Placeholder */}
+      {/* Synchronization Tab */}
       <TabPanel value={activeTab} index={3}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
               Synchronization Task Overview
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              This section will provide an overview of all configured database synchronization tasks.
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Below is a list of all configured database synchronization tasks.
               You can manage individual task settings within the detail view of each database connection.
             </Typography>
-            {/* TODO: Implement table/list view of sync tasks from API */}
-            <Box sx={{ mt: 3, p: 3, border: '1px dashed', borderColor: 'divider', borderRadius: 1, textAlign: 'center' }}>
-              <Typography variant="subtitle1">Coming Soon</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Display list of active sync jobs here (e.g., source, target, schedule, status).
-              </Typography>
-            </Box>
+            
+            {loadingSyncTasks && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}>
+                <CircularProgress />
+              </Box>
+            )}
+            
+            {errorSyncTasks && (
+              <Alert severity="error" sx={{ my: 2 }}>{errorSyncTasks}</Alert>
+            )}
+            
+            {!loadingSyncTasks && !errorSyncTasks && (
+              <TableContainer component={Paper} sx={{ mt: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
+                <Table sx={{ minWidth: 750 }} aria-label="synchronization tasks table">
+                  <TableHead sx={{ bgcolor: 'action.hover' }}>
+                    <TableRow>
+                      <TableCell>Source Database</TableCell>
+                      <TableCell>Target Database</TableCell>
+                      <TableCell>Schedule</TableCell>
+                      <TableCell align="center">Enabled</TableCell>
+                      <TableCell>Last Sync</TableCell>
+                      <TableCell align="center">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {syncTasks.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                          No synchronization tasks configured yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      syncTasks.map((task) => (
+                        <TableRow
+                          key={task.task_id}
+                          sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                        >
+                          <TableCell component="th" scope="row">
+                            {task.source_db_name || `(ID: ${task.source_connection_id})`}
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              ({task.source_db_engine || 'N/A'})
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {task.target_db_name || `(ID: ${task.target_connection_id})`}
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              ({task.target_db_engine || 'N/A'})
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{task.schedule || 'never'}</TableCell>
+                          <TableCell align="center">
+                            <Tooltip title={task.enabled ? 'Disable Task' : 'Enable Task'}>
+                              <span>
+                                <IconButton 
+                                  color={task.enabled ? 'success' : 'default'}
+                                  onClick={() => handleToggleSyncTask(task.task_id, task.enabled)}
+                                  disabled={taskBeingProcessed === task.task_id}
+                                  size="small"
+                                >
+                                  {taskBeingProcessed === task.task_id ? 
+                                    <CircularProgress size={20} color="inherit" /> : 
+                                    (task.enabled ? <ToggleOnIcon /> : <ToggleOffIcon />)
+                                  }
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                          <TableCell>{task.last_sync ? new Date(task.last_sync).toLocaleString() : 'Never'}</TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Delete Task">
+                              <span>
+                                <IconButton 
+                                  color="error"
+                                  onClick={() => openDeleteConfirmDialog(task)}
+                                  disabled={taskBeingProcessed === task.task_id}
+                                  size="small"
+                                >
+                                  {taskBeingProcessed === task.task_id && taskToDelete?.task_id !== task.task_id ? 
+                                    <CircularProgress size={20} color="inherit" /> : 
+                                    <DeleteIcon />
+                                  }
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </CardContent>
         </SettingCard>
       </TabPanel>
@@ -1137,6 +1319,30 @@ export default function Settings() {
           Save All Settings
         </Button>
       </Box>
+
+      {/* Confirmation Dialog for Deletion */}
+      <Dialog
+        open={confirmDeleteDialogOpen}
+        onClose={closeDeleteConfirmDialog}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          Confirm Deletion
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            Are you sure you want to delete the sync task for source database "{taskToDelete?.source_db_name || 'Unknown'}"? 
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDeleteConfirmDialog}>Cancel</Button>
+          <Button onClick={handleDeleteSyncTask} color="error" autoFocus>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar for notifications */}
       <Snackbar

@@ -42,4 +42,9 @@ app/db-sync/logs/sync.log
 .docker-data/
 
 # Testing
-/coverage 
+/coverage
+
+# Specific configuration files containing sensitive information
+*.env
+config.json
+secrets.yml 

@@ -14,6 +14,7 @@
     "ace-builds": "^1.33.0",
     "axios": "^1.6.7",
     "chart.js": "^4.4.1",
+    "date-fns": "^3.6.0",
     "react": "^18.2.0",
     "react-ace": "^11.0.1",
     "react-chartjs-2": "^5.2.0",

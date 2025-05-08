@@ -31,7 +31,21 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - JWT_SECRET=mole-secret-key-change-in-production
+      - JWT_SECRET=${JWT_SECRET}
+      # Default Admin credentials for the mole-postgres service (read from .env)
+      - DEFAULT_PG_ADMIN_USER=${POSTGRES_ADMIN_USER}
+      - DEFAULT_PG_ADMIN_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
+      - DB_CREATE_PG_HOST=mole-postgres # Default host for PG admin operations
+      - DB_CREATE_PG_PORT=5432          # Default port for PG admin operations
+      # Default Admin credentials for the mole-mysql service (read from .env)
+      - DEFAULT_MYSQL_ADMIN_USER=${MYSQL_ROOT_USER}
+      - DEFAULT_MYSQL_ADMIN_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - DB_CREATE_MYSQL_HOST=mole-mysql # Default host for MySQL admin operations
+      - DB_CREATE_MYSQL_PORT=3306       # Default port for MySQL admin operations
+      # Default Admin credentials for the mole-influxdb service (read from .env)
+      - DEFAULT_INFLUXDB_ADMIN_ORG=${INFLUXDB_ADMIN_ORG}
+      - DEFAULT_INFLUXDB_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+      - DB_CREATE_INFLUXDB_URL=http://mole-influxdb:8086 # Default URL for InfluxDB admin operations
     volumes:
       # Don't mount the entire /app directory, just the specific files/directories we need
       - ./app/backend/controllers:/app/controllers
@@ -59,6 +73,9 @@ services:
       - SYNC_INTERVAL=86400
       # Add PYTHONUNBUFFERED to see logs immediately
       - PYTHONUNBUFFERED=1
+      # Pass the PostgreSQL admin credentials from .env for db-sync to use
+      - DEFAULT_PG_ADMIN_USER=${POSTGRES_ADMIN_USER}
+      - DEFAULT_PG_ADMIN_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
     volumes:
       - ./app/db-sync/config:/app/config
       - ./app/db-sync/logs:/app/logs
@@ -73,10 +90,10 @@ services:
     container_name: mole-mysql
     restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=mole_secret
-      - MYSQL_DATABASE=moledb
-      - MYSQL_USER=mole
-      - MYSQL_PASSWORD=mole_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DB_NAME}
+      MYSQL_USER: ${MYSQL_REGULAR_USER}
+      MYSQL_PASSWORD: ${MYSQL_REGULAR_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
@@ -84,17 +101,18 @@ services:
 
   # Example PostgreSQL service for testing (optional)
   postgres:
-    image: postgres:14
+    image: timescale/timescaledb:latest-pg14
     container_name: mole-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_PASSWORD=mole_secret
-      - POSTGRES_USER=mole
-      - POSTGRES_DB=moledb
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_DB: ${POSTGRES_DB_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - mole-network
+    command: postgres -c shared_preload_libraries=timescaledb
 
   # Example InfluxDB service for testing (optional)
   influxdb:
@@ -102,11 +120,13 @@ services:
     container_name: mole-influxdb
     restart: unless-stopped
     environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=mole
-      - DOCKER_INFLUXDB_INIT_PASSWORD=mole_secret
-      - DOCKER_INFLUXDB_INIT_ORG=mole-org
-      - DOCKER_INFLUXDB_INIT_BUCKET=mole-bucket
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USER}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ADMIN_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_ADMIN_BUCKET}
+      # We pass the admin token here too for potential internal use or easier access if needed
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_ADMIN_TOKEN}
     volumes:
       - influxdb_data:/var/lib/influxdb2
     networks:

@@ -45,32 +45,73 @@ async function findSyncTaskBySourceId(sourceId) {
 
 exports.getSyncSettings = async (req, res) => {
   const sourceId = req.params.databaseId;
+  let db;
   try {
     console.log(`[SyncController] Getting settings for source DB ID: ${sourceId}`);
-    // findSyncTaskBySourceId now handles its own connection and uses await correctly
-    const task = await findSyncTaskBySourceId(sourceId);
+    // Use a single DB connection for both queries
+    db = await getDbConnection(); 
+    
+    // Find the task first
+    const task = await db.get(
+      'SELECT * FROM sync_tasks WHERE source_connection_id = ?',
+      [sourceId]
+    );
+
+    let responseData = {};
+
     if (task) {
       console.log(`[SyncController] Found sync task:`, task);
-      res.json({
-        enabled: !!task.enabled, // Convert 1/0 to boolean
-        schedule: task.schedule || 'never', // Default if null
-        last_sync: task.last_sync, // Keep as string/null
-        target_connection_id: task.target_connection_id, // Also return target ID if exists
-        // Optional: Add target_connection_id, tables if needed later
-      });
+      responseData = {
+        enabled: !!task.enabled, 
+        schedule: task.schedule || 'never',
+        last_sync: task.last_sync, 
+        target_connection_id: task.target_connection_id,
+        last_log_status: null, // Default values
+        last_log_message: null,
+        last_log_timestamp: null
+      };
+
+      // Now find the latest log entry for this task
+      const lastLog = await db.get(
+        'SELECT status, message, end_time FROM sync_logs WHERE task_id = ? ORDER BY end_time DESC LIMIT 1',
+        [task.id]
+      );
+
+      if (lastLog) {
+        console.log(`[SyncController] Found last log entry for task ${task.id}:`, lastLog);
+        responseData.last_log_status = lastLog.status;
+        responseData.last_log_message = lastLog.message;
+        responseData.last_log_timestamp = lastLog.end_time;
+      }
+      
+      res.json(responseData);
+
     } else {
       console.log(`[SyncController] No sync task found for source DB ID: ${sourceId}. Returning defaults.`);
-      // If no task exists, return default disabled settings
       res.json({
         enabled: false,
         schedule: 'never',
         last_sync: null,
-        target_connection_id: null
+        target_connection_id: null,
+        last_log_status: null, // Ensure defaults are consistent
+        last_log_message: null,
+        last_log_timestamp: null
       });
     }
   } catch (error) {
     console.error(`[SyncController] Error getting sync settings for ${sourceId}:`, error);
     res.status(500).json({ message: error.message || 'Failed to retrieve sync settings.' });
+  } finally {
+    // Close the single connection
+    if (db) {
+      try {
+          console.log("[getSyncSettings] Closing DB connection...");
+          await db.close();
+          console.log("[getSyncSettings] DB connection closed.");
+      } catch (closeError) {
+          console.error("[getSyncSettings] Error closing DB:", closeError);
+      }
+    }
   }
 };
 
@@ -78,132 +119,133 @@ exports.updateSyncSettings = async (req, res) => {
   const sourceId = req.params.databaseId;
   const { enabled, schedule, target_connection_id } = req.body; 
 
-  // Validate required fields
+  // Validate required fields for basic operation
   if (typeof enabled === 'undefined' || typeof schedule === 'undefined') {
     return res.status(400).json({ message: 'Missing required fields: enabled and schedule.' });
-  }
-  // If enabling, target must be provided
-  if (enabled && !target_connection_id) {
-      return res.status(400).json({ message: 'Target database ID or "Create New" option is required when enabling synchronization.' });
-  }
-
-  // Basic validation for schedule (could be more robust)
-  const validSchedules = ['never', 'hourly', 'daily', 'weekly'];
-  if (enabled && schedule !== 'never' && !validSchedules.includes(schedule)) {
-     // Could also check for valid cron expressions here later
-     // For now, restrict to predefined values
-    console.warn(`[SyncController] Received schedule "${schedule}" which is not in the standard list, accepting anyway.`);
   }
 
   let db;
   try {
     console.log(`[SyncController] Updating settings for source DB ID: ${sourceId}`, { enabled, schedule, target_connection_id });
-    // findSyncTaskBySourceId handles its own connection
-    const existingTask = await findSyncTaskBySourceId(sourceId);
-    const now = new Date().toISOString();
-    const enabledValue = enabled ? 1 : 0;
+    
     let targetIdValue = null;
-    let newTargetCreated = false; // Flag to indicate if a new target was created
+    let newTargetCreated = false; 
+    let proceedWithSave = true; 
+    let effectiveSchedule = schedule; // Use the passed schedule by default
+    let effectiveEnabled = enabled; // Use the passed enabled status by default
 
-    if (enabled) {
-        if (target_connection_id === '__CREATE_NEW__') {
-            console.log("[SyncController] Create New Target requested.");
-            let sourceConnection = null;
-            try {
-                sourceConnection = await databaseService.getConnectionById(sourceId);
-                if (!sourceConnection) {
-                     return res.status(404).json({ message: 'Source database connection not found.' });
-                }
-            } catch (e) {
-                 console.error("[SyncController] Could not fetch source connection details:", e.message);
-                 return res.status(500).json({ message: 'Could not retrieve source connection details to create target.' });
+    // --- Step 1: Determine Target ID Value (Handle potential creation) ---
+    if (target_connection_id === '__CREATE_NEW__') {
+        console.log("[SyncController] Create New Target requested.");
+        // Proceed with creation regardless of the initial 'enabled' state from the request
+        // The user explicitly chose to create a target.
+        let sourceConnection = null;
+        try {
+            sourceConnection = await databaseService.getConnectionById(sourceId);
+            if (!sourceConnection) {
+                 res.status(404).json({ message: 'Source database connection not found.' });
+                 proceedWithSave = false;
             }
+        } catch (e) {
+             console.error("[SyncController] Could not fetch source connection details:", e.message);
+             res.status(500).json({ message: 'Could not retrieve source connection details to create target.' });
+             proceedWithSave = false;
+        }
 
-            // Define parameters for the new database
-            const newDbName = `${sourceConnection.name}_sync_copy_${Date.now()}`.substring(0, 63); // Add timestamp, limit length
+        if (proceedWithSave) { // Only proceed if source was found
+            // Generate a valid DB name: replace spaces/invalid chars with _, ensure length limit
+            const baseName = sourceConnection.name.replace(/[^a-zA-Z0-9_]/g, '_');
+            const timestamp = Date.now();
+            const newDbName = `${baseName}_backup_${timestamp}`.substring(0, 63); 
+            
             const newEngine = sourceConnection.engine;
-            // Assume connection uses same host/port/user/pass as source for simplicity?
-            // OR define specific target credentials?
-            // For now, let's assume we create it with default user/pass on the same engine/host.
-            // The API endpoint /create-instance handles the actual creation on the server.
             const creationPayload = {
-                name: newDbName, // This will be the connection name AND the db name created
+                name: newDbName,
                 engine: newEngine,
-                // Use source details as template, but the API uses ENV vars for creation itself
-                host: sourceConnection.host, 
-                port: sourceConnection.port, 
-                username: sourceConnection.username || 'sync_user', // Use a placeholder/derived username
-                password: `autogen_${Date.now()}`, // Use an auto-generated placeholder password
+                // Let create-instance use its defaults for admin/target creds/host
+                username: sourceConnection.username || 'sync_user', 
+                password: `autogen_${Date.now()}`,
                 ssl_enabled: sourceConnection.ssl_enabled,
                 notes: `Auto-created sync target for ${sourceConnection.name}`
             };
             
             console.log("[SyncController] Calling internal create-instance API with payload:", creationPayload);
             try {
-                // Internal API call to the existing endpoint
-                // Need to construct the base URL for localhost or use a service discovery method if needed
                 const baseUrl = `http://localhost:${process.env.PORT || 3001}`;
                 const creationResponse = await axios.post(`${baseUrl}/api/databases/create-instance`, creationPayload);
                 
                 if (creationResponse.data && creationResponse.data.success && creationResponse.data.connection) {
                     targetIdValue = creationResponse.data.connection.id;
-                    newTargetCreated = true; // Set the flag
-                    console.log(`[SyncController] Successfully created and saved new target DB connection with ID: ${targetIdValue}`);
+                    newTargetCreated = true;
+                    console.log(`[SyncController] Successfully created new target DB connection with ID: ${targetIdValue}`);
                 } else {
                     throw new Error(creationResponse.data.message || 'Failed to create database instance via internal API call.');
                 }
             } catch (creationError) {
                  console.error("[SyncController] Error calling create-instance API:", creationError.response?.data || creationError.message);
                  const detail = creationError.response?.data?.message || creationError.message;
-                 return res.status(500).json({ message: `Failed to automatically create target database: ${detail}` });
+                 res.status(500).json({ message: `Failed to automatically create target database: ${detail}` });
+                 proceedWithSave = false; // Stop the update process
             }
-
-        } else if (target_connection_id) {
-            targetIdValue = target_connection_id;
-        } else {
-             // This case should be caught by validation above, but as safety net:
-             return res.status(400).json({ message: 'Target database ID is required when enabling synchronization.' });
         }
-    } // else (disabled) targetIdValue remains null
+        // If creating a new target, force the schedule to 'never' initially?
+        // Or keep the requested schedule? Let's keep requested for now.
+        // effectiveSchedule = 'never'; 
+        // effectiveEnabled = false; // Maybe disable initially after creation?
 
-    db = await getDbConnection(); // Get connection for update/insert
-
-    if (existingTask) {
-      console.log(`[SyncController] Updating existing task ID: ${existingTask.id}`);
-      // Use Promise-based db.run from 'sqlite' package
-      await db.run(
-        'UPDATE sync_tasks SET enabled = ?, schedule = ?, target_connection_id = ?, updated_at = ? WHERE id = ?',
-        [enabledValue, schedule, targetIdValue, now, existingTask.id]
-      );
-      console.log(`[SyncController] Sync task ${existingTask.id} updated.`);
-      const responsePayload = { message: 'Sync settings updated successfully.' };
-      if (newTargetCreated) {
-          responsePayload.newTargetId = targetIdValue;
-      }
-      res.json(responsePayload);
-    } else {
-      if (enabled && targetIdValue) {
-          const defaultName = `Sync for Connection ${sourceId}`;
-          console.log(`[SyncController] Creating new sync task for source DB ID: ${sourceId} targeting ${targetIdValue}`);
-          // Use Promise-based db.run from 'sqlite' package
-          // The result object contains lastID after INSERT
-          const result = await db.run(
-            'INSERT INTO sync_tasks (name, source_connection_id, target_connection_id, enabled, schedule, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [defaultName, sourceId, targetIdValue, enabledValue, schedule, now, now]
-          );
-          const newTaskId = result.lastID;
-          console.log(`[SyncController] New sync task created with ID: ${newTaskId}`);
-           // If new target was created, return its ID to the frontend
-          const responsePayload = { message: 'Sync settings saved successfully (new task created).', taskId: newTaskId };
-          if (newTargetCreated) {
-              responsePayload.newTargetId = targetIdValue;
-          }
-          res.status(201).json(responsePayload);
-      } else {
-          console.log(`[SyncController] No existing task and not creating a new one (disabled or no target).`);
-          res.json({ message: 'Sync settings saved (no active task configured).' });
-      }
+    } else if (target_connection_id) {
+        // Use the provided target ID
+        targetIdValue = target_connection_id;
     }
+    // If target_connection_id was empty or null, targetIdValue remains null
+
+    // --- Step 2: Validation (removed - Step 3 handles creation/update logic) ---
+    // if (enabled && !targetIdValue) { ... }
+
+    // --- Step 3: Proceed with DB Update (if no creation error occurred) ---
+    if (proceedWithSave) {
+        const existingTask = await findSyncTaskBySourceId(sourceId);
+        const now = new Date().toISOString();
+        // Use the potentially modified effectiveEnabled/Schedule status
+        const enabledValue = effectiveEnabled ? 1 : 0; 
+        
+        db = await getDbConnection();
+        if (existingTask) {
+            console.log(`[SyncController] Updating existing task ID: ${existingTask.id}`);
+            await db.run(
+                'UPDATE sync_tasks SET enabled = ?, schedule = ?, target_connection_id = ?, updated_at = ? WHERE id = ?',
+                [enabledValue, effectiveSchedule, targetIdValue, now, existingTask.id] 
+            );
+            console.log(`[SyncController] Sync task ${existingTask.id} updated.`);
+            const responsePayload = { message: 'Sync settings updated successfully.' };
+            if (newTargetCreated) {
+                responsePayload.newTargetId = targetIdValue;
+            }
+            res.json(responsePayload);
+        } else {
+            // Only create if a target was actually determined
+            if (targetIdValue) {
+                const defaultName = `Sync for Connection ${sourceId}`;
+                console.log(`[SyncController] Creating new sync task entry for source DB ID: ${sourceId} targeting ${targetIdValue} (Enabled: ${effectiveEnabled})`);
+                const result = await db.run(
+                    'INSERT INTO sync_tasks (name, source_connection_id, target_connection_id, enabled, schedule, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [defaultName, sourceId, targetIdValue, enabledValue, effectiveSchedule, now, now] 
+                );
+                const newTaskId = result.lastID;
+                console.log(`[SyncController] New sync task created with ID: ${newTaskId}`);
+                const responsePayload = { message: 'Sync settings saved successfully (new task created).', taskId: newTaskId };
+                if (newTargetCreated) {
+                    responsePayload.newTargetId = targetIdValue;
+                }
+                res.status(201).json(responsePayload);
+            } else {
+                // This case now means target_connection_id was null/empty AND not '__CREATE_NEW__'
+                console.log(`[SyncController] No existing task and no valid target determined. No task created/updated.`);
+                res.json({ message: 'Sync settings received (no active task configured).' });
+            }
+        }
+    } // End if(proceedWithSave)
+
   } catch (error) {
     console.error(`[SyncController] Error updating sync settings for ${sourceId}:`, error);
     res.status(500).json({ message: error.message || 'Failed to update sync settings.' });
@@ -234,11 +276,8 @@ exports.triggerSync = async (req, res) => {
     if (!task.target_connection_id) {
       return res.status(400).json({ message: 'Sync task exists but has no target database configured.' });
     }
-    if (!task.enabled) {
-      return res.status(400).json({ message: 'Sync task is disabled. Please enable it first.' });
-    }
 
-    console.log(`[SyncController] Found task ID ${task.id} (Source: ${task.source_connection_id}, Target: ${task.target_connection_id}). Fetching connection details...`);
+    console.log(`[SyncController] Found task ID ${task.id} (Source: ${task.source_connection_id}, Target: ${task.target_connection_id}, Enabled: ${task.enabled}). Fetching connection details...`);
 
     // Fetch connection details for source and target
     const [sourceConnection, targetConnection] = await Promise.all([
@@ -330,5 +369,147 @@ exports.triggerSync = async (req, res) => {
      // Catch errors from findSyncTaskBySourceId or fetching connections
     console.error(`[SyncController] Error during sync trigger setup for source ${sourceDbId}:`, error);
     res.status(500).json({ message: error.message || 'Internal server error while preparing to trigger sync.' });
+  }
+};
+
+// --- NEW METHOD --- 
+/**
+ * Get all configured synchronization tasks for overview
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getAllSyncTasks = async (req, res) => {
+  let db;
+  try {
+    console.log("[SyncController] Getting all sync tasks for overview...");
+    db = await getDbConnection();
+
+    const tasks = await db.all(`
+      SELECT
+        st.id AS task_id,
+        st.schedule,
+        st.enabled,
+        st.last_sync,
+        st.source_connection_id,
+        src_conn.name AS source_db_name,
+        src_conn.engine AS source_db_engine,
+        st.target_connection_id,
+        tgt_conn.name AS target_db_name,
+        tgt_conn.engine AS target_db_engine
+      FROM
+        sync_tasks st
+      LEFT JOIN
+        database_connections src_conn ON st.source_connection_id = src_conn.id
+      LEFT JOIN
+        database_connections tgt_conn ON st.target_connection_id = tgt_conn.id
+      ORDER BY
+        src_conn.name ASC, st.created_at DESC
+    `);
+
+    console.log(`[SyncController] Found ${tasks.length} sync tasks.`);
+    res.json({ success: true, tasks: tasks });
+
+  } catch (error) {
+    console.error("[SyncController] Error getting all sync tasks:", error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to retrieve sync tasks.' });
+  } finally {
+    if (db) {
+      try {
+        console.log("[getAllSyncTasks] Closing DB connection...");
+        await db.close();
+        console.log("[getAllSyncTasks] DB connection closed.");
+      } catch (closeError) {
+        console.error("[getAllSyncTasks] Error closing DB:", closeError);
+      }
+    }
+  }
+};
+
+// --- NEW METHOD: Delete Sync Task ---
+exports.deleteSyncTask = async (req, res) => {
+  const taskId = req.params.taskId;
+  let db;
+  try {
+    console.log(`[SyncController] Deleting sync task with ID: ${taskId}`);
+    db = await getDbConnection();
+    const result = await db.run('DELETE FROM sync_tasks WHERE id = ?', [taskId]);
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, message: 'Sync task not found.' });
+    }
+    
+    console.log(`[SyncController] Sync task ${taskId} deleted successfully.`);
+    res.json({ success: true, message: 'Sync task deleted successfully.' });
+
+  } catch (error) {
+    console.error(`[SyncController] Error deleting sync task ${taskId}:`, error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to delete sync task.' });
+  } finally {
+    if (db) {
+      try {
+        await db.close();
+      } catch (closeError) {
+        console.error("[deleteSyncTask] Error closing DB:", closeError);
+      }
+    }
+  }
+};
+
+// --- NEW METHOD: Update Sync Task ---
+exports.updateSyncTask = async (req, res) => {
+  const taskId = req.params.taskId;
+  // Allow updating enabled status and schedule for now
+  const { enabled, schedule } = req.body; 
+  let db;
+
+  // Basic validation: At least one field must be provided
+  if (typeof enabled === 'undefined' && typeof schedule === 'undefined') {
+    return res.status(400).json({ message: 'No update data provided (expected enabled or schedule).' });
+  }
+
+  try {
+    console.log(`[SyncController] Updating task ID: ${taskId}`, req.body);
+    db = await getDbConnection();
+
+    // Construct the SET part of the query dynamically
+    const fieldsToUpdate = {};
+    if (typeof enabled !== 'undefined') {
+      fieldsToUpdate.enabled = enabled ? 1 : 0;
+    }
+    if (typeof schedule !== 'undefined') {
+      // Optional: Add validation for schedule value here if needed
+      fieldsToUpdate.schedule = schedule;
+    }
+    fieldsToUpdate.updated_at = new Date().toISOString();
+
+    const setClauses = Object.keys(fieldsToUpdate).map(key => `${key} = ?`).join(', ');
+    const values = [...Object.values(fieldsToUpdate), taskId];
+
+    if (!setClauses) { // Should not happen due to validation above
+        return res.status(400).json({ message: 'No valid fields to update.'});
+    }
+
+    const query = `UPDATE sync_tasks SET ${setClauses} WHERE id = ?`;
+    console.log("[updateSyncTask] Executing query:", query, values);
+    const result = await db.run(query, values);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, message: 'Sync task not found or no changes made.' });
+    }
+
+    console.log(`[SyncController] Sync task ${taskId} updated successfully.`);
+    res.json({ success: true, message: 'Sync task updated successfully.' });
+
+  } catch (error) {
+    console.error(`[SyncController] Error updating sync task ${taskId}:`, error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to update sync task.' });
+  } finally {
+    if (db) {
+      try {
+        await db.close();
+      } catch (closeError) {
+        console.error("[updateSyncTask] Error closing DB:", closeError);
+      }
+    }
   }
 }; 

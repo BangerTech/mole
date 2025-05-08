@@ -1055,10 +1055,20 @@ exports.getTopTables = async (req, res) => {
  * @param {Object} res - Express response object
  */
 exports.createDatabaseInstance = async (req, res) => {
-  const { engine: userEngineChoice, name: connectionName, host: userHost, port: userPort, username: connectionUser, password: connectionPassword, ssl_enabled: userSslEnabled, notes: userNotes } = req.body;
+  // Host and Port are no longer expected from req.body for the final connection
+  const { 
+    engine: userEngineChoice, 
+    name: connectionName, 
+    // host: userHost, // Removed
+    // port: userPort, // Removed
+    username: connectionUser, 
+    password: connectionPassword, 
+    ssl_enabled: userSslEnabled, 
+    notes: userNotes
+  } = req.body;
   const dbNameToCreate = connectionName;
 
-  console.log(`[createDatabaseInstance] Request received: Engine=${userEngineChoice}, Name=${dbNameToCreate}`);
+  console.log(`[createDatabaseInstance] Request received: Engine=${userEngineChoice}, Name=${dbNameToCreate}. Using default backend admin credentials and default service target.`);
 
   if (!userEngineChoice || !dbNameToCreate || !connectionUser) {
     console.error('[createDatabaseInstance] Missing required fields in request body (engine, name, username are required).');
@@ -1075,22 +1085,25 @@ exports.createDatabaseInstance = async (req, res) => {
 
   try {
     if (userEngineChoice.toLowerCase() === 'postgresql') {
-      const pgAdminUser = process.env.DB_CREATE_PG_USER || 'postgres';
-      const pgAdminPassword = process.env.DB_CREATE_PG_PASSWORD;
-      const pgHost = process.env.DB_CREATE_PG_HOST || 'mole-postgres';
-      const pgPort = process.env.DB_CREATE_PG_PORT || 5432;
-
+      // Always use default admin credentials and target from environment
+      const pgAdminHost = process.env.DB_CREATE_PG_HOST || 'mole-postgres';
+      const pgAdminPort = process.env.DB_CREATE_PG_PORT || 5432;
+      const pgAdminUser = process.env.DEFAULT_PG_ADMIN_USER || 'mole';
+      const pgAdminPassword = process.env.DEFAULT_PG_ADMIN_PASSWORD;
+      
       if (!pgAdminPassword) {
-        throw new Error('PostgreSQL admin password (DB_CREATE_PG_PASSWORD) not configured.');
+        console.error('[createDatabaseInstance] Default PostgreSQL admin password (DEFAULT_PG_ADMIN_PASSWORD) not configured in backend environment.');
+        return res.status(500).json({ success: false, message: 'Default PostgreSQL admin password (DEFAULT_PG_ADMIN_PASSWORD) not configured in backend environment.'});
       }
+      console.log(`[createDatabaseInstance] Using default PG admin credentials for target: ${pgAdminUser}@${pgAdminHost}:${pgAdminPort}`);
 
       const pool = new Pool({
-        host: pgHost, port: pgPort, user: pgAdminUser, password: pgAdminPassword,
-        database: 'postgres',
+        host: pgAdminHost, port: pgAdminPort, user: pgAdminUser, password: pgAdminPassword,
+        database: 'postgres', // Connect to the default 'postgres' db to perform admin tasks
         connectionTimeoutMillis: 10000
       });
       adminClient = await pool.connect();
-      console.log(`[createDatabaseInstance] Connected to PG admin@${pgHost} to check/create ${dbNameToCreate}`);
+      console.log(`[createDatabaseInstance] Connected to PG admin@${pgAdminHost}:${pgAdminPort} to check/create ${dbNameToCreate}`);
       try {
         const checkRes = await adminClient.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbNameToCreate]);
         if (checkRes.rowCount > 0) {
@@ -1098,32 +1111,62 @@ exports.createDatabaseInstance = async (req, res) => {
           creationMessage = `PostgreSQL database '${dbNameToCreate}' already exists.`;
           console.log(creationMessage);
         } else {
-          await adminClient.query(`CREATE DATABASE "${dbNameToCreate}"`); // Corrected quoting
+          await adminClient.query(`CREATE DATABASE "${dbNameToCreate}"`);
+          if (connectionUser) { // connectionUser is the user for the *newly created* database
+            // Check if user already exists before trying to create
+            const userExistsRes = await adminClient.query('SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = $1', [connectionUser]);
+            if (userExistsRes.rowCount === 0) {
+              // User does not exist, create them
+              await adminClient.query(`CREATE USER "${connectionUser}" WITH PASSWORD '${connectionPassword}';`);
+              console.log(`User '${connectionUser}' created.`);
+            } else {
+              console.log(`User '${connectionUser}' already exists. Skipping creation.`);
+              // Optionally, you could update the password here if needed:
+              // await adminClient.query(`ALTER USER "${connectionUser}" WITH PASSWORD '${connectionPassword}';`);
+            }
+            // Grant privileges regardless of whether user was just created or already existed
+            await adminClient.query(`GRANT ALL PRIVILEGES ON DATABASE "${dbNameToCreate}" TO "${connectionUser}";`);
+            console.log(`Privileges granted on '${dbNameToCreate}' to user '${connectionUser}'.`);
+          } else {
+            console.warn(`[createDatabaseInstance] No connectionUser provided to create/grant privileges for the new PostgreSQL database '${dbNameToCreate}'.`);
+          }
           creationSuccess = true;
           creationMessage = `PostgreSQL database '${dbNameToCreate}' created successfully.`;
           console.log(creationMessage);
         }
       } finally {
         if (adminClient) adminClient.release();
-        await pool.end(); // End the admin pool
+        await pool.end();
       }
     } else if (userEngineChoice.toLowerCase() === 'mysql') {
-      const mysqlAdminUser = process.env.DB_CREATE_MYSQL_USER || 'root';
-      const mysqlAdminPassword = process.env.DB_CREATE_MYSQL_PASSWORD;
-      const mysqlHost = process.env.DB_CREATE_MYSQL_HOST || 'mole-mysql';
-      const mysqlPort = process.env.DB_CREATE_MYSQL_PORT || 3306;
+      // Always use default admin credentials and target from environment
+      const mysqlAdminHost = process.env.DB_CREATE_MYSQL_HOST || 'mole-mysql';
+      const mysqlAdminPort = process.env.DB_CREATE_MYSQL_PORT || 3306;
+      const mysqlAdminUser = process.env.DEFAULT_MYSQL_ADMIN_USER || 'root';
+      const mysqlAdminPassword = process.env.DEFAULT_MYSQL_ADMIN_PASSWORD;
 
       if (!mysqlAdminPassword) {
-        throw new Error('MySQL admin password (DB_CREATE_MYSQL_PASSWORD) not configured.');
+        console.error('[createDatabaseInstance] Default MySQL admin password (DEFAULT_MYSQL_ADMIN_PASSWORD) not configured in backend environment.');
+        return res.status(500).json({ success: false, message: 'Default MySQL admin password (DEFAULT_MYSQL_ADMIN_PASSWORD) not configured in backend environment.'});
       }
+      console.log(`[createDatabaseInstance] Using default MySQL admin credentials for target: ${mysqlAdminUser}@${mysqlAdminHost}:${mysqlAdminPort}`);
 
       adminClient = await mysql.createConnection({
-          host: mysqlHost, port: mysqlPort, user: mysqlAdminUser, password: mysqlAdminPassword,
+          host: mysqlAdminHost, port: mysqlAdminPort, user: mysqlAdminUser, password: mysqlAdminPassword,
           connectTimeout: 10000
       });
-      console.log(`[createDatabaseInstance] Connected to MySQL admin@${mysqlHost} to check/create ${dbNameToCreate}`);
+      console.log(`[createDatabaseInstance] Connected to MySQL admin@${mysqlAdminHost}:${mysqlAdminPort} to check/create ${dbNameToCreate}`);
       try {
-        await adminClient.query(`CREATE DATABASE IF NOT EXISTS \`${dbNameToCreate}\``); // Corrected quoting
+        await adminClient.query(`CREATE DATABASE IF NOT EXISTS \`${dbNameToCreate}\``);
+        if (connectionUser && connectionPassword) {
+          // MySQL's CREATE USER IF NOT EXISTS handles the existence check
+          await adminClient.query(`CREATE USER IF NOT EXISTS '${connectionUser}'@'%' IDENTIFIED BY '${connectionPassword}';`);
+          await adminClient.query(`GRANT ALL PRIVILEGES ON \`${dbNameToCreate}\`.* TO '${connectionUser}'@'%';`);
+          await adminClient.query(`FLUSH PRIVILEGES;`);
+          console.log(`User '${connectionUser}' created/updated and granted privileges on MySQL database '${dbNameToCreate}'.`);
+        } else {
+          console.warn(`[createDatabaseInstance] No connectionUser/Password provided to create/grant privileges for the new MySQL database '${dbNameToCreate}'.`);
+        }
         creationSuccess = true;
         creationMessage = `MySQL database '${dbNameToCreate}' created or already exists.`;
         console.log(creationMessage);
@@ -1131,16 +1174,17 @@ exports.createDatabaseInstance = async (req, res) => {
           if (adminClient) await adminClient.end();
       }
     } else if (userEngineChoice.toLowerCase() === 'influxdb') {
-      // Read InfluxDB config from ENV vars
+      // Always use default admin credentials and target from environment
       const influxUrl = process.env.DB_CREATE_INFLUXDB_URL || 'http://mole-influxdb:8086';
-      const influxToken = process.env.DB_CREATE_INFLUXDB_TOKEN;
-      const influxOrgName = process.env.DB_CREATE_INFLUXDB_ORG; // Org Name is needed for bucket creation
+      const influxToken = process.env.DEFAULT_INFLUXDB_ADMIN_TOKEN;
+      const influxOrgName = process.env.DEFAULT_INFLUXDB_ADMIN_ORG;
 
       if (!influxToken || !influxOrgName) {
-          throw new Error('InfluxDB config (URL, TOKEN, ORG) incomplete in ENV vars.');
+        console.error('[createDatabaseInstance] Default InfluxDB admin token (DEFAULT_INFLUXDB_ADMIN_TOKEN) or organization (DEFAULT_INFLUXDB_ADMIN_ORG) not configured in backend environment.');
+        return res.status(500).json({ success: false, message: 'Default InfluxDB admin token (DEFAULT_INFLUXDB_ADMIN_TOKEN) or organization (DEFAULT_INFLUXDB_ADMIN_ORG) not configured in backend environment.'});
       }
+      console.log(`[createDatabaseInstance] Using default InfluxDB admin credentials for target: Org '${influxOrgName}' at ${influxUrl}`);
 
-      console.log(`[createDatabaseInstance] Creating InfluxDB bucket '${dbNameToCreate}' in org '${influxOrgName}' at ${influxUrl}`);
       const influxDB = new InfluxDB({ url: influxUrl, token: influxToken });
       const bucketsAPI = influxDB.getBucketsApi();
 
@@ -1172,14 +1216,32 @@ exports.createDatabaseInstance = async (req, res) => {
     if (creationSuccess) {
       console.log('[createDatabaseInstance] Proceeding to save connection entry.');
       try {
+          // Determine the correct host and port for the connection based on the engine
+          let connectionHost, connectionPort;
+          if (userEngineChoice.toLowerCase() === 'postgresql') {
+              connectionHost = process.env.DB_CREATE_PG_HOST || 'mole-postgres';
+              connectionPort = parseInt(process.env.DB_CREATE_PG_PORT || '5432', 10);
+          } else if (userEngineChoice.toLowerCase() === 'mysql') {
+              connectionHost = process.env.DB_CREATE_MYSQL_HOST || 'mole-mysql';
+              connectionPort = parseInt(process.env.DB_CREATE_MYSQL_PORT || '3306', 10);
+          } else if (userEngineChoice.toLowerCase() === 'influxdb') {
+              // For InfluxDB, host/port might be less relevant than URL, but store service name for consistency
+              connectionHost = 'mole-influxdb'; // Usually accessed via URL, but store service name
+              connectionPort = 8086; // Default InfluxDB port
+          } else {
+               // Should not happen if validation is correct, but set defaults
+               connectionHost = 'unknown-host';
+               connectionPort = 0;
+          }
+
           const connectionToSave = {
-              name: connectionName, // User-provided connection name
-              engine: userEngineChoice, // User-chosen engine
-              host: userHost, // User-provided host for connecting later
-              port: userPort || (userEngineChoice === 'PostgreSQL' ? 5432 : (userEngineChoice === 'MySQL' ? 3306 : 8086)), // User-provided port or default
-              database: dbNameToCreate, // The name of the database/bucket created
-              username: connectionUser, // User-provided username
-              password: connectionPassword, // User-provided password
+              name: connectionName, 
+              engine: userEngineChoice, 
+              host: connectionHost, // Use determined service name
+              port: connectionPort, // Use determined default port
+              database: dbNameToCreate, 
+              username: connectionUser, 
+              password: connectionPassword, 
               ssl_enabled: userSslEnabled || false,
               notes: userNotes || '',
               isSample: false
