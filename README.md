@@ -1,10 +1,33 @@
 # MOLE - Database Agent
 
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![NodeJS](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)
+![Express.js](https://img.shields.io/badge/express.js-%23404d59.svg?style=for-the-badge&logo=express&logoColor=%2361DAFB)
+![MySQL](https://img.shields.io/badge/mysql-%2300f.svg?style=for-the-badge&logo=mysql&logoColor=white)
+![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+
 <p align="center">
   <img src="app/react-ui/public/images/logo.png" alt="MOLE Logo" width="350">
 </p>
 
-A modern, web-based database management tool with a beautiful interface inspired by Apple and Nextcloud design. MOLE allows you to connect to multiple database types, create databases, perform table operations, and synchronize data between different database servers.
+> A modern, web-based database management tool with a beautiful interface inspired by Apple and Nextcloud design. MOLE allows you to connect to multiple database types, create databases, perform table operations, and synchronize data between different database servers.
+
+## Screenshots
+
+<img src="app/react-ui/public/images/screenshots/Screenshot1.png" width="49%" /> <img src="app/react-ui/public/images/screenshots/Screenshot2.png" width="49%" />
+
+<img src="app/react-ui/public/images/screenshots/Screenshot3.png" width="49%" /> <img src="app/react-ui/public/images/screenshots/Screenshot4.png" width="49%" />
+
+## Table of Contents
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Docker Compose Configuration](#docker-compose-configuration)
+- [Usage](#usage)
+- [Customization](#customization)
+- [Architecture](#architecture)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
 
 ## Features
 
@@ -142,3 +165,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Uses React and Material UI for the frontend
 - Powered by Python for database synchronization 
 - Node.js Express for authentication and email services 
+
+## Keywords
+`database-management` `mysql` `postgresql` `influxdb` `react` `node-js` `docker` 
+`synchronization` `monitoring` `web-ui` `material-ui` `database-sync` `devops` 
+`self-hosted` `open-source` 
