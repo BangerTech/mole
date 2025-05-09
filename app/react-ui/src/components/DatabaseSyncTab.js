@@ -20,6 +20,14 @@ import SyncIcon from '@mui/icons-material/Sync';
 import DatabaseService from '../services/DatabaseService';
 import { formatDistanceToNow } from 'date-fns'; // Import date-fns for relative time
 
+// MUI Dialog imports
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogTitle from '@mui/material/DialogTitle';
+import TextField from '@mui/material/TextField';
+
 const CREATE_NEW_TARGET_VALUE = "__CREATE_NEW__"; // Constant for special value
 
 const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
@@ -46,6 +54,14 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
   const [lastLogStatus, setLastLogStatus] = useState(null);
   const [lastLogMessage, setLastLogMessage] = useState(null);
   const [lastLogTimestamp, setLastLogTimestamp] = useState(null);
+
+  // State for dialog
+  const [showCreateDbDialog, setShowCreateDbDialog] = useState(false);
+  const [newDbName, setNewDbName] = useState('');
+  const [newDbUser, setNewDbUser] = useState('');
+  const [newDbPassword, setNewDbPassword] = useState('');
+  const [newDbPasswordConfirm, setNewDbPasswordConfirm] = useState('');
+  const [dialogError, setDialogError] = useState('');
 
   // Load initial state from API
   useEffect(() => {
@@ -91,34 +107,73 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
     loadData();
   }, [databaseId]);
 
-  // Refactored: Accepts explicit target ID
+  // Refactored: Accepts explicit target ID and optional new DB credentials
   const updateSettings = async (settingsUpdate) => {
-    const { enabled, schedule, targetId } = settingsUpdate;
+    // Destructure all possible parameters, including new ones for DB creation
+    const { enabled, schedule, targetId, newDbName, newDbUser, newDbPassword } = settingsUpdate;
+    
     if (!databaseId) return;
     
-    // Validation: If enabling, a target must be provided
-    if (enabled && !targetId) {
+    // --- MODIFIED VALIDATION ---
+    // If enabling, a target must be provided OR we must be in the process of creating one.
+    // If targetId is empty AND not CREATE_NEW_TARGET_VALUE (which implies we are creating), then error.
+    if (enabled && !targetId && targetId !== CREATE_NEW_TARGET_VALUE) {
       setSettingsError("Please select a target database or choose to create a new one when enabling sync.");
+      // Reset isUpdatingSettings if it was set by the caller
+      if (isUpdatingSettings) setIsUpdatingSettings(false);
       return; 
     }
-
-    setIsUpdatingSettings(true);
+    // Clear error if validation passes
     setSettingsError(null);
+
+    // setIsUpdatingSettings(true); // Caller might set this (e.g., handleCreateDbDialogSubmit)
+                                 // or it's set at the start of this function if not already set.
+    if (!isUpdatingSettings) setIsUpdatingSettings(true); // Ensure it's true for this operation
     setSyncSuccess(null); 
+
     try {
       const payload = { 
-        enabled: enabled, // Use passed-in value
-        schedule: schedule, // Use passed-in value
-        target_connection_id: targetId || null // Use explicitly passed target ID
+        enabled: enabled,
+        schedule: schedule,
+        target_connection_id: targetId || null 
       };
+
+      // If creating a new target, add the new DB credentials to the payload
+      if (targetId === CREATE_NEW_TARGET_VALUE && newDbName && newDbUser && newDbPassword) {
+        payload.newDbName = newDbName;
+        payload.newDbUser = newDbUser;
+        payload.newDbPassword = newDbPassword;
+      }
+      
       console.log("Updating settings with payload:", payload);
       const result = await DatabaseService.updateSyncSettings(databaseId, payload);
+      // Assuming result.message contains success message
       setSyncSuccess(result.message || 'Synchronization settings saved successfully.'); 
       
-      // Handle new target creation response (if applicable)
+      // Handle new target creation response
       if (targetId === CREATE_NEW_TARGET_VALUE && result.newTargetId) {
           console.log("Backend created new target with ID:", result.newTargetId);
-          // Consider refreshing target list and selecting the new one
+          // Refresh target list and select the new one
+          setSelectedTargetId(result.newTargetId.toString()); // Ensure it's a string
+          
+          // Fetch all connections again to update the dropdown
+          setIsLoadingTargets(true);
+          try {
+            const allConnections = await DatabaseService.getDatabaseConnections();
+            const potentialTargets = allConnections.filter(conn => conn.id.toString() !== databaseId.toString());
+            setAvailableTargets(potentialTargets);
+          } catch (fetchError) {
+            console.error("Failed to refresh target list after creation:", fetchError);
+            // Non-critical, but log it. The selectedTargetId is updated anyway.
+          } finally {
+            setIsLoadingTargets(false);
+          }
+          setIsSyncEnabled(enabled); // Reflect the 'enabled' state passed during the creation
+      } else if (targetId !== CREATE_NEW_TARGET_VALUE) {
+          // If we were just updating settings for an existing target, ensure UI reflects this
+          setIsSyncEnabled(enabled);
+          setSyncFrequency(schedule);
+          setSelectedTargetId(targetId || '');
       }
 
     } catch (error) {
@@ -157,45 +212,69 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
   const handleTargetChange = (event) => {
       const newTargetValue = event.target.value;
       setSelectedTargetId(newTargetValue);
-      setSettingsError(null); 
-      
-      // Always call updateSettings, passing the *new* target value directly
-      updateSettings({ 
-        enabled: isSyncEnabled,      // Keep current enabled state
-        schedule: syncFrequency,    // Keep current frequency
-        targetId: newTargetValue  // Explicitly pass the NEW value
-      }); 
+      setSettingsError(null); // Clear general settings error
+
+      if (newTargetValue === CREATE_NEW_TARGET_VALUE) {
+          // Open the dialog instead of calling updateSettings directly
+          setNewDbName(''); // Clear previous entries
+          setNewDbUser('');
+          setNewDbPassword('');
+          setNewDbPasswordConfirm('');
+          setDialogError(''); // Clear previous dialog errors
+          setShowCreateDbDialog(true);
+      } else {
+          // If an existing target is selected, or if "Select Target..." (empty value) is chosen,
+          // proceed to update settings as before.
+          // The updateSettings function already handles the case where newTargetValue might be empty.
+          updateSettings({ 
+            enabled: isSyncEnabled,
+            schedule: syncFrequency, 
+            targetId: newTargetValue // This will be the ID of an existing DB or ''
+          }); 
+      }
   };
 
   const handleManualSync = async () => {
     if (!databaseId) return;
-    // Allow manual sync if a target ID is selected OR if create new is selected
-    if (!selectedTargetId) {
-        setSyncError('Please select a target database or choose "Create New Target Database" before starting a manual sync.');
-        return;
-    }
-    setIsSyncing(true);
+
     setSyncError(null);
     setSyncSuccess(null);
+
+    // Case 1: User selected "+ Create New Target Database"
+    if (selectedTargetId === CREATE_NEW_TARGET_VALUE) {
+      // If the dialog process hasn't resulted in a real target ID yet.
+      setSyncError('Please complete the "Create New Target Database" configuration using the dialog first, then try syncing.');
+      if (!showCreateDbDialog) { // If dialog is not already open, open it as a hint.
+          setShowCreateDbDialog(true);
+      }
+      return;
+    }
+
+    // Case 2: An existing target database is selected (selectedTargetId is a real ID)
+    if (!selectedTargetId) { // Should not happen if button is enabled, but as a safeguard
+        setSyncError('Please select a target database before starting a manual sync.');
+        return;
+    }
+    
+    setIsSyncing(true);
     try {
-        // Check if we need the backend to create the target first
-        if (selectedTargetId === CREATE_NEW_TARGET_VALUE) {
-            console.log("Manual Sync: Requesting target creation first...");
-            // Ideally, the trigger endpoint could handle creation, or we need a separate one.
-            // For now, let's assume trigger handles it, or fails if target doesn't exist yet.
-             // We might need to call updateSettings first to ensure the task is created.
-            await updateSettings({ enabled: true, schedule: syncFrequency }); 
-            // If updateSettings failed, the error state will be set.
-            if (settingsError) {
-                 setIsSyncing(false);
-                return; // Stop if saving settings failed
-            }
-        }
-        
-      // Now trigger the actual sync (backend uses the target ID stored in the task)
-      console.log("Triggering sync...");
+      console.log(`Triggering sync for databaseId: ${databaseId} to targetId: ${selectedTargetId}`);
       const result = await DatabaseService.triggerSync(databaseId);
-      setSyncSuccess(result.message || `Synchronization started in background for task ${databaseId}.`);
+      setSyncSuccess(result.message || `Synchronization started successfully.`);
+      
+      // Optionally, refresh last sync time and log status after a short delay
+      setTimeout(async () => {
+        try {
+          const fetchedSettings = await DatabaseService.getSyncSettings(databaseId);
+          setLastSyncTime(fetchedSettings.last_sync ? new Date(fetchedSettings.last_sync).toLocaleString() : 'Never');
+          setLastLogStatus(fetchedSettings.last_log_status);
+          setLastLogMessage(fetchedSettings.last_log_message);
+          setLastLogTimestamp(fetchedSettings.last_log_timestamp);
+        } catch (e) {
+          console.warn("Could not refresh sync status after manual trigger.", e);
+        }
+      }, 5000); // Refresh after 5 seconds
+
     } catch (error) {
       console.error("Manual sync error:", error);
       setSyncError(error.message || 'Failed to start manual sync.');
@@ -221,6 +300,47 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
           </Box>
       );
   }
+
+  const handleCreateDbDialogSubmit = async () => {
+    setDialogError(''); // Clear previous dialog errors
+
+    // Basic Validation
+    if (!newDbName.trim() || !newDbUser.trim() || !newDbPassword.trim()) {
+      setDialogError('All fields (Database Name, Username, Password) are required.');
+      return;
+    }
+    if (newDbPassword !== newDbPasswordConfirm) {
+      setDialogError('Passwords do not match.');
+      return;
+    }
+
+    // We are now ready to call updateSettings with the new DB details
+    // We'll also set 'enabled' to true by default when creating a new target this way,
+    // and keep the current syncFrequency. The user can change these after creation.
+    // The selectedTargetId is already CREATE_NEW_TARGET_VALUE.
+
+    // Show loading indicator for the main settings update
+    setIsUpdatingSettings(true); 
+    setShowCreateDbDialog(false); // Close dialog immediately
+
+    await updateSettings({
+      enabled: true, // Let's enable by default when user explicitly creates
+      schedule: syncFrequency,
+      targetId: CREATE_NEW_TARGET_VALUE, // Signal to backend to use new credentials
+      // Pass the new credentials
+      newDbName: newDbName.trim(),
+      newDbUser: newDbUser.trim(),
+      newDbPassword: newDbPassword 
+    });
+
+    // Clear dialog fields after submission attempt (success or fail)
+    // updateSettings will set settingsError or syncSuccess
+    setNewDbName('');
+    setNewDbUser('');
+    setNewDbPassword('');
+    setNewDbPasswordConfirm('');
+    // setIsUpdatingSettings(false) is handled by updateSettings itself.
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -255,7 +375,7 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
             control={<Switch checked={isSyncEnabled} onChange={handleEnableChange} disabled={isUpdatingSettings}/>}
             label="Enable Automatic Synchronization"
           />
-           {isSyncEnabled && !selectedTargetId && (
+           {isSyncEnabled && !selectedTargetId && selectedTargetId !== CREATE_NEW_TARGET_VALUE && (
                 <Typography variant="caption" color="error" sx={{ display: 'block', ml: 4 }}>
                     Select a target database to activate synchronization.
                 </Typography>
@@ -264,7 +384,7 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
 
         {/* Target Database Dropdown */}
          <Grid item xs={12} sm={6}>
-          <FormControl fullWidth required error={isSyncEnabled && !selectedTargetId} disabled={isUpdatingSettings || isLoadingTargets}>
+          <FormControl fullWidth required error={isSyncEnabled && !selectedTargetId && selectedTargetId !== CREATE_NEW_TARGET_VALUE} disabled={isUpdatingSettings || isLoadingTargets}>
             <InputLabel id="target-database-label">Target Database</InputLabel>
             <Select
               labelId="target-database-label"
@@ -288,7 +408,7 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
               ))}
             </Select>
              {/* Update helper text */} 
-             <FormHelperText>{isSyncEnabled && !selectedTargetId ? "Required: Select or create target" : "Select existing or create a new target DB"}</FormHelperText>
+             <FormHelperText>{isSyncEnabled && !selectedTargetId && selectedTargetId !== CREATE_NEW_TARGET_VALUE ? "Required: Select or create target" : "Select existing or create a new target DB"}</FormHelperText>
           </FormControl>
         </Grid>
 
@@ -337,6 +457,67 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
         )}
 
       </Grid>
+
+      {/* Dialog for Creating New Target Database */}
+      <Dialog open={showCreateDbDialog} onClose={() => { setShowCreateDbDialog(false); setDialogError(''); setNewDbName(''); setNewDbUser(''); setNewDbPassword(''); setNewDbPasswordConfirm(''); }}>
+        <DialogTitle>Create New Target Database</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Please provide the details for the new target database.
+            This database and user will be created on the server.
+          </DialogContentText>
+          {dialogError && <Alert severity="error" sx={{ mb: 2 }}>{dialogError}</Alert>}
+          <TextField
+            autoFocus
+            margin="dense"
+            id="newDbName"
+            label="Database Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newDbName}
+            onChange={(e) => setNewDbName(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            id="newDbUser"
+            label="Database Username"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newDbUser}
+            onChange={(e) => setNewDbUser(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            id="newDbPassword"
+            label="Password"
+            type="password"
+            fullWidth
+            variant="outlined"
+            value={newDbPassword}
+            onChange={(e) => setNewDbPassword(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            id="newDbPasswordConfirm"
+            label="Confirm Password"
+            type="password"
+            fullWidth
+            variant="outlined"
+            value={newDbPasswordConfirm}
+            onChange={(e) => setNewDbPasswordConfirm(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setShowCreateDbDialog(false); setDialogError(''); setNewDbName(''); setNewDbUser(''); setNewDbPassword(''); setNewDbPasswordConfirm(''); }}>Cancel</Button>
+          <Button onClick={handleCreateDbDialogSubmit}>Create & Configure</Button>
+        </DialogActions>
+      </Dialog>
+
     </Box>
   );
 };

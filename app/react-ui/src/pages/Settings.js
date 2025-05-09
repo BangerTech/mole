@@ -153,9 +153,17 @@ export default function Settings() {
     const tab = query.get('tab');
     
     if (tab === 'notifications') {
-      setActiveTab(1); // Notifications tab index is 1
+      setActiveTab(0);
+    } else if (tab === 'databases') {
+      setActiveTab(1);
+    } else if (tab === 'synchronization') {
+      setActiveTab(2);
+    } else if (tab === 'ai') {
+      setActiveTab(3);
+    } else if (tab === 'security') {
+      setActiveTab(4);
     } else if (tab === 'email') {
-      setActiveTab(7); // Email Settings tab index is 7
+      setActiveTab(5);
     }
   }, [location]);
 
@@ -353,7 +361,7 @@ export default function Settings() {
 
   // Fetch sync tasks when the sync tab becomes active
   useEffect(() => {
-    if (activeTab === 3) { // Index of Synchronization tab
+    if (activeTab === 2) { // Index of Synchronization tab
       fetchSyncTasks();
     }
   }, [activeTab]);
@@ -433,80 +441,17 @@ export default function Settings() {
           variant="scrollable"
           scrollButtons="auto"
         >
-          <StyledTab icon={<PaletteIcon sx={{ mr: 1 }} />} iconPosition="start" label="Appearance" />
           <StyledTab icon={<NotificationsIcon sx={{ mr: 1 }} />} iconPosition="start" label="Notifications" />
           <StyledTab icon={<StorageIcon sx={{ mr: 1 }} />} iconPosition="start" label="Databases" />
           <StyledTab icon={<SyncIcon sx={{ mr: 1 }} />} iconPosition="start" label="Synchronization" />
           <StyledTab icon={<SmartToyIcon sx={{ mr: 1 }} />} iconPosition="start" label="AI Assistant" />
           <StyledTab icon={<SecurityIcon sx={{ mr: 1 }} />} iconPosition="start" label="Security" />
-          <StyledTab icon={<InfoIcon sx={{ mr: 1 }} />} iconPosition="start" label="About" />
           <StyledTab icon={<EmailIcon sx={{ mr: 1 }} />} iconPosition="start" label="Email Settings" />
         </Tabs>
       </Box>
 
-      {/* Appearance Tab */}
-      <TabPanel value={activeTab} index={0}>
-        <SettingCard>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Theme and Display
-            </Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Switch 
-                      checked={darkMode} 
-                      onChange={() => setDarkMode(!darkMode)}
-                      color="primary"
-                    />
-                  }
-                  label="Dark Mode"
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Enable dark mode for a more eye-friendly display in low light conditions.
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
-                  <InputLabel>Language</InputLabel>
-                  <Select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    label="Language"
-                  >
-                    <MenuItem value="de">Deutsch</MenuItem>
-                    <MenuItem value="en">English</MenuItem>
-                    <MenuItem value="fr">Français</MenuItem>
-                    <MenuItem value="es">Español</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Font Size
-                </Typography>
-                <Slider
-                  defaultValue={14}
-                  step={1}
-                  min={12}
-                  max={20}
-                  valueLabelDisplay="auto"
-                  marks={[
-                    { value: 12, label: 'Small' },
-                    { value: 14, label: 'Default' },
-                    { value: 16, label: 'Medium' },
-                    { value: 20, label: 'Large' },
-                  ]}
-                />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </SettingCard>
-      </TabPanel>
-
       {/* Notifications Tab */}
-      <TabPanel value={activeTab} index={1}>
+      <TabPanel value={activeTab} index={0}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -594,7 +539,7 @@ export default function Settings() {
       </TabPanel>
 
       {/* Databases Tab */}
-      <TabPanel value={activeTab} index={2}>
+      <TabPanel value={activeTab} index={1}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -691,7 +636,7 @@ export default function Settings() {
       </TabPanel>
 
       {/* Synchronization Tab */}
-      <TabPanel value={activeTab} index={3}>
+      <TabPanel value={activeTab} index={2}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -798,7 +743,7 @@ export default function Settings() {
       </TabPanel>
 
       {/* AI Assistant Tab */}
-      <TabPanel value={activeTab} index={4}>
+      <TabPanel value={activeTab} index={3}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -1055,7 +1000,7 @@ export default function Settings() {
       </TabPanel>
 
       {/* Security Tab */}
-      <TabPanel value={activeTab} index={5}>
+      <TabPanel value={activeTab} index={4}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -1123,54 +1068,8 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
-      {/* About Tab */}
-      <TabPanel value={activeTab} index={6}>
-        <SettingCard>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              About Mole Database Manager
-            </Typography>
-            <Typography variant="body1" paragraph>
-              Version: 1.0.0
-            </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              Mole Database Manager is a modern tool for managing and synchronizing database connections. With a user-friendly interface, you can effortlessly manage various database types and interact with them.
-            </Typography>
-            
-            <Box sx={{ my: 2 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Environment Information
-              </Typography>
-              <Stack spacing={1}>
-                <Typography variant="body2">
-                  <strong>Operating System:</strong> Linux
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Browser:</strong> Chrome 96.0.4664.110
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Node.js:</strong> 18.15.0
-                </Typography>
-                <Typography variant="body2">
-                  <strong>React:</strong> 18.2.0
-                </Typography>
-              </Stack>
-            </Box>
-            
-            <Box sx={{ mt: 3 }}>
-              <Button variant="outlined" startIcon={<InfoIcon />}>
-                Release Notes
-              </Button>
-              <Button variant="outlined" sx={{ ml: 2 }} startIcon={<InfoIcon />}>
-                License
-              </Button>
-            </Box>
-          </CardContent>
-        </SettingCard>
-      </TabPanel>
-
       {/* Email Settings Tab */}
-      <TabPanel value={activeTab} index={7}>
+      <TabPanel value={activeTab} index={5}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>

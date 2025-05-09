@@ -10,7 +10,7 @@ import logging
 import yaml
 import atexit
 from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime
+from datetime import datetime, timezone # Added timezone
 import subprocess
 import sys
 import json
@@ -645,7 +645,7 @@ echo "Sync completed!"
             # Update status
             statuses[name] = {
                 "status": status,
-                "last_run": datetime.now().isoformat(),
+                "last_run": datetime.now(timezone.utc).isoformat(), # Use timezone.utc
                 "message": message
             }
             
@@ -2326,9 +2326,12 @@ def update_last_sync_time(task_id: int, sync_time: datetime):
      try:
          conn = get_backend_db_connection()
          cursor = conn.cursor()
+         # Ensure sync_time is timezone-aware (it should be if start_time was)
+         # If sync_time could be naive, convert it: sync_time.astimezone(timezone.utc).isoformat()
+         # However, start_time passed to it is already UTC, so sync_time.isoformat() is fine.
          cursor.execute(
              "UPDATE sync_tasks SET last_sync = ?, updated_at = ? WHERE id = ?",
-             (sync_time.isoformat(), datetime.now().isoformat(), task_id)
+             (sync_time.isoformat(), datetime.now(timezone.utc).isoformat(), task_id) # Use timezone.utc for updated_at
          )
          conn.commit()
          logger.info(f"Updated last_sync time for task {task_id}")
@@ -2370,7 +2373,7 @@ def perform_database_sync(task_details: Dict):
     target_name = target_conn.get('name', f"DB {target_conn.get('id')}") # Use name or ID
 
     logger.info(f"[TASK {task_id}] Starting sync from {source_engine} '{source_name}' to {target_engine} '{target_name}'")
-    start_time = datetime.now()
+    start_time = datetime.now(timezone.utc) # Use timezone.utc
     status = "error" # Default to error
     message = ""
     rows_synced = 0 # Placeholder for row count
@@ -2401,7 +2404,7 @@ def perform_database_sync(task_details: Dict):
         status = "error"
     
     finally:
-        end_time = datetime.now()
+        end_time = datetime.now(timezone.utc) # Use timezone.utc
         update_sync_log(task_id, start_time, end_time, status, message, rows_synced)
 
 # --- Specific Sync Implementations --- 
