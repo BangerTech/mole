@@ -45,14 +45,14 @@ EOL
 fi
 
 # Check if the sync service is enabled
-if grep -q "enabled: true" /app/config/sync.yml; then
-    echo "Starting database sync service..."
-    # Start the sync service in the background
-    /app/sync.sh &
-else
-    echo "Database sync service is disabled. Set 'enabled: true' in /app/config/sync.yml to enable it."
-fi
+# if grep -q "enabled: true" /app/config/sync.yml; then
+#     echo "Starting database sync service..."
+#     # Start the sync service in the background
+#     /app/sync.sh &
+# else
+#     echo "Database sync service is disabled. Set 'enabled: true' in /app/config/sync.yml to enable it."
+# fi
 
 # Start the Flask API server using Gunicorn
 echo "Starting Flask API server on port 5000..."
-exec gunicorn --bind 0.0.0.0:5000 sync_manager:app 
+exec gunicorn --bind 0.0.0.0:5000 --preload --workers 1 sync_manager:app 

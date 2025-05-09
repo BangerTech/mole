@@ -16,4 +16,5 @@ safetensors==0.3.3
 sentencepiece==0.1.99
 protobuf==3.20.3
 gunicorn
-APScheduler 
+APScheduler
+cryptography 
