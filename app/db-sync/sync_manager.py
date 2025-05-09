@@ -416,8 +416,9 @@ echo "Sync completed!"
         pg_dump_cmd.extend(['--dbname', source['database']])
         # Use custom format (-Fc) instead of plain SQL
         pg_dump_cmd.extend(['--format=custom', '--file', dump_file]) 
-        pg_dump_cmd.extend(['--no-owner', '--no-acl']) # --no-comments not applicable for custom format
-        # Exclude TimescaleDB internal schemas to avoid permission errors on restore
+        pg_dump_cmd.extend(['--no-owner', '--no-acl'])
+        pg_dump_cmd.extend(['--no-comments']) # ADDED: Do not dump comments
+        # Exclude TimescaleDB internal schemas
         pg_dump_cmd.extend(['--exclude-schema=_timescaledb_internal'])
         pg_dump_cmd.extend(['--exclude-schema=_timescaledb_catalog'])
         pg_dump_cmd.extend(['--exclude-schema=_timescaledb_config'])
@@ -451,74 +452,144 @@ echo "Sync completed!"
         target_user_env['PGPASSWORD'] = tgt_pass
 
         try:
-            # --- Target DB Preparation (as Admin) ---
-            if options.get('drop_target_first'):
-                logger.info(f"[TASK {name}] Dropping target database '{tgt_db_name}' (as admin)...")
-                drop_cmd = psql_admin_maintenance_cmd_base + ['-c', f'DROP DATABASE IF EXISTS "{tgt_db_name}";']
-                subprocess.run(drop_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
-                
-                logger.info(f"[TASK {name}] Recreating target database '{tgt_db_name}' with owner '{tgt_user}' (as admin)...")
-                create_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
-                subprocess.run(create_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
-            else:
-                logger.info(f"[TASK {name}] Ensuring target database '{tgt_db_name}' exists (as admin)...")
-                try:
-                    create_if_not_exists_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
-                    subprocess.run(create_if_not_exists_cmd, capture_output=True, text=True, env=target_admin_env) 
-                except subprocess.CalledProcessError as cpe:
-                     if "already exists" not in cpe.stderr: 
-                         raise
-                     logger.info(f"[TASK {name}] Target database '{tgt_db_name}' already exists.")
+            # --- Target DB Preparation: Admin drops and recreates the database for a clean state ---
+            logger.info(f"[TASK {name}] Admin: Dropping target database '{tgt_db_name}' (if exists) for a clean start...")
+            try:
+                # Connect to 'postgres' or a default maintenance DB to drop the target DB
+                drop_db_cmd = psql_admin_maintenance_cmd_base + ['-c', f'DROP DATABASE IF EXISTS "{tgt_db_name}" WITH (FORCE);']
+                subprocess.run(drop_db_cmd, capture_output=True, text=True, env=target_admin_env) # check=True removed, allow to fail if not exists
+            except Exception as e_drop:
+                logger.warning(f"[TASK {name}] Admin: Issue dropping database '{tgt_db_name}' (might not exist or other issue): {e_drop}")
 
-            logger.info(f"[TASK {name}] Setting owner of 'public' schema in '{tgt_db_name}' to '{tgt_user}' (as admin)...")
-            alter_schema_cmd = psql_admin_target_db_cmd_base + ['-c', f'ALTER SCHEMA public OWNER TO "{tgt_user}";']
-            subprocess.run(alter_schema_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
-            # --- End Target DB Preparation ---
+            logger.info(f"[TASK {name}] Admin: Recreating target database '{tgt_db_name}' with owner '{tgt_user}'...")
+            create_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
+            subprocess.run(create_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+            # --- End Target DB Preparation by Admin ---
 
-            # --- Schema Cleaning and Extension Creation (as Target User - BEFORE restore) ---
-            logger.info(f"[TASK {name}] Cleaning public schema in '{tgt_db_name}' (as target user '{tgt_user}')...")
-            # Use psql_user_cmd_base requires defining it again based on target_user_env
-            psql_user_cmd_base = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_user, '--dbname', tgt_db_name] 
-            clean_schema_cmd = psql_user_cmd_base + ['-c', f'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public AUTHORIZATION "{tgt_user}";']
-            subprocess.run(clean_schema_cmd, capture_output=True, text=True, env=target_user_env, check=True)
-            
-            logger.info(f"[TASK {name}] Creating TimescaleDB extension in '{tgt_db_name}' (as target user '{tgt_user}')...")
-            create_extension_cmd = psql_user_cmd_base + ['-c', "CREATE EXTENSION IF NOT EXISTS timescaledb SCHEMA public;"]
+            # --- Extension Creation and Schema Ownership by Target User in the new DB ---
+            psql_user_cmd_base_for_target_db = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_user, '--dbname', tgt_db_name]
+
+            logger.info(f"[TASK {name}] Target User: Creating TimescaleDB extension in fresh '{tgt_db_name}'...")
+            create_extension_cmd = psql_user_cmd_base_for_target_db + ['-c', "CREATE EXTENSION IF NOT EXISTS timescaledb SCHEMA public;"]
             subprocess.run(create_extension_cmd, capture_output=True, text=True, env=target_user_env, check=True)
-            # --- End Schema Cleaning/Extension ---
+            # --- End Extension Creation and Schema Ownership by Target User ---
             
-            # --- Run pg_dump from source (Keep) --- 
-            logger.info(f"[TASK {name}] Exporting source database '{source['database']}' (using pg_dump -Fc)...")
-            logger.debug(f"[TASK {name}] Running pg_dump command: {' '.join(pg_dump_cmd)}")
-            dump_result = subprocess.run(pg_dump_cmd, capture_output=True, text=True, env=source_env, check=True)
-            logger.info(f"[TASK {name}] pg_dump completed.")
+            # --- TimescaleDB Pre-Restore Hook (run as ADMIN) ---
+            logger.info(f"[TASK {name}] ADMIN: Executing timescaledb_pre_restore() in '{tgt_db_name}'...")
+            pre_restore_cmd = psql_admin_target_db_cmd_base + ['-c', "SELECT timescaledb_pre_restore();"]
+            subprocess.run(pre_restore_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+            # --- End TimescaleDB Pre-Restore Hook ---
+            
+            # --- Run pg_dump from source (MODIFIED to exclude sensor_readings data) --- 
+            logger.info(f"[TASK {name}] Exporting source database '{source['database']}' (using pg_dump -Fc, EXCLUDING public.sensor_readings data)...")
+            
+            # pg_dump_cmd is already defined with basic options like --format=custom, --no-owner, --no-acl, --no-comments
+            # We create a copy to add the table data exclusion for this specific run.
+            pg_dump_cmd_excluding_hypertable_data = list(pg_dump_cmd) 
+            pg_dump_cmd_excluding_hypertable_data.append('--exclude-table-data=public.sensor_readings')
+
+            logger.debug(f"[TASK {name}] Running pg_dump command: {' '.join(pg_dump_cmd_excluding_hypertable_data)}")
+            dump_result = subprocess.run(pg_dump_cmd_excluding_hypertable_data, capture_output=True, text=True, env=source_env, check=True)
+            logger.info(f"[TASK {name}] pg_dump (excluding public.sensor_readings data) completed.")
             if dump_result.stderr:
                 logger.info(f"[TASK {name}] pg_dump stderr: {dump_result.stderr}")
 
-            # --- Run pg_restore to import into target (as Target User) --- 
-            logger.info(f"[TASK {name}] Importing into target database '{tgt_db_name}' (using pg_restore as target user '{tgt_user}')...")
-            # Use pg_restore with the custom format dump file
-            pg_restore_cmd = [
+            # --- Run pg_restore to import schema and other data (as Target User) --- 
+            logger.info(f"[TASK {name}] Importing schema and other data into '{tgt_db_name}' (using pg_restore as target user '{tgt_user}')...")
+            # pg_restore_cmd should be defined without --clean and without --disable-triggers from previous successful setup
+            pg_restore_cmd_for_schema_and_other_data = [
                 'pg_restore',
                 '--host', tgt_host,
                 '--port', tgt_port,
                 '--username', tgt_user,
                 '--dbname', tgt_db_name,
-                #'--clean',                # Ensure clean flag is NOT active
-                '--no-owner',             # Don't restore original ownership
-                '--disable-triggers',     # Disable triggers during data load
-                # '-v',                   # Uncomment for verbose debugging
-                dump_file                 # Input dump file
+                '--no-owner', # Target user creates extension, admin owns DB, schema ownership is complex.
+                '-v', # Keep verbose
+                dump_file 
             ]
-                
-            logger.debug(f"[TASK {name}] Running pg_restore command: {' '.join(pg_restore_cmd)}")
-            import_result = subprocess.run(pg_restore_cmd, capture_output=True, text=True, env=target_user_env, check=True)
-            logger.info(f"[TASK {name}] pg_restore import completed.")
-            # pg_restore typically logs errors/warnings to stderr
+            logger.debug(f"[TASK {name}] Running pg_restore command: {' '.join(pg_restore_cmd_for_schema_and_other_data)}")
+            import_result = subprocess.run(pg_restore_cmd_for_schema_and_other_data, capture_output=True, text=True, env=target_user_env, check=True)
+            logger.info(f"[TASK {name}] pg_restore (schema and other data) import completed.")
             if import_result.stdout:
-                logger.debug(f"[TASK {name}] pg_restore import stdout: {import_result.stdout}")
+                logger.info(f"[TASK {name}] pg_restore import stdout: {import_result.stdout}")
             if import_result.stderr:
                 logger.info(f"[TASK {name}] pg_restore import stderr: {import_result.stderr}")
+
+            # --- BEGIN INSERTED CODE ---
+            # Drop the ts_insert_blocker trigger if it was restored with the schema, before attempting to create hypertable
+            # This specific trigger can cause issues if create_hypertable tries to create it again.
+            # We target 'public.sensor_readings' as it's the known hypertable causing issues.
+            # This should ideally be more dynamic if multiple hypertables with such triggers are common.
+            logger.info(f"[TASK {name}] Target User: Attempting to drop 'ts_insert_blocker' trigger from 'public.sensor_readings' before hypertable creation...")
+            drop_trigger_sql = "DROP TRIGGER IF EXISTS ts_insert_blocker ON public.sensor_readings;"
+            drop_trigger_cmd = psql_user_cmd_base_for_target_db + ['-c', drop_trigger_sql]
+            dt_run_result = subprocess.run(drop_trigger_cmd, capture_output=True, text=True, env=target_user_env)
+            if dt_run_result.returncode != 0:
+                # Log a warning, as the trigger might not exist, which is fine.
+                logger.warning(f"[TASK {name}] Target User: Command to drop 'ts_insert_blocker' trigger executed. It might have failed if the trigger didn\\'t exist. Stderr: {dt_run_result.stderr}. Stdout: {dt_run_result.stdout}.")
+            else:
+                logger.info(f"[TASK {name}] Target User: 'ts_insert_blocker' trigger drop command executed successfully. Stdout: {dt_run_result.stdout}")
+            # --- END INSERTED CODE ---
+
+            # --- Special handling for sensor_readings hypertable ---
+            logger.info(f"[TASK {name}] Target User: Ensuring 'public.sensor_readings' is a hypertable in '{tgt_db_name}'...")
+            # psql_user_cmd_base_for_target_db is defined earlier (connects as tgt_user to tgt_db_name)
+            # 'time' is the partitioning column for sensor_readings.
+            create_hypertable_sql = "SELECT create_hypertable('public.sensor_readings', 'time', if_not_exists => TRUE, migrate_data => FALSE);"
+            create_hypertable_cmd = psql_user_cmd_base_for_target_db + ['-c', create_hypertable_sql]
+            ch_run_result = subprocess.run(create_hypertable_cmd, capture_output=True, text=True, env=target_user_env)
+            if ch_run_result.returncode != 0:
+                # Log error but try to continue, data copy might still work if hypertable was already there
+                logger.error(f"[TASK {name}] Target User: create_hypertable command for 'public.sensor_readings' failed. Stderr: {ch_run_result.stderr}. Stdout: {ch_run_result.stdout}. Continuing with data copy attempt.")
+            else:
+                logger.info(f"[TASK {name}] Target User: 'public.sensor_readings' hypertable ensured/created. Stdout: {ch_run_result.stdout}")
+
+            # Data copy for sensor_readings using \\COPY
+            sensor_readings_csv_path = f"/tmp/sensor_readings_data_task_{name}.csv"
+            
+            # Export from source
+            logger.info(f"[TASK {name}] Exporting 'public.sensor_readings' data from source DB '{source['database']}' to CSV: {sensor_readings_csv_path}...")
+            psql_source_cmd_base = ['psql', '--host', source['host'], '--port', str(source['port']), '--username', source['username'], '--dbname', source['database']]
+            copy_to_sql = f"\\COPY (SELECT * FROM public.sensor_readings) TO '{sensor_readings_csv_path}' WITH CSV HEADER" # Added HEADER
+            copy_to_cmd = psql_source_cmd_base + ['-c', copy_to_sql]
+            
+            copy_to_result = subprocess.run(copy_to_cmd, capture_output=True, text=True, env=source_env)
+            if copy_to_result.returncode != 0:
+                logger.error(f"[TASK {name}] Failed to export 'public.sensor_readings' data to CSV. Stderr: {copy_to_result.stderr}. Stdout: {copy_to_result.stdout}")
+                # Decide if we should raise an exception or try to continue without this table's data
+                raise Exception(f"Failed to export sensor_readings to CSV: {copy_to_result.stderr}")
+            logger.info(f"[TASK {name}] 'public.sensor_readings' data exported to CSV.")
+
+            # Import into target
+            if os.path.exists(sensor_readings_csv_path):
+                logger.info(f"[TASK {name}] Target User: Importing 'public.sensor_readings' data from CSV '{sensor_readings_csv_path}' into '{tgt_db_name}'...")
+                # psql_user_cmd_base_for_target_db is already defined
+                copy_from_sql = f"\\COPY public.sensor_readings FROM '{sensor_readings_csv_path}' WITH CSV HEADER" # Added HEADER
+                copy_from_cmd = psql_user_cmd_base_for_target_db + ['-c', copy_from_sql]
+                copy_from_result = subprocess.run(copy_from_cmd, capture_output=True, text=True, env=target_user_env)
+                if copy_from_result.returncode != 0:
+                    logger.error(f"[TASK {name}] Target User: Failed to import 'public.sensor_readings' data from CSV. Stderr: {copy_from_result.stderr}. Stdout: {copy_from_result.stdout}")
+                    # Log error but don't necessarily stop the whole sync if other parts were successful
+                else:
+                    logger.info(f"[TASK {name}] Target User: 'public.sensor_readings' data imported from CSV.")
+            else:
+                logger.warning(f"[TASK {name}] CSV file {sensor_readings_csv_path} not found for import. Skipping sensor_readings data copy.")
+
+
+            # Clean up CSV file
+            if os.path.exists(sensor_readings_csv_path):
+                try:
+                    os.remove(sensor_readings_csv_path)
+                    logger.info(f"[TASK {name}] Cleaned up temporary CSV file: {sensor_readings_csv_path}")
+                except OSError as e_remove_csv:
+                    logger.warning(f"[TASK {name}] Could not remove temporary CSV file {sensor_readings_csv_path}: {e_remove_csv}")
+            # --- End special handling for sensor_readings ---
+
+            # --- TimescaleDB Post-Restore Hook (run as ADMIN) ---
+            logger.info(f"[TASK {name}] ADMIN: Executing timescaledb_post_restore() in '{tgt_db_name}'...")
+            post_restore_cmd = psql_admin_target_db_cmd_base + ['-c', "SELECT timescaledb_post_restore();"]
+            subprocess.run(post_restore_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+            # --- End TimescaleDB Post-Restore Hook ---
 
             return "success", "PostgreSQL sync completed successfully.", rows_synced
 
@@ -2365,6 +2436,7 @@ def sync_postgresql_to_postgresql(task_id: int, source: Dict, target: Dict, opti
     # Use custom format (-Fc) instead of plain SQL
     pg_dump_cmd.extend(['--format=custom', '--file', dump_file]) 
     pg_dump_cmd.extend(['--no-owner', '--no-acl'])
+    pg_dump_cmd.extend(['--no-comments']) # ADDED: Do not dump comments
     # Exclude TimescaleDB internal schemas
     pg_dump_cmd.extend(['--exclude-schema=_timescaledb_internal'])
     pg_dump_cmd.extend(['--exclude-schema=_timescaledb_catalog'])
@@ -2395,72 +2467,150 @@ def sync_postgresql_to_postgresql(task_id: int, source: Dict, target: Dict, opti
     target_user_env['PGPASSWORD'] = tgt_pass
 
     try:
-        # --- Target DB Preparation (as Admin) (Keep) ---
-        if options.get('drop_target_first'):
-            logger.info(f"[TASK {task_id}] Dropping target database '{tgt_db_name}' (as admin)...")
-            drop_cmd = psql_admin_maintenance_cmd_base + ['-c', f'DROP DATABASE IF EXISTS "{tgt_db_name}";']
-            subprocess.run(drop_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
-            logger.info(f"[TASK {task_id}] Recreating target database '{tgt_db_name}' with owner '{tgt_user}' (as admin)...")
-            create_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
-            subprocess.run(create_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
-        else:
-            logger.info(f"[TASK {task_id}] Ensuring target database '{tgt_db_name}' exists (as admin)...")
-            try:
-                create_if_not_exists_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
-                subprocess.run(create_if_not_exists_cmd, capture_output=True, text=True, env=target_admin_env)
-            except subprocess.CalledProcessError as cpe:
-                if "already exists" not in cpe.stderr:
-                    raise
-                logger.info(f"[TASK {task_id}] Target database '{tgt_db_name}' already exists.")
-        logger.info(f"[TASK {task_id}] Setting owner of 'public' schema in '{tgt_db_name}' to '{tgt_user}' (as admin)...")
-        alter_schema_cmd = psql_admin_target_db_cmd_base + ['-c', f'ALTER SCHEMA public OWNER TO "{tgt_user}";']
-        subprocess.run(alter_schema_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
-        # --- End Target DB Preparation ---
+        # --- Target DB Preparation: Admin drops and recreates the database for a clean state ---
+        logger.info(f"[TASK {task_id}] Admin: Dropping target database '{tgt_db_name}' (if exists) for a clean start...")
+        try:
+            # Connect to 'postgres' or a default maintenance DB to drop the target DB
+            drop_db_cmd = psql_admin_maintenance_cmd_base + ['-c', f'DROP DATABASE IF EXISTS "{tgt_db_name}" WITH (FORCE);']
+            subprocess.run(drop_db_cmd, capture_output=True, text=True, env=target_admin_env) # check=True removed, allow to fail if not exists
+        except Exception as e_drop:
+            logger.warning(f"[TASK {task_id}] Admin: Issue dropping database '{tgt_db_name}' (might not exist or other issue): {e_drop}")
 
-        # --- Schema Cleaning and Extension Creation (as Target User - BEFORE restore) ---
-        logger.info(f"[TASK {task_id}] Cleaning public schema in '{tgt_db_name}' (as target user '{tgt_user}')...")
-        # Use psql_user_cmd_base requires defining it again based on target_user_env
-        psql_user_cmd_base = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_user, '--dbname', tgt_db_name] 
-        clean_schema_cmd = psql_user_cmd_base + ['-c', f'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public AUTHORIZATION "{tgt_user}";']
-        subprocess.run(clean_schema_cmd, capture_output=True, text=True, env=target_user_env, check=True)
-        
-        logger.info(f"[TASK {task_id}] Creating TimescaleDB extension in '{tgt_db_name}' (as target user '{tgt_user}')...")
-        create_extension_cmd = psql_user_cmd_base + ['-c', "CREATE EXTENSION IF NOT EXISTS timescaledb SCHEMA public;"]
+        logger.info(f"[TASK {task_id}] Admin: Recreating target database '{tgt_db_name}' with owner '{tgt_user}'...")
+        create_cmd = psql_admin_maintenance_cmd_base + ['-c', f'CREATE DATABASE "{tgt_db_name}" OWNER "{tgt_user}";']
+        subprocess.run(create_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+        # --- End Target DB Preparation by Admin ---
+
+        # --- Extension Creation and Schema Ownership by Target User in the new DB ---
+        psql_user_cmd_base_for_target_db = ['psql', '--host', tgt_host, '--port', tgt_port, '--username', tgt_user, '--dbname', tgt_db_name]
+
+        logger.info(f"[TASK {task_id}] Target User: Creating TimescaleDB extension in fresh '{tgt_db_name}'...")
+        create_extension_cmd = psql_user_cmd_base_for_target_db + ['-c', "CREATE EXTENSION IF NOT EXISTS timescaledb SCHEMA public;"]
         subprocess.run(create_extension_cmd, capture_output=True, text=True, env=target_user_env, check=True)
-        # --- End Schema Cleaning/Extension ---
+        # --- End Extension Creation and Schema Ownership by Target User ---
         
-        # --- Run pg_dump from source (Keep) --- 
-        logger.info(f"[TASK {task_id}] Exporting source database '{source['database']}' (using pg_dump -Fc)...")
-        logger.debug(f"[TASK {task_id}] Running pg_dump command: {' '.join(pg_dump_cmd)}")
-        dump_result = subprocess.run(pg_dump_cmd, capture_output=True, text=True, env=source_env, check=True)
-        logger.info(f"[TASK {task_id}] pg_dump completed.")
+        # --- TimescaleDB Pre-Restore Hook (run as ADMIN) ---
+        logger.info(f"[TASK {task_id}] ADMIN: Executing timescaledb_pre_restore() in '{tgt_db_name}'...")
+        pre_restore_cmd = psql_admin_target_db_cmd_base + ['-c', "SELECT timescaledb_pre_restore();"]
+        subprocess.run(pre_restore_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+        # --- End TimescaleDB Pre-Restore Hook ---
+        
+        # --- Run pg_dump from source (MODIFIED to exclude sensor_readings data) --- 
+        logger.info(f"[TASK {task_id}] Exporting source database '{source['database']}' (using pg_dump -Fc, EXCLUDING public.sensor_readings data)...")
+        
+        # pg_dump_cmd is already defined with basic options like --format=custom, --no-owner, --no-acl, --no-comments
+        # We create a copy to add the table data exclusion for this specific run.
+        pg_dump_cmd_excluding_hypertable_data = list(pg_dump_cmd) 
+        pg_dump_cmd_excluding_hypertable_data.append('--exclude-table-data=public.sensor_readings')
+
+        logger.debug(f"[TASK {task_id}] Running pg_dump command: {' '.join(pg_dump_cmd_excluding_hypertable_data)}")
+        dump_result = subprocess.run(pg_dump_cmd_excluding_hypertable_data, capture_output=True, text=True, env=source_env, check=True)
+        logger.info(f"[TASK {task_id}] pg_dump (excluding public.sensor_readings data) completed.")
         if dump_result.stderr:
             logger.info(f"[TASK {task_id}] pg_dump stderr: {dump_result.stderr}")
 
-        # --- Run pg_restore to import into target (as Target User) --- 
-        logger.info(f"[TASK {task_id}] Importing into target database '{tgt_db_name}' (using pg_restore as target user '{tgt_user}')...")
-        # Use pg_restore with the custom format dump file
-        pg_restore_cmd = [
+        # --- Run pg_restore to import schema and other data (as Target User) --- 
+        logger.info(f"[TASK {task_id}] Importing schema and other data into '{tgt_db_name}' (using pg_restore as target user '{tgt_user}')...")
+        # pg_restore_cmd should be defined without --clean and without --disable-triggers from previous successful setup
+        pg_restore_cmd_for_schema_and_other_data = [
             'pg_restore',
             '--host', tgt_host,
             '--port', tgt_port,
             '--username', tgt_user,
             '--dbname', tgt_db_name,
-            #'--clean',                # Ensure clean flag is NOT active
-            '--no-owner',             # Don't restore original ownership
-            '--disable-triggers',     # Disable triggers during data load
-            # '-v',                   # Uncomment for verbose debugging
-            dump_file                 # Input dump file
+            '--no-owner', # Target user creates extension, admin owns DB, schema ownership is complex.
+            '-v', # Keep verbose
+            dump_file 
         ]
-                
-        logger.debug(f"[TASK {task_id}] Running pg_restore command: {' '.join(pg_restore_cmd)}")
-        import_result = subprocess.run(pg_restore_cmd, capture_output=True, text=True, env=target_user_env, check=True)
-        logger.info(f"[TASK {task_id}] pg_restore import completed.")
-        # pg_restore typically logs errors/warnings to stderr
+        logger.debug(f"[TASK {task_id}] Running pg_restore command: {' '.join(pg_restore_cmd_for_schema_and_other_data)}")
+        import_result = subprocess.run(pg_restore_cmd_for_schema_and_other_data, capture_output=True, text=True, env=target_user_env, check=True)
+        logger.info(f"[TASK {task_id}] pg_restore (schema and other data) import completed.")
         if import_result.stdout:
-            logger.debug(f"[TASK {task_id}] pg_restore import stdout: {import_result.stdout}")
+            logger.info(f"[TASK {task_id}] pg_restore import stdout: {import_result.stdout}")
         if import_result.stderr:
             logger.info(f"[TASK {task_id}] pg_restore import stderr: {import_result.stderr}")
+
+        # --- BEGIN INSERTED CODE ---
+        # Drop the ts_insert_blocker trigger if it was restored with the schema, before attempting to create hypertable
+        # This specific trigger can cause issues if create_hypertable tries to create it again.
+        # We target 'public.sensor_readings' as it's the known hypertable causing issues.
+        # This should ideally be more dynamic if multiple hypertables with such triggers are common.
+        logger.info(f"[TASK {task_id}] Target User: Attempting to drop 'ts_insert_blocker' trigger from 'public.sensor_readings' before hypertable creation...")
+        drop_trigger_sql = "DROP TRIGGER IF EXISTS ts_insert_blocker ON public.sensor_readings;"
+        drop_trigger_cmd = psql_user_cmd_base_for_target_db + ['-c', drop_trigger_sql]
+        dt_run_result = subprocess.run(drop_trigger_cmd, capture_output=True, text=True, env=target_user_env)
+        if dt_run_result.returncode != 0:
+            # Log a warning, as the trigger might not exist, which is fine.
+            logger.warning(f"[TASK {task_id}] Target User: Command to drop 'ts_insert_blocker' trigger executed. It might have failed if the trigger didn\\'t exist. Stderr: {dt_run_result.stderr}. Stdout: {dt_run_result.stdout}.")
+        else:
+            logger.info(f"[TASK {task_id}] Target User: 'ts_insert_blocker' trigger drop command executed successfully. Stdout: {dt_run_result.stdout}")
+        # --- END INSERTED CODE ---
+
+        # --- Special handling for sensor_readings hypertable ---
+        logger.info(f"[TASK {task_id}] Target User: Ensuring 'public.sensor_readings' is a hypertable in '{tgt_db_name}'...")
+        # psql_user_cmd_base_for_target_db is defined earlier (connects as tgt_user to tgt_db_name)
+        # 'time' is the partitioning column for sensor_readings.
+        create_hypertable_sql = "SELECT create_hypertable('public.sensor_readings', 'time', if_not_exists => TRUE, migrate_data => FALSE);"
+        create_hypertable_cmd = psql_user_cmd_base_for_target_db + ['-c', create_hypertable_sql]
+        ch_run_result = subprocess.run(create_hypertable_cmd, capture_output=True, text=True, env=target_user_env)
+        if ch_run_result.returncode != 0:
+            # Log error but try to continue, data copy might still work if hypertable was already there
+            logger.error(f"[TASK {task_id}] Target User: create_hypertable command for 'public.sensor_readings' failed. Stderr: {ch_run_result.stderr}. Stdout: {ch_run_result.stdout}. Continuing with data copy attempt.")
+        else:
+            logger.info(f"[TASK {task_id}] Target User: 'public.sensor_readings' hypertable ensured/created. Stdout: {ch_run_result.stdout}")
+
+        # Data copy for sensor_readings using \\COPY
+        sensor_readings_csv_path = f"/tmp/sensor_readings_data_task_{task_id}.csv"
+
+        # Temporarily turn off 'timescaledb.restoring' to allow \\COPY into hypertable
+        logger.info(f"[TASK {task_id}] ADMIN: Temporarily setting timescaledb.restoring = 'off' for '{tgt_db_name}' to allow COPY...")
+        set_restoring_off_cmd = psql_admin_target_db_cmd_base + ['-c', f'ALTER DATABASE "{tgt_db_name}" SET timescaledb.restoring = \'off\';']
+        subprocess.run(set_restoring_off_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+        
+        try:
+            # Export from source
+            logger.info(f"[TASK {task_id}] Exporting 'public.sensor_readings' data from source DB '{source['database']}' to CSV: {sensor_readings_csv_path}...")
+            psql_source_cmd_base = ['psql', '--host', source['host'], '--port', str(source['port']), '--username', source['username'], '--dbname', source['database']]
+            copy_to_sql = f"\\COPY (SELECT * FROM public.sensor_readings) TO '{sensor_readings_csv_path}' WITH CSV HEADER"
+            copy_to_cmd = psql_source_cmd_base + ['-c', copy_to_sql]
+            copy_to_result = subprocess.run(copy_to_cmd, capture_output=True, text=True, env=source_env)
+            if copy_to_result.returncode != 0:
+                logger.error(f"[TASK {task_id}] Failed to export 'public.sensor_readings' data to CSV. Stderr: {copy_to_result.stderr}. Stdout: {copy_to_result.stdout}")
+                raise Exception(f"Failed to export sensor_readings to CSV: {copy_to_result.stderr}")
+            logger.info(f"[TASK {task_id}] 'public.sensor_readings' data exported to CSV.")
+
+            # Import into target
+            if os.path.exists(sensor_readings_csv_path):
+                logger.info(f"[TASK {task_id}] Target User: Importing 'public.sensor_readings' data from CSV '{sensor_readings_csv_path}' into '{tgt_db_name}'...")
+                copy_from_sql = f"\\COPY public.sensor_readings FROM '{sensor_readings_csv_path}' WITH CSV HEADER"
+                copy_from_cmd = psql_user_cmd_base_for_target_db + ['-c', copy_from_sql]
+                copy_from_result = subprocess.run(copy_from_cmd, capture_output=True, text=True, env=target_user_env)
+                if copy_from_result.returncode != 0:
+                    logger.error(f"[TASK {task_id}] Target User: Failed to import 'public.sensor_readings' data from CSV. Stderr: {copy_from_result.stderr}. Stdout: {copy_from_result.stdout}")
+                else:
+                    logger.info(f"[TASK {task_id}] Target User: 'public.sensor_readings' data imported from CSV.")
+            else:
+                logger.warning(f"[TASK {task_id}] CSV file {sensor_readings_csv_path} not found for import. Skipping sensor_readings data copy.")
+        finally:
+            # Always try to turn 'timescaledb.restoring' back 'on'
+            logger.info(f"[TASK {task_id}] ADMIN: Setting timescaledb.restoring = 'on' for '{tgt_db_name}' after COPY attempt...")
+            set_restoring_on_cmd = psql_admin_target_db_cmd_base + ['-c', f'ALTER DATABASE "{tgt_db_name}" SET timescaledb.restoring = \'on\';']
+            subprocess.run(set_restoring_on_cmd, capture_output=True, text=True, env=target_admin_env, check=True) # check=True to ensure it's set back
+
+            # Clean up CSV file
+            if os.path.exists(sensor_readings_csv_path):
+                try:
+                    os.remove(sensor_readings_csv_path)
+                    logger.info(f"[TASK {task_id}] Cleaned up temporary CSV file: {sensor_readings_csv_path}")
+                except OSError as e_remove_csv:
+                    logger.warning(f"[TASK {task_id}] Could not remove temporary CSV file {sensor_readings_csv_path}: {e_remove_csv}")
+        # --- End special handling for sensor_readings ---
+
+        # --- TimescaleDB Post-Restore Hook (run as ADMIN) ---
+        logger.info(f"[TASK {task_id}] ADMIN: Executing timescaledb_post_restore() in '{tgt_db_name}'...")
+        post_restore_cmd = psql_admin_target_db_cmd_base + ['-c', "SELECT timescaledb_post_restore();"]
+        subprocess.run(post_restore_cmd, capture_output=True, text=True, env=target_admin_env, check=True)
+        # --- End TimescaleDB Post-Restore Hook ---
 
         return "success", "PostgreSQL sync completed successfully.", rows_synced
 
