@@ -524,8 +524,13 @@ export default function Dashboard() {
     // Set up polling to update system info every 30 seconds
     const intervalId = setInterval(async () => {
       try {
-        const apiBaseUrl = getApiBaseUrl();
-        const sysInfoResponse = await fetch(`${apiBaseUrl}/system/info`);
+        // const apiBaseUrl = getApiBaseUrl(); // This was 'http://hostname:3001/api/databases'
+        // const sysInfoResponse = await fetch(`${apiBaseUrl}/system/info`); // This resulted in /api/databases/system/info
+
+        // Corrected URL construction:
+        const hostname = window.location.hostname;
+        const sysInfoResponse = await fetch(`http://${hostname}:3001/api/system/info`); // Targets http://hostname:3001/api/system/info
+
         const sysInfoData = await sysInfoResponse.json();
         // Check if response indicates an error from the backend service
         if (sysInfoResponse.ok) {

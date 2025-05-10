@@ -10,6 +10,8 @@ import logging
 import yaml
 import atexit
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime, timezone
 import subprocess
 import sys
@@ -132,26 +134,83 @@ class DatabaseSync:
         except Exception as e: logger.error(f"Error fetching tasks: {e}", exc_info=True)
         return tasks
 
-    def _reload_config(self):
-        logger.info("Reloading sync jobs from database.")
-        current_job_ids = {job.id for job in scheduler.get_jobs() if job.id.startswith('dbtask_')}
-        tasks_from_db = self._fetch_sync_tasks_from_db()
-        db_task_ids_to_schedule = {f"dbtask_{task['task_id']}" for task in tasks_from_db}
+    def _fetch_single_task_from_db(self, task_id_to_fetch: int) -> Optional[Dict]:
+        task = None
+        try:
+            with self._get_db_connection() as conn:
+                cursor = conn.cursor()
+                query = """
+                SELECT st.id as task_id, st.name as task_name, st.schedule, st.tables,
+                       s_conn.id as source_id, s_conn.name as source_name, s_conn.engine as source_engine, 
+                       s_conn.host as source_host, s_conn.port as source_port, s_conn.database as source_database, 
+                       s_conn.username as source_username, s_conn.encrypted_password as source_encrypted_password, s_conn.ssl_enabled as source_ssl_enabled,
+                       t_conn.id as target_id, t_conn.name as target_name, t_conn.engine as target_engine, 
+                       t_conn.host as target_host, t_conn.port as target_port, t_conn.database as target_database, 
+                       t_conn.username as target_username, t_conn.encrypted_password as target_encrypted_password, t_conn.ssl_enabled as target_ssl_enabled
+                FROM sync_tasks st
+                JOIN database_connections s_conn ON st.source_connection_id = s_conn.id
+                JOIN database_connections t_conn ON st.target_connection_id = t_conn.id
+                WHERE st.id = ? AND st.enabled = 1; 
+                """
+                cursor.execute(query, (task_id_to_fetch,))
+                row = cursor.fetchone()
+                if row:
+                    task = dict(row)
+                    logger.info(f"Fetched details for task ID {task_id_to_fetch} for wrapper.")
+                else:
+                    logger.warning(f"Task ID {task_id_to_fetch} not found or not enabled in DB during fetch for wrapper.")
+        except Exception as e:
+            logger.error(f"Error fetching single task ID {task_id_to_fetch}: {e}", exc_info=True)
+        return task
 
-        # Remove jobs that are no longer in the DB or are disabled/set to never
-        for job_id in current_job_ids - db_task_ids_to_schedule:
-            try: scheduler.remove_job(job_id); logger.info(f"Removed stale job: {job_id}")
-            except Exception as e: logger.warning(f"Error removing job {job_id}: {e}")
+    def _perform_database_sync_wrapper(self, task_id: int):
+        logger.info(f"[WRAPPER - TASK {task_id}] Execution triggered. Fetching latest task details.")
+        task_config = self._fetch_single_task_from_db(task_id)
+
+        if not task_config:
+            logger.warning(f"[WRAPPER - TASK {task_id}] Task config not found or task disabled. Aborting sync run.")
+            return
         
-        # Add/Update jobs from DB
-        self._schedule_tasks(tasks_from_db, overwrite=True)
-        logger.info("Sync jobs reload complete.")
+        # Check if task is still meant to be scheduled (e.g. schedule not 'never')
+        if task_config.get("schedule", "never").lower() == 'never':
+            logger.info(f"[WRAPPER - TASK {task_id}] Task schedule is 'never'. Aborting planned execution.")
+            # _reload_config should remove this job if schedule became 'never'
+            return
 
-    def _schedule_periodic_reload(self):
-        job_id = 'reload_db_jobs'
-        if scheduler.get_job(job_id): scheduler.remove_job(job_id) 
-        scheduler.add_job(self._reload_config, 'interval', minutes=5, id=job_id) # Check every 5 mins
-        logger.info(f"Scheduled periodic reload of sync jobs every 5 minutes.")
+        try:
+            sync_payload = {
+                'taskId': task_config['task_id'],
+                'source': { 
+                    'id': task_config['source_id'], 'name': task_config['source_name'], 'engine': task_config['source_engine'], 
+                    'host': task_config['source_host'], 'port': task_config['source_port'], 'database': task_config['source_database'], 
+                    'username': task_config['source_username'], 'password': task_config['source_encrypted_password'], 
+                    'ssl_enabled': task_config['source_ssl_enabled']
+                },
+                'target': { 
+                    'id': task_config['target_id'], 'name': task_config['target_name'], 'engine': task_config['target_engine'], 
+                    'host': task_config['target_host'], 'port': task_config['target_port'], 'database': task_config['target_database'], 
+                    'username': task_config['target_username'], 'password': task_config['target_encrypted_password'], 
+                    'ssl_enabled': task_config['target_ssl_enabled']
+                },
+                'tables': json.loads(task_config['tables']) if task_config['tables'] else None
+            }
+            logger.info(f"[WRAPPER - TASK {task_id}] Payload constructed. Calling perform_database_sync.")
+            perform_database_sync(sync_payload) # Call the original global sync logic
+        except Exception as e_payload:
+            logger.error(f"[WRAPPER - TASK {task_id}] Failed to construct payload or call perform_database_sync: {e_payload}", exc_info=True)
+            start_time = datetime.now(timezone.utc)
+            update_sync_log(task_id, start_time, datetime.now(timezone.utc), "error", f"Wrapper error: {e_payload}", 0)
+
+    def _create_trigger_from_schedule(self, schedule_frequency: str, task_id: int) -> Optional[Union[IntervalTrigger, CronTrigger]]:
+        if schedule_frequency == "hourly":
+            return IntervalTrigger(hours=1)
+        elif schedule_frequency == "daily":
+            return CronTrigger(hour=2) # Default daily at 2 AM
+        elif schedule_frequency == "weekly":
+            return CronTrigger(day_of_week='mon', hour=2) # Default weekly Mon at 2 AM
+        else:
+            logger.warning(f"Cannot create trigger for unsupported schedule: {schedule_frequency} for task {task_id}")
+            return None
 
     def _schedule_tasks(self, tasks_to_schedule: List[Dict], overwrite: bool = False):
         for task_config in tasks_to_schedule:
@@ -161,34 +220,112 @@ class DatabaseSync:
                 schedule_frequency = task_config.get("schedule", "never").lower()
                 job_id = f"dbtask_{task_id}"
 
-                if scheduler.get_job(job_id) and not overwrite:
-                    logger.info(f"Job {job_id} already exists and overwrite is false. Skipping.")
+                if schedule_frequency == 'never':
+                    # If task is set to 'never', ensure it's removed if it exists
+                    existing_job = scheduler.get_job(job_id)
+                    if existing_job:
+                        logger.info(f"Task {task_name} ({job_id}) schedule is 'never'. Removing existing job.")
+                        scheduler.remove_job(job_id)
                     continue
-                if scheduler.get_job(job_id) and overwrite:
-                    scheduler.remove_job(job_id)
-                    logger.info(f"Overwriting existing job: {job_id}")
 
-                if schedule_frequency == 'never': continue
+                new_trigger_obj = self._create_trigger_from_schedule(schedule_frequency, task_id)
+                if not new_trigger_obj:
+                    continue # Unsupported schedule, already logged
 
-                sync_payload = { # Construct payload as before
-                    'taskId': task_id,
-                    'source': { 'id': task_config['source_id'], 'name': task_config['source_name'], 'engine': task_config['source_engine'], 'host': task_config['source_host'], 'port': task_config['source_port'], 'database': task_config['source_database'], 'username': task_config['source_username'], 'password': task_config['source_encrypted_password'], 'ssl_enabled': task_config['source_ssl_enabled']},
-                    'target': { 'id': task_config['target_id'], 'name': task_config['target_name'], 'engine': task_config['target_engine'], 'host': task_config['target_host'], 'port': task_config['target_port'], 'database': task_config['target_database'], 'username': task_config['target_username'], 'password': task_config['target_encrypted_password'], 'ssl_enabled': task_config['target_ssl_enabled']},
-                    'tables': json.loads(task_config['tables']) if task_config['tables'] else None }
+                # Wrapper function for scheduler, captures self and task_id
+                # The actual sync execution (perform_database_sync) is called within the wrapper
+                job_func_for_scheduler = lambda current_task_id=task_id: threading.Thread(target=self._perform_database_sync_wrapper, args=(current_task_id,)).start()
                 
-                job_function = lambda p=sync_payload: threading.Thread(target=perform_database_sync, args=(p,)).start()
+                existing_job = scheduler.get_job(job_id)
 
-                if schedule_frequency == "hourly": scheduler.add_job(job_function, 'interval', hours=1, id=job_id, replace_existing=True)
-                elif schedule_frequency == "daily": scheduler.add_job(job_function, 'cron', hour=2, id=job_id, replace_existing=True)
-                elif schedule_frequency == "weekly": scheduler.add_job(job_function, 'cron', day_of_week='mon', hour=2, id=job_id, replace_existing=True)
-                else: logger.warning(f"Unsupported schedule {schedule_frequency} for {task_name}"); continue
-                logger.info(f"Scheduled: {task_name} ({job_id}) for {schedule_frequency}.")
-            except Exception as e: logger.error(f"Error scheduling task_id {task_config.get('task_id')}: {e}", exc_info=True)
+                if existing_job:
+                    if overwrite: # This branch is primarily for _reload_config
+                        logger.info(f"Job {job_id} ({task_name}) exists. Overwrite=True. Checking for trigger changes.")
+                        needs_reschedule = False
+                        current_job_trigger = existing_job.trigger
+
+                        # Compare new_trigger_obj with current_job_trigger more carefully
+                        if type(current_job_trigger) is not type(new_trigger_obj):
+                            needs_reschedule = True
+                            logger.info(f"Job {job_id} trigger TYPE changed. Old: {type(current_job_trigger)}, New: {type(new_trigger_obj)}")
+                        elif isinstance(new_trigger_obj, IntervalTrigger):
+                            # For IntervalTrigger, only compare the interval duration itself.
+                            # We assume other fields like start_date, end_date, timezone, jitter are not being managed by this simple schedule string.
+                            if current_job_trigger.interval != new_trigger_obj.interval:
+                                needs_reschedule = True
+                                logger.info(f"Job {job_id} IntervalTrigger DURATION changed. Old: {current_job_trigger.interval}, New: {new_trigger_obj.interval}")
+                        elif isinstance(new_trigger_obj, CronTrigger):
+                            # For CronTrigger, the default __eq__ compares all relevant fields (day_of_week, hour, minute, etc.)
+                            if current_job_trigger != new_trigger_obj: # This relies on CronTrigger.__eq__ being thorough
+                                needs_reschedule = True
+                                logger.info(f"Job {job_id} CronTrigger fields changed. Old: {current_job_trigger}, New: {new_trigger_obj}")
+                        # Add more elif for other trigger types if ever supported
+                        
+                        if needs_reschedule:
+                            logger.info(f"Job {job_id} trigger requires update. Rescheduling. Old: {current_job_trigger}, New: {new_trigger_obj}")
+                            try:
+                                scheduler.reschedule_job(job_id, trigger=new_trigger_obj)
+                                # Note: func is not changed here, wrapper handles payload changes
+                                logger.info(f"Job {job_id} rescheduled. Next run: {scheduler.get_job(job_id).next_run_time if scheduler.get_job(job_id) else 'N/A'}")
+                            except Exception as e_reschedule:
+                                logger.error(f"Error rescheduling job {job_id}: {e_reschedule}. Attempting replace.", exc_info=True)
+                                try: # Fallback to replace if reschedule fails (e.g., job disappeared)
+                                    scheduler.add_job(job_func_for_scheduler, trigger=new_trigger_obj, id=job_id, replace_existing=True)
+                                    logger.info(f"Job {job_id} replaced after reschedule error. Next run: {scheduler.get_job(job_id).next_run_time if scheduler.get_job(job_id) else 'N/A'}")
+                                except Exception as e_replace_fallback:
+                                    logger.error(f"Error replacing job {job_id} after reschedule error: {e_replace_fallback}", exc_info=True)
+                        else:
+                            logger.info(f"Job {job_id} trigger is effectively unchanged ({current_job_trigger}). No reschedule needed. Payload changes handled by wrapper at runtime. Next run: {existing_job.next_run_time}")
+                            # Ensure the function is up-to-date if it somehow changed, though with lambda capturing task_id, it should be stable.
+                            # This modify_job might not be strictly necessary if func definition is stable.
+                            # scheduler.modify_job(job_id, func=job_func_for_scheduler)
+                    else: # Job exists but overwrite is False (initial setup_jobs call)
+                        logger.info(f"Job {job_id} ({task_name}) already exists during initial setup (overwrite=false). Skipping.")
+                else: # Job does not exist, add it
+                    logger.info(f"Job {job_id} ({task_name}) does not exist. Adding new job for schedule: {schedule_frequency}")
+                    try:
+                        scheduler.add_job(job_func_for_scheduler, trigger=new_trigger_obj, id=job_id, replace_existing=False)
+                        # Simpler log for newly added job, as next_run_time might not be immediately available on the direct return or on the object from add_job itself before scheduler processes it.
+                        logger.info(f"Job {job_id} ({task_name}) submitted to scheduler with trigger: {new_trigger_obj}. Next run time will be determined by scheduler.")
+                    except Exception as e_add_new:
+                        logger.error(f"Error adding new job {job_id}: {e_add_new}", exc_info=True)
+
+            except Exception as e:
+                logger.error(f"Error in _schedule_tasks for task_id {task_config.get('task_id')}: {e}", exc_info=True)
+
+    def _reload_config(self):
+        logger.info("Reloading sync jobs from database.")
+        current_job_ids = {job.id for job in scheduler.get_jobs() if job.id.startswith('dbtask_')}
+        tasks_from_db = self._fetch_sync_tasks_from_db()
+        db_task_ids_to_schedule = {f"dbtask_{task['task_id']}" for task in tasks_from_db}
+
+        # Remove jobs that are no longer in the DB or are disabled/set to never
+        for job_id_to_remove in current_job_ids - db_task_ids_to_schedule:
+            try: 
+                scheduler.remove_job(job_id_to_remove)
+                logger.info(f"Removed stale/disabled job from scheduler: {job_id_to_remove}")
+            except Exception as e: 
+                logger.warning(f"Error removing job {job_id_to_remove} during reload: {e}")
+        
+        # Add/Update jobs from DB. Overwrite=True will now use reschedule_job if trigger changed.
+        self._schedule_tasks(tasks_from_db, overwrite=True)
+        logger.info("Sync jobs reload complete.")
+
+    def _schedule_periodic_reload(self):
+        job_id = 'reload_db_jobs'
+        # Remove existing job first to ensure only one instance if this method is called multiple times (e.g. during init issues)
+        if scheduler.get_job(job_id): 
+            try: scheduler.remove_job(job_id)
+            except Exception: pass # Ignore if already gone
+        scheduler.add_job(self._reload_config, 'interval', minutes=5, id=job_id)
+        logger.info(f"Scheduled periodic reload of sync jobs every 5 minutes.")
 
     def setup_jobs(self):
         logger.info("Initial setup of scheduled jobs from database...")
         db_tasks = self._fetch_sync_tasks_from_db()
-        if not db_tasks: logger.info("No initial tasks to schedule."); return
+        if not db_tasks: 
+            logger.info("No initial tasks to schedule from DB.")
+            return
         self._schedule_tasks(db_tasks, overwrite=False)
 
 # --- DB Log/Update Functions (Global, as they use their own connections) ---
@@ -325,6 +462,58 @@ def get_performance_history_endpoint():
     # ... (this endpoint remains the same) ...
     metric = request.args.get('metric'); limit = request.args.get('limit',default=MAX_HISTORY,type=int)
     return jsonify({'success':True,'metric':metric,'history':metrics_history[metric][-limit:]}) if metric in metrics_history else (jsonify({'success':False,'message':f'Invalid metric. Avail: {list(metrics_history.keys())}'}),400)
+
+@app.route('/api/system/info', methods=['GET'])
+def get_system_info_endpoint():
+    try:
+        cpu_usage = psutil.cpu_percent(interval=0.1) # Percentage
+        
+        memory_info = psutil.virtual_memory()
+        memory_usage_percent = memory_info.percent
+        memory_used_gb = round(memory_info.used / (1024**3), 1)
+        memory_total_gb = round(memory_info.total / (1024**3), 1)
+        
+        disk_info = psutil.disk_usage('/') # For root disk. Change path if needed.
+        disk_usage_percent = disk_info.percent
+        disk_used_gb = round(disk_info.used / (1024**3), 1)
+        disk_total_gb = round(disk_info.total / (1024**3), 1)
+        
+        swap_info = psutil.swap_memory()
+        swap_usage_percent = swap_info.percent
+        swap_used_gb = round(swap_info.used / (1024**3), 1)
+        swap_total_gb = round(swap_info.total / (1024**3), 1)
+        
+        boot_time_timestamp = psutil.boot_time()
+        current_time_timestamp = time.time()
+        uptime_seconds = current_time_timestamp - boot_time_timestamp
+        
+        days = int(uptime_seconds // (24 * 3600))
+        hours = int((uptime_seconds % (24 * 3600)) // 3600)
+        minutes = int((uptime_seconds % 3600) // 60)
+        uptime_str = f"{days} days, {hours} hours, {minutes} minutes"
+        
+        current_time_iso = datetime.now(timezone.utc).isoformat()
+
+        system_info = {
+            "cpuUsage": round(cpu_usage, 1),
+            "memoryUsagePercent": round(memory_usage_percent, 1),
+            "memoryUsed": f"{memory_used_gb} GB",
+            "memoryTotal": f"{memory_total_gb} GB",
+            "diskUsagePercent": round(disk_usage_percent, 1),
+            "diskUsed": f"{disk_used_gb} GB",
+            "diskTotal": f"{disk_total_gb} GB",
+            "swapUsagePercent": round(swap_usage_percent, 1),
+            "swapUsed": f"{swap_used_gb} GB",
+            "swapTotal": f"{swap_total_gb} GB",
+            "uptime": uptime_str,
+            "rawUptimeSeconds": int(uptime_seconds), # Frontend also has a rawUptimeSeconds
+            "currentTime": current_time_iso
+        }
+        return jsonify(system_info), 200
+        
+    except Exception as e:
+        logger.error(f"Error fetching system info: {e}", exc_info=True)
+        return jsonify({"error": "Failed to fetch system information", "details": str(e)}), 500
 
 # --- Application Initialization for Gunicorn ---
 if not scheduler.get_job('metric_collector'): # Ensure job isn't added multiple times by Gunicorn workers

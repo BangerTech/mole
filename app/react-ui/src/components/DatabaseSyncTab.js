@@ -148,7 +148,17 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
       console.log("Updating settings with payload:", payload);
       const result = await DatabaseService.updateSyncSettings(databaseId, payload);
       // Assuming result.message contains success message
-      setSyncSuccess(result.message || 'Synchronization settings saved successfully.'); 
+      // setSyncSuccess(result.message || 'Synchronization settings saved successfully.'); 
+
+      const dbName = databaseInfo?.name || 'this database';
+      let scheduleText = '';
+      if (payload.enabled && payload.schedule && payload.schedule !== 'never') {
+        scheduleText = ` and scheduled ${payload.schedule}`;
+      }
+      const enabledText = payload.enabled ? 'ENABLED' : 'DISABLED';
+      const backendMessage = result.message ? ` ${result.message}` : ''; // Add space
+
+      setSyncSuccess(`Settings for '${dbName}' saved. Sync is ${enabledText}${scheduleText}.${backendMessage}`);
       
       // Handle new target creation response
       if (targetId === CREATE_NEW_TARGET_VALUE && result.newTargetId) {
@@ -168,12 +178,30 @@ const DatabaseSyncTab = ({ databaseId, databaseInfo }) => {
           } finally {
             setIsLoadingTargets(false);
           }
-          setIsSyncEnabled(enabled); // Reflect the 'enabled' state passed during the creation
+          setIsSyncEnabled(payload.enabled); // Reflect the 'enabled' state passed during the creation
       } else if (targetId !== CREATE_NEW_TARGET_VALUE) {
           // If we were just updating settings for an existing target, ensure UI reflects this
-          setIsSyncEnabled(enabled);
-          setSyncFrequency(schedule);
-          setSelectedTargetId(targetId || '');
+          // These are already being set by the direct handlers (handleEnableChange, etc.)
+          // but explicitly setting from payload ensures consistency if backend modified something.
+          setIsSyncEnabled(payload.enabled);
+          setSyncFrequency(payload.schedule);
+          setSelectedTargetId(payload.target_connection_id || '');
+      }
+
+      // Refresh sync status details immediately after any successful update
+      try {
+        console.log("Refreshing sync status after settings update for", databaseId);
+        const fetchedSettings = await DatabaseService.getSyncSettings(databaseId);
+        setIsSyncEnabled(fetchedSettings.enabled || false);
+        setSyncFrequency(fetchedSettings.schedule || 'never');
+        setLastSyncTime(fetchedSettings.last_sync ? new Date(fetchedSettings.last_sync).toLocaleString() : 'Never');
+        setSelectedTargetId(fetchedSettings.target_connection_id || '');
+        setLastLogStatus(fetchedSettings.last_log_status);
+        setLastLogMessage(fetchedSettings.last_log_message);
+        setLastLogTimestamp(fetchedSettings.last_log_timestamp);
+      } catch (refreshError) {
+        console.warn("Could not refresh sync status immediately after update:", refreshError);
+        // Non-critical, the periodic poll or next manual refresh will catch up
       }
 
     } catch (error) {
