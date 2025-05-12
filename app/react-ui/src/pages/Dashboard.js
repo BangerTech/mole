@@ -36,7 +36,10 @@ import {
   Skeleton,
   ListItemIcon,
   Avatar,
-  ListItemSecondaryAction
+  ListItemSecondaryAction,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import StorageIcon from '@mui/icons-material/Storage';
@@ -54,6 +57,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import SendIcon from '@mui/icons-material/Send';
 import BarChartIcon from '@mui/icons-material/BarChart';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useNavigate } from 'react-router-dom';
 import AIService from '../services/AIService';
 import DatabaseService from '../services/DatabaseService';
@@ -95,10 +99,14 @@ ChartJS.register(
 );
 
 // Styled components
-const RootStyle = styled('div')({
-  height: '100%',
-  padding: '24px'
-});
+const RootStyle = styled('div')(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: '100vh', // Mindestens die volle Viewport-Höhe
+  padding: theme.spacing(3), // theme.spacing(3) anstatt '24px' für Konsistenz
+  boxSizing: 'border-box',
+  // overflowY: 'auto', // Vorerst auskommentiert, da dies oft globaler gehandhabt wird
+}));
 
 const StatsCard = styled(Card)(({ theme }) => ({
   height: '100%',
@@ -1541,61 +1549,111 @@ export default function Dashboard() {
               />
               
               {aiResponse && (
-                <Card variant="outlined" sx={{ mb: 2 }}>
+                <Card variant="outlined" sx={{ mb: 2, overflow: 'visible' }}> {/* Allow accordion to expand */} 
                   <CardContent>
-                    <Typography variant="subtitle2" color="primary" gutterBottom>
-                      Response using {aiProvider || 'AI'}:
-                    </Typography>
-                    
-                    <Typography variant="body1" gutterBottom>
-                      {aiResponse.formatted_results}
-                    </Typography>
-                    
-                    {aiResponse.sql && (
-                      <>
-                        <Divider sx={{ my: 2 }} />
-                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                          Generated SQL:
+                    {/* Accordion for Formatted Results (Provider Response & SQL) */}
+                    <Accordion sx={{ boxShadow: 'none', '&:before': { display: 'none' }, mb:1 }}>
+                      <AccordionSummary 
+                        expandIcon={<ExpandMoreIcon />} 
+                        aria-controls="panel-ai-details-content" 
+                        id="panel-ai-details-header"
+                        sx={{ 
+                          minHeight: '48px', 
+                          '&.Mui-expanded': { minHeight: '48px' },
+                          backgroundColor: 'action.hover'
+                        }}
+                      >
+                        <Typography variant="subtitle2" color="primary">
+                          AI Interaction Details (Provider: {aiProvider || 'AI'})
                         </Typography>
-                        <Box sx={{ 
-                          p: 1, 
-                          bgcolor: 'background.paper', 
-                          borderRadius: 1,
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          maxHeight: '100px',
-                          overflow: 'auto'
-                        }}>
-                          <Typography variant="body2" component="pre" sx={{ margin: 0 }}>
-                            {aiResponse.sql}
-                          </Typography>
-                        </Box>
-                      </>
-                    )}
-                    
-                    {aiResponse.results && aiResponse.results.length > 0 && (
-                      <>
-                        <Divider sx={{ my: 2 }} />
-                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                          Result Data:
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                        <Typography variant="body1" gutterBottom component="pre" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                          {aiResponse.formatted_results?.replace(aiResponse.sql, '').replace('Execution Result:\n[]', 'Execution Result: No data returned or non-SELECT query.').trim() || 'No detailed response from provider.'}
                         </Typography>
-                        <TableContainer component={Paper} sx={{ maxHeight: '200px' }}>
+                        {aiResponse.sql && (
+                          <>
+                            <Typography variant="subtitle2" color="textSecondary" gutterBottom sx={{mt:1}}>
+                              Generated SQL:
+                            </Typography>
+                            <Box sx={{ 
+                              p: 1, 
+                              bgcolor: 'background.paper', 
+                              borderRadius: 1,
+                              border: '1px solid',
+                              borderColor: 'divider',
+                              maxHeight: '150px',
+                              overflow: 'auto'
+                            }}>
+                              <Typography variant="body2" component="pre" sx={{ margin: 0 }}>
+                                {aiResponse.sql}
+                              </Typography>
+                            </Box>
+                          </>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
+                    
+                    {/* Result Data Table - Enhanced Styling */}
+                    {aiResponse.success && aiResponse.results && aiResponse.results.length > 0 && (
+                      <>
+                        <Typography variant="subtitle1" color="text.primary" gutterBottom sx={{ mt: 2, fontWeight: 'bold' }}>
+                          Query Result Data:
+                        </Typography>
+                        <TableContainer 
+                          component={Paper} 
+                          sx={{ 
+                            maxHeight: '300px', 
+                            border: '2px solid', 
+                            borderColor: 'primary.main',
+                            borderRadius: '8px', 
+                            boxShadow: 3 
+                          }}
+                        >
                           <Table size="small" stickyHeader>
                             <TableHead>
                               <TableRow>
-                                {Object.keys(aiResponse.results[0]).map(key => (
-                                  <TableCell key={key}>{key}</TableCell>
-                                ))}
+                                {aiResponse.columns && aiResponse.columns.length > 0 
+                                  ? aiResponse.columns.map(col => (
+                                      <TableCell 
+                                        key={col.name} 
+                                        sx={theme => ({ 
+                                          fontWeight: 'bold', 
+                                          backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
+                                          color: theme.palette.text.primary
+                                        })}
+                                      >
+                                        {col.name}
+                                      </TableCell>
+                                    ))
+                                  : aiResponse.results && aiResponse.results.length > 0 && Object.keys(aiResponse.results[0]).map(key => (
+                                      <TableCell 
+                                        key={key} 
+                                        sx={theme => ({ 
+                                          fontWeight: 'bold', 
+                                          backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
+                                          color: theme.palette.text.primary
+                                        })}
+                                      >
+                                        {key}
+                                      </TableCell>
+                                  ))}
                               </TableRow>
                             </TableHead>
                             <TableBody>
                               {aiResponse.results.map((row, i) => (
-                                <TableRow key={i}>
-                                  {Object.values(row).map((value, j) => (
-                                    <TableCell key={j}>
-                                      {typeof value === 'object' ? JSON.stringify(value) : value}
-                                    </TableCell>
-                                  ))}
+                                <TableRow key={i} sx={{ '&:hover': { backgroundColor: 'action.hover' } }}>
+                                  {aiResponse.columns && aiResponse.columns.length > 0
+                                    ? aiResponse.columns.map(col => (
+                                      <TableCell key={`${i}-${col.name}`}>
+                                        {typeof row[col.name] === 'object' ? JSON.stringify(row[col.name]) : String(row[col.name])}
+                                      </TableCell>
+                                    ))
+                                    : Object.values(row).map((value, j) => (
+                                      <TableCell key={`${i}-${j}`}>
+                                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                      </TableCell>
+                                    ))}
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -1603,6 +1661,13 @@ export default function Dashboard() {
                         </TableContainer>
                       </>
                     )}
+                    {/* Message for no results or failed execution */}
+                    {(!aiResponse.success || (aiResponse.results && aiResponse.results.length === 0)) && aiResponse.sql && (
+                      <Alert severity={aiResponse.success ? "info" : "warning"} sx={{ mt: 2 }}>
+                        {aiResponse.db_message || (aiResponse.success ? "Query executed successfully, but returned no data." : "Query execution failed or returned no data.")}
+                      </Alert>
+                    )}
+
                   </CardContent>
                 </Card>
               )}

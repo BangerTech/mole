@@ -13,6 +13,7 @@ const mysql = require('mysql2/promise');
 const { Pool } = require('pg');
 const fs = require('fs'); // Needed for SQLite check
 const { formatBytes } = require('../utils/formatUtils'); // Import from backend utils
+const path = require('path'); // Import path module for sample query handling
 
 // Flag to determine which implementation to use
 // This can be switched in the future when fully migrated to Sequelize
@@ -106,8 +107,19 @@ async function _fetchSchemaDetails(connectionConfig) {
             const pool = new Pool({ host: host || 'localhost', port: port || 5432, database, user: username, password: plainPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined, connectionTimeoutMillis: 10000 });
             const client = await pool.connect();
             try {
-                const tablesQuery = `SELECT table_name AS name, table_type AS type, (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = t.table_name) AS columns FROM information_schema.tables t WHERE table_schema = 'public' AND table_type IN ('BASE TABLE', 'VIEW') ORDER BY table_name`;
+                const tablesQuery = `
+                  SELECT 
+                    t.table_name AS name, 
+                    t.table_type AS type,
+                    (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = t.table_name) AS columns,
+                    pc.reltuples AS row_estimate
+                  FROM information_schema.tables t
+                  LEFT JOIN pg_class pc ON pc.relname = t.table_name
+                  LEFT JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+                  WHERE t.table_schema = 'public' AND t.table_type IN ('BASE TABLE', 'VIEW') AND pn.nspname = 'public'
+                  ORDER BY t.table_name`;
                 const tablesResult = await client.query(tablesQuery);
+                console.log('[DBService_FetchSchemaPG] Raw tablesResult.rows:', JSON.stringify(tablesResult.rows.slice(0, 2), null, 2)); // Log first 2 raw rows
                 
                 const sizeQuery = `SELECT c.relname AS name, pg_size_pretty(pg_total_relation_size(c.oid)) AS size FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v') ORDER BY c.relname`;
                 const sizeResult = await client.query(sizeQuery);
@@ -127,14 +139,18 @@ async function _fetchSchemaDetails(connectionConfig) {
                     tableColumns[column.table_name].push({ name: column.name, type: column.type, nullable: column.nullable === 'YES', default: column.default_value, key: column.key, extra: '' });
                 });
 
-                tables = tablesResult.rows.map(table => ({
-                    name: table.name,
-                    type: table.type === 'BASE TABLE' ? 'TABLE' : 'VIEW',
-                    rows: 0, // Row count removed earlier
-                    size: sizeMap[table.name]?.size || '0 KB',
-                    columns: table.columns || 0,
-                    lastUpdated: new Date().toISOString().split('T')[0]
-                }));
+                tables = tablesResult.rows.map(table => {
+                    // Log individual table estimate before rounding
+                    console.log(`[DBService_FetchSchemaPG] Table: ${table.name}, Raw row_estimate: ${table.row_estimate}, Type: ${typeof table.row_estimate}`);
+                    return {
+                        name: table.name,
+                        type: table.type === 'BASE TABLE' ? 'TABLE' : 'VIEW',
+                        rows: Math.round(table.row_estimate || 0), // Verwende row_estimate
+                        size: sizeMap[table.name]?.size || '0 KB',
+                        columns: parseInt(table.columns, 10) || 0, // Stelle sicher, dass columns eine Zahl ist
+                        lastUpdated: new Date().toISOString().split('T')[0]
+                    };
+                });
                 totalSizeFormatted = formatBytes(totalSizeRaw);
                 success = true;
             } catch(pgError) {
@@ -821,6 +837,124 @@ const databaseService = {
       totalRollbacks,
       message
     };
+  },
+
+  /**
+   * Executes a SQL query against a specified database connection.
+   * @param {string|number} connectionId - The ID of the connection (or 'sample').
+   * @param {string} queryString - The SQL query to execute.
+   * @returns {Promise<Object>} An object { success, columns, rows, affectedRows, message, error? }.
+   */
+  async executeDbQuery(connectionId, queryString) {
+    if (!queryString) {
+      return { success: false, message: 'No query string provided', rows: [], columns: [] };
+    }
+
+    let connectionDetails;
+    try {
+      // For the sample database, we need a specific handling for query execution
+      if (connectionId === 'sample') {
+        // This requires a mechanism to query the actual sample SQLite database.
+        // Assuming SAMPLE_DB contains path or connection info for the actual sample DB.
+        // For now, let's assume we have a helper for sample DB or handle it directly.
+        const sampleDbPath = path.join(__dirname, '../data/mole.db'); // Path to the actual users.json or a sample SQLite DB
+        
+        // If users.json is used, we need to simulate SQL or use an in-memory SQLite with users.json data
+        // For simplicity, if the query is SELECT COUNT(*) FROM users, we use users.json
+        if (queryString.trim().toUpperCase() === 'SELECT COUNT(*) FROM USERS') {
+          try {
+            const usersJsonPath = path.join(__dirname, '../data/users.json');
+            if (fs.existsSync(usersJsonPath)) {
+              const usersData = JSON.parse(fs.readFileSync(usersJsonPath, 'utf8'));
+              return {
+                success: true,
+                columns: [{ name: 'COUNT(*)' }],
+                rows: [{ 'COUNT(*)': usersData.length }],
+                affectedRows: 0,
+                message: `Query executed successfully on sample data. ${usersData.length} rows returned.`
+              };
+            }
+          } catch (jsonError) {
+            console.error('Error reading or parsing users.json for sample query:', jsonError);
+            return { success: false, message: 'Error querying sample data (users.json)', error: jsonError.message, rows: [], columns: [] };
+          }
+        }
+        // For other queries on sample DB, return not implemented or specific error
+        return { 
+          success: false, 
+          message: `Query execution for sample database with query \'${queryString}\' is not fully implemented for this specific query. Only COUNT(*) FROM users is supported for users.json.`, 
+          rows: [], 
+          columns: [] 
+        };
+      }
+
+      connectionDetails = await this.getConnectionByIdFull(connectionId); // Use internal method to get full details
+      if (!connectionDetails) {
+        return { success: false, message: 'Database connection not found', rows: [], columns: [] };
+      }
+    } catch (error) {
+      console.error(`Error fetching connection details for query execution (ID: ${connectionId}):`, error);
+      return { success: false, message: `Error fetching connection details: ${error.message}`, error: error.message, rows: [], columns: [] };
+    }
+
+    const { engine, host, port, database, username, encrypted_password, password: plainPassword, ssl_enabled } = connectionDetails;
+    let decryptedPassword = '';
+    try {
+      decryptedPassword = encrypted_password ? decrypt(encrypted_password) : plainPassword;
+    } catch (e) {
+      return { success: false, message: 'Password decryption failed', error: e.message, rows: [], columns: [] };
+    }
+
+    try {
+      if (engine.toLowerCase() === 'mysql') {
+        const mysqlConnection = await mysql.createConnection({
+          host: host || 'localhost', port: port || 3306, database,
+          user: username, password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectTimeout: 10000
+        });
+        try {
+          const [rows, fields] = await mysqlConnection.query(queryString);
+          const columns = fields ? fields.map(field => ({ name: field.name, type: field.type })) : []; // Include type if available
+          return {
+            success: true, columns, rows,
+            affectedRows: rows.affectedRows !== undefined ? rows.affectedRows : (Array.isArray(rows) ? 0 : null), // MySQL specific for affected rows
+            message: `Query executed successfully. ${Array.isArray(rows) ? rows.length : 0} rows returned.`
+          };
+        } finally {
+          await mysqlConnection.end();
+        }
+      } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+        const pool = new Pool({
+          host: host || 'localhost', port: port || 5432, database,
+          user: username, password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectionTimeoutMillis: 10000
+        });
+        const client = await pool.connect();
+        try {
+          const result = await client.query(queryString);
+          const columns = result.fields ? result.fields.map(field => ({ name: field.name, dataTypeID: field.dataTypeID })) : []; // Include type if available
+          return {
+            success: true, columns, rows: result.rows,
+            affectedRows: result.rowCount !== null ? result.rowCount : 0,
+            message: `Query executed successfully.`
+          };
+        } finally {
+          client.release();
+          await pool.end();
+        }
+      } else {
+        return { success: false, message: `Unsupported database engine for query: ${engine}`, rows: [], columns: [] };
+      }
+    } catch (error) {
+      console.error(`Query execution error for connection ${connectionId} (${engine}):`, error);
+      return { 
+        success: false, 
+        message: `Failed to execute query: ${error.message}`,
+        error: error.message,
+        rows: [], 
+        columns: [] 
+      };
+    }
   },
 };
 

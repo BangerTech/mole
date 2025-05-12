@@ -418,140 +418,28 @@ exports.executeQuery = async (req, res) => {
   try {
     const connectionId = req.params.id;
     const { query } = req.body;
-    
-    if (!query) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'No query provided' 
-      });
-    }
-    
-    // Get connection details
-    const connection = await databaseService.getConnectionById(connectionId);
-    
-    if (!connection) {
-      return res.status(404).json({ message: 'Database connection not found' });
-    }
-    
-    const { engine, host, port, database, username, password, ssl_enabled } = connection;
-    
-    // Different connection logic based on database engine
-    if (engine.toLowerCase() === 'mysql') {
-      const mysqlConnection = await mysql.createConnection({
-        host: host || 'localhost',
-        port: port || 3306,
-        database,
-        user: username,
-        password: connection.encrypted_password ? decrypt(connection.encrypted_password) : password,
-        ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
-        connectTimeout: 10000 // 10 seconds timeout
-      });
-      
-      // Execute the query
-      const [rows, fields] = await mysqlConnection.query(query);
-      
-      // Extract column names from fields
-      const columns = fields ? fields.map(field => field.name) : [];
-      
-      await mysqlConnection.end();
-      
-      res.status(200).json({
-        success: true,
-        columns,
-        rows,
-        message: `Query executed successfully. ${rows.length} rows returned.`
-      });
-    } 
-    else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
-      const pool = new Pool({
-        host: host || 'localhost',
-        port: port || 5432,
-        database,
-        user: username,
-        password: connection.encrypted_password ? decrypt(connection.encrypted_password) : password,
-        ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
-        connectionTimeoutMillis: 10000 // 10 seconds timeout
-      });
-      
-      const client = await pool.connect();
-      
-      try {
-        // Execute the user's query directly
-        // IMPORTANT: Sanitize or parameterize user input if it were used here!
-        // But for simple query execution, we pass it directly
-        const result = await client.query(query); // Use the 'query' argument passed in
 
-        // Extract columns and rows from the result
-        const columns = result.fields ? result.fields.map(field => field.name) : [];
-        const rows = result.rows;
+    const result = await databaseService.executeDbQuery(connectionId, query);
 
-        // Determine affected rows for non-SELECT queries
-        const affectedRows = result.rowCount !== null ? result.rowCount : 0;
-
-        // ---> MOVED: Release client, end pool, and send response AFTER successful execution <---
-        client.release();
-        // Consider if pool should be ended per query or kept alive
-        // Ending the pool per query might be less efficient but simpler for now
-        await pool.end(); 
-
-        res.status(200).json({
-          success: true,
-          columns,
-          rows,
-          affectedRows, // Include affected rows count
-          message: `Query executed successfully.` // Simplified message
-        });
-        // ---> END MOVED <---
-
-      } catch (queryError) {
-        // ---> REMOVED redundant release/end from catch block as it's handled above now <---
-        // client.release(); 
-        // await pool.end(); 
-        // ---------------------------------------------------------------------------------
-        
-        // Detaillierte Fehlerinformationen für besseres Debugging
-        console.error('PostgreSQL query error:', queryError);
-        
-        // Prüfen, ob es ein Syntaxfehler ist, der mit Identifizierern zu tun haben könnte
-        if (queryError.message.includes('syntax error') && 
-            (queryError.message.includes('-') || queryError.message.includes('at or near'))) {
-          
-          // Hinweis für Frontend, wie Tabellen mit Bindestrichen zu verwenden sind
-          res.status(500).json({
-            success: false,
-            message: 'SQL syntax error. For tables with hyphens, try surrounding names with double quotes.',
-            error: queryError.message,
-            detail: 'Example: SELECT * FROM "table-name" instead of SELECT * FROM table-name'
-          });
-        } else {
-          // Allgemeiner Fehler
-          res.status(500).json({
-            success: false,
-            message: queryError.message || 'Failed to execute query',
-            error: queryError.message
-          });
-        }
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      // Determine status code based on the error message or type if available
+      let statusCode = 500;
+      if (result.message && result.message.toLowerCase().includes('not found')) {
+        statusCode = 404;
+      } else if (result.message && result.message.toLowerCase().includes('no query')) {
+        statusCode = 400;
       }
+      // Add more specific error handling if needed (e.g., for syntax errors from DB)
+      res.status(statusCode).json(result);
     }
-    else if (engine.toLowerCase() === 'sqlite') {
-      // For SQLite, we would use the sqlite3 module
-      res.status(200).json({
-        success: false,
-        message: 'SQLite query execution is not fully implemented yet'
-      });
-    }
-    else {
-      res.status(400).json({ 
-        success: false, 
-        message: `Unsupported database engine: ${engine}` 
-      });
-    }
-  }
-  catch (error) {
-    console.error('Query execution error:', error);
+  } catch (error) {
+    // This catch block is for unexpected errors in the controller itself
+    console.error('Unexpected error in executeQuery controller:', error);
     res.status(500).json({ 
       success: false, 
-      message: error.message || 'Failed to execute query',
+      message: 'Internal server error during query execution.',
       error: error.message
     });
   }

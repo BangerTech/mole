@@ -1,5 +1,5 @@
 html {
-  overflow-y: hidden; /* Prevent browser scrollbar */
+  /* overflow-y: hidden; */ /* Prevent browser scrollbar - REMOVED */
 }
 
 body {
@@ -10,7 +10,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f5f5f7;
-  overflow-y: hidden; /* Prevent browser scrollbar */
+  /* overflow-y: hidden; */ /* Prevent browser scrollbar - REMOVED */
 }
 
 code {

@@ -146,6 +146,7 @@ export default function Settings() {
   const [taskBeingProcessed, setTaskBeingProcessed] = useState(null);
   const [confirmDeleteDialogOpen, setConfirmDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
+  const [aiTestStatus, setAiTestStatus] = useState({}); // Zustand für Test-Status (pro Provider)
 
   // Handle tab selection from URL query parameters
   useEffect(() => {
@@ -185,7 +186,7 @@ export default function Settings() {
           perplexity: {
             enabled: true,
             apiKey: perplexityApiKey,
-            model: 'pplx-7b-online',
+            model: 'sonar-pro',
           },
           huggingface: {
             enabled: true,
@@ -218,53 +219,156 @@ export default function Settings() {
     }
   };
 
+  // useEffect für das Laden der AI-Einstellungen
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settings = await AIService.getSettings();
+        console.log("Loaded AI settings:", settings);
+        if (settings) {
+          setAiProvider(settings.defaultProvider || 'sqlpal');
+          setOpenaiApiKey(settings.providers.openai?.apiKey || '');
+          setPerplexityApiKey(settings.providers.perplexity?.apiKey || '');
+          setHuggingfaceApiKey(settings.providers.huggingface?.apiKey || '');
+          setHuggingfaceModel(settings.providers.huggingface?.model || 'mistralai/Mistral-7B-Instruct-v0.2');
+          setLocalModelPath(settings.providers.llama?.modelPath || '/models/llama-2-7b');
+          // Setze das Perplexity-Modell auf den Standard, falls keins geladen wurde
+          if (!settings.providers.perplexity?.model) {
+            // Dies wird normalerweise nicht passieren, wenn der Backend-Standard gesetzt ist,
+            // aber zur Sicherheit
+          }
+          // Beachte: hasApiKey wird hier nicht direkt gesetzt, das ist nur für die Anzeige
+        }
+      } catch (error) {
+        console.error('Error loading AI settings:', error);
+        setSnackbar({
+          open: true,
+          message: 'Could not load AI settings.',
+          severity: 'warning',
+        });
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const handleTestAIProvider = async (provider) => {
+    let apiKeyToTest = '';
+    switch (provider) {
+      case 'openai': apiKeyToTest = openaiApiKey; break;
+      case 'perplexity': apiKeyToTest = perplexityApiKey; break;
+      case 'huggingface': apiKeyToTest = huggingfaceApiKey; break;
+      default: return; // Kein Test für sqlpal oder local
+    }
+
+    if (!apiKeyToTest) {
+      setSnackbar({
+        open: true,
+        message: `Please enter an API key for ${provider} first.`,
+        severity: 'warning'
+      });
+      return;
+    }
+
+    setAiTestStatus(prev => ({ ...prev, [provider]: { testing: true, success: null, message: 'Testing...' } }));
+    try {
+      const result = await AIService.testProvider(provider, apiKeyToTest);
+      setAiTestStatus(prev => ({ ...prev, [provider]: { testing: false, ...result } }));
+    } catch (error) {
+      setAiTestStatus(prev => ({ 
+        ...prev, 
+        [provider]: { 
+          testing: false, 
+          success: false, 
+          message: error.response?.data?.message || error.message || 'Test failed' 
+        } 
+      }));
+    }
+  };
+
   const renderApiKeyField = () => {
-    switch (aiProvider) {
+    const provider = aiProvider; // Verwende den aktuellen State
+    const currentTestStatus = aiTestStatus[provider] || {};
+
+    switch (provider) {
       case 'openai':
         return (
-          <TextField
-            fullWidth
-            label="OpenAI API Key"
-            variant="outlined"
-            value={openaiApiKey}
-            onChange={(e) => setOpenaiApiKey(e.target.value)}
-            type="password"
-            placeholder="sk-..."
-            sx={{ mt: 2 }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', mt: 2, gap: 2 }}>
+            <TextField
+              fullWidth
+              label="OpenAI API Key"
+              variant="outlined"
+              value={openaiApiKey}
+              onChange={(e) => setOpenaiApiKey(e.target.value)}
+              type="password"
+              placeholder="sk-..."
+              disabled={currentTestStatus.testing}
+            />
+            <Button
+              variant="outlined"
+              onClick={() => handleTestAIProvider('openai')}
+              disabled={currentTestStatus.testing}
+              startIcon={currentTestStatus.testing ? <CircularProgress size={20} /> : <CheckIcon />}
+              sx={{ height: '56px' }} // Höhe an TextField anpassen
+            >
+              Test
+            </Button>
+          </Box>
         );
       case 'perplexity':
         return (
-          <TextField
-            fullWidth
-            label="Perplexity API Key"
-            variant="outlined"
-            value={perplexityApiKey}
-            onChange={(e) => setPerplexityApiKey(e.target.value)}
-            type="password"
-            placeholder="pplx-..."
-            sx={{ mt: 2 }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', mt: 2, gap: 2 }}>
+            <TextField
+              fullWidth
+              label="Perplexity API Key"
+              variant="outlined"
+              value={perplexityApiKey}
+              onChange={(e) => setPerplexityApiKey(e.target.value)}
+              type="password"
+              placeholder="pplx-..."
+              disabled={currentTestStatus.testing}
+            />
+            <Button
+              variant="outlined"
+              onClick={() => handleTestAIProvider('perplexity')}
+              disabled={currentTestStatus.testing}
+              startIcon={currentTestStatus.testing ? <CircularProgress size={20} /> : <CheckIcon />}
+              sx={{ height: '56px' }} // Höhe an TextField anpassen
+            >
+              Test
+            </Button>
+          </Box>
         );
       case 'huggingface':
         return (
-          <>
-            <TextField
-              fullWidth
-              label="Hugging Face API Key"
-              variant="outlined"
-              value={huggingfaceApiKey}
-              onChange={(e) => setHuggingfaceApiKey(e.target.value)}
-              type="password"
-              placeholder="hf_..."
-              sx={{ mt: 2, mb: 2 }}
-            />
+          <Box sx={{ mt: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2, gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Hugging Face API Key (optional for some models)"
+                variant="outlined"
+                value={huggingfaceApiKey}
+                onChange={(e) => setHuggingfaceApiKey(e.target.value)}
+                type="password"
+                placeholder="hf_..."
+                disabled={currentTestStatus.testing}
+              />
+              <Button
+                variant="outlined"
+                onClick={() => handleTestAIProvider('huggingface')}
+                disabled={currentTestStatus.testing}
+                startIcon={currentTestStatus.testing ? <CircularProgress size={20} /> : <CheckIcon />}
+                sx={{ height: '56px' }} // Höhe an TextField anpassen
+              >
+                Test
+              </Button>
+            </Box>
             <FormControl fullWidth variant="outlined">
               <InputLabel>Model</InputLabel>
               <Select
                 value={huggingfaceModel}
                 onChange={(e) => setHuggingfaceModel(e.target.value)}
                 label="Model"
+                disabled={currentTestStatus.testing}
               >
                 <MenuItem value="mistralai/Mistral-7B-Instruct-v0.2">Mistral 7B Instruct</MenuItem>
                 <MenuItem value="microsoft/phi-2">Phi-2</MenuItem>
@@ -273,17 +377,17 @@ export default function Settings() {
                 <MenuItem value="bigcode/starcoder2-15b">StarCoder2 15B</MenuItem>
               </Select>
             </FormControl>
-          </>
+          </Box>
         );
-      case 'local':
+      case 'local': // Renamed from 'local' to 'llama' to match backend logic
         return (
           <TextField
             fullWidth
-            label="Local Model Path"
+            label="Local Model Path (Llama)"
             variant="outlined"
             value={localModelPath}
             onChange={(e) => setLocalModelPath(e.target.value)}
-            placeholder="/path/to/model"
+            placeholder="/path/to/model or /models/llama-2-7b"
             sx={{ mt: 2 }}
           />
         );
@@ -454,7 +558,7 @@ export default function Settings() {
           perplexity: {
             enabled: true,
             apiKey: perplexityApiKey,
-            model: 'pplx-7b-online',
+            model: 'sonar-pro',
           },
           huggingface: {
             enabled: true,
@@ -919,6 +1023,16 @@ export default function Settings() {
               
               <Grid item xs={12}>
                 {renderApiKeyField()}
+              </Grid>
+              <Grid item xs={12}>
+                {aiProvider !== 'sqlpal' && aiProvider !== 'local' && aiTestStatus[aiProvider]?.message && (
+                  <Alert 
+                    severity={aiTestStatus[aiProvider].success ? 'success' : 'error'}
+                    sx={{ mt: 2 }}
+                  >
+                    {aiTestStatus[aiProvider].message}
+                  </Alert>
+                )}
               </Grid>
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>

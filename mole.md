@@ -839,3 +839,74 @@ Alle Endpunkte unter `/api/users` erfordern Authentifizierung und Admin-Rechte, 
 | POST    | `/`         | Neuen Benutzer erstellen           |
 | PUT     | `/:id`      | Bestehenden Benutzer aktualisieren |
 | DELETE  | `/:id`      | Benutzer löschen                   |
+
+## AI Assistant & Perplexity-Integration (seit 2024-06)
+
+### Architektur & Backend-Integration
+- Die gesamte AI-Provider-Logik (Provider-Liste, Test, Query) wird jetzt ausschließlich im Node.js-Backend gehandhabt. Es gibt keine Weiterleitung mehr an den Python-Service (`db-sync`).
+- Neue Endpunkte im Backend:
+  - `GET /api/ai/providers` – Liefert die Liste der unterstützten AI-Provider (z.B. OpenAI, Perplexity, HuggingFace, Local).
+  - `POST /api/ai/test` – Testet die Konfiguration (API-Key, Modell) eines Providers und gibt Feedback zurück.
+  - `POST /api/ai/query` – Führt eine AI-Abfrage aus (z.B. SQL-Generierung, Datenbank-Fragen) und gibt das Ergebnis zurück.
+- Perplexity-Integration: Das Backend ruft die Perplexity-API direkt auf. Unterstützte Modelle werden validiert (z.B. `sonar-pro`). Fehlerhafte Modelle oder ungültige API-Keys werden klar zurückgemeldet.
+- Die AI-Settings werden pro User verschlüsselt gespeichert (siehe User-Settings-Schema).
+
+### Frontend-Änderungen
+- Im AI Assistant Settings-Tab kann für jeden Provider der API-Key eingegeben und direkt getestet werden ("Test"-Button neben dem Eingabefeld).
+- Die Auswahl des AI-Providers bleibt nach dem Speichern persistent.
+- Test-Feedback (Erfolg/Fehler) wird direkt unter dem Eingabefeld angezeigt.
+- Die AI-Tab kann jetzt mit Perplexity und anderen Providern genutzt werden, inkl. Fehlerbehandlung für ungültige Keys/Modelle.
+
+### Perplexity-Modelle
+- Unterstütztes Modell: `sonar-pro` (frühere Namen wie `pplx-7b-online` oder `sonar-medium-online` sind veraltet und führen zu Fehlern).
+- Das Backend prüft die Modellnamen und gibt bei Fehlern eine verständliche Rückmeldung.
+
+### Sensitive Daten & .gitignore
+- Der Ordner `/app/backend/data` (inkl. `users.json`, `ai_settings.json`, `mole.db`) ist in `.gitignore` eingetragen und wird nicht mehr zu GitHub hochgeladen.
+- Bereits getrackte Dateien wurden mit `git rm --cached` entfernt und die Änderungen gepusht.
+
+### Sample Database Query Execution
+- Das Backend unterstützt jetzt die Ausführung von SQL wie `SELECT COUNT(*) FROM users` auf der Sample-Datenbank (liest aus `users.json`).
+- Für andere Queries auf der Sample-DB wird ein "Not implemented"-Fehler zurückgegeben.
+- Für echte Datenbanken (MySQL/PostgreSQL) werden die Queries wie gewohnt ausgeführt.
+- Die AI-Query-API gibt jetzt sowohl das generierte SQL als auch das Abfrageergebnis (oder Fehler) an das Frontend zurück.
+
+### Migration 011 - AI Assistant & Perplexity-Integration (2024-06-XX)
+
+In dieser Migration wurden folgende Features eingeführt:
+
+1. **AI-Provider-Logik ins Node.js-Backend verlagert** (keine Weiterleitung an Python-Service mehr)
+2. **Perplexity-Integration** mit echtem API-Call, Modellvalidierung und Fehlerbehandlung
+3. **Frontend-Verbesserungen**: Test-Button, persistente Provider-Auswahl, Feedback
+4. **Sensitive Daten**: .gitignore und Git-Index-Bereinigung für `/app/backend/data`
+5. **Sample-DB-Query**: Unterstützung für `SELECT COUNT(*) FROM users` auf der Sample-Datenbank
+
+```sql
+-- Keine SQL-Änderungen, aber neue Service- und Settings-Dateien im Backend
+-- AI-Settings werden verschlüsselt in data/user_settings/{userId}.json gespeichert
+```
+
+### AI-Settings im User-Settings-Schema
+
+Die AI-Settings werden pro User verschlüsselt gespeichert:
+
+| Feld                | Typ     | Beschreibung                                  |
+|---------------------|---------|-----------------------------------------------|
+| provider            | TEXT    | Gewählter AI-Provider (z.B. openai, perplexity)|
+| openaiApiKey        | TEXT    | OpenAI API-Key (verschlüsselt)                |
+| perplexityApiKey    | TEXT    | Perplexity API-Key (verschlüsselt)            |
+| huggingfaceApiKey   | TEXT    | HuggingFace API-Key (verschlüsselt)           |
+| huggingfaceModel    | TEXT    | Modellname für HuggingFace                    |
+| localModelPath      | TEXT    | Pfad zu lokalem Modell (optional)             |
+
+Beispiel (verschlüsselte Felder als Platzhalter):
+```json
+"ai": {
+  "provider": "perplexity",
+  "openaiApiKey": "<verschlüsselt>",
+  "perplexityApiKey": "<verschlüsselt>",
+  "huggingfaceApiKey": "<verschlüsselt>",
+  "huggingfaceModel": "",
+  "localModelPath": ""
+}
+```

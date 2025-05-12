@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const { encrypt, decrypt } = require('../utils/encryptionUtil');
+const databaseService = require('../services/databaseService'); // Import databaseService
 
 // Path to store AI settings
 const AI_SETTINGS_PATH = path.join(__dirname, '../data/ai_settings.json');
@@ -23,7 +24,7 @@ const DEFAULT_AI_SETTINGS = {
     perplexity: {
       enabled: true,
       apiKey: '',
-      model: 'pplx-7b-online'
+      model: 'sonar-pro'
     },
     llama: {
       enabled: true,
@@ -209,80 +210,185 @@ exports.updateAISettings = async (req, res) => {
 };
 
 // Get available AI providers from Python backend
-exports.getAIProviders = async (req, res) => {
+exports.getAIProviders = (req, res) => {
   try {
-    const response = await axios.get(`${PYTHON_BACKEND_URL}/api/ai/providers`);
-    res.json(response.data);
-  } catch (error) {
-    res.status(500).json({ 
-      error: 'Failed to get AI providers', 
-      details: error.message,
-      providers: {
-        available_providers: ['sqlpal'],
-        default_provider: 'sqlpal',
-        providers: {
-          'sqlpal': {
-            name: 'sqlpal',
-            available: true,
-            model: 'default',
-            is_default: true
-          }
-        }
-      }
+    const settings = loadAISettings();
+    const providers = Object.keys(settings.providers);
+    res.json({
+      available_providers: providers,
+      default_provider: settings.defaultProvider,
+      providers: settings.providers
     });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get AI providers', details: error.message });
   }
 };
 
 // Test AI provider connection
 exports.testAIProvider = async (req, res) => {
   try {
-    const { provider, apiKey } = req.body;
+    const { provider, apiKey } = req.body; // Get apiKey from request body for testing
+    const settings = loadAISettings(); // Load settings to get model etc.
     
-    // If testing SQLPal, always return success (local model)
     if (provider === 'sqlpal') {
       return res.json({ success: true, message: 'SQLPal is a local model and should be available' });
     }
+
+    if (provider === 'perplexity') {
+      if (!apiKey) {
+        return res.json({ success: false, message: 'Perplexity API key is required for testing.' });
+      }
+      const model = settings.providers.perplexity?.model || 'sonar-pro';
+      try {
+        await axios.post('https://api.perplexity.ai/chat/completions', {
+          model: model,
+          messages: [{ role: "user", content: "Test" }],
+          max_tokens: 1
+        }, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        return res.json({ success: true, message: 'Perplexity connection successful.' });
+      } catch (apiError) {
+        console.error('Perplexity API test error:', apiError.response?.data || apiError.message);
+        const errorMessage = apiError.response?.data?.error?.message || apiError.message;
+        return res.json({ success: false, message: `Perplexity connection failed: ${errorMessage}` });
+      }
+    }
     
-    // For other providers, forward the test to Python backend
-    const response = await axios.post(`${PYTHON_BACKEND_URL}/api/ai/test`, {
-      provider,
-      api_key: apiKey
-    });
+    // Placeholder for other providers (e.g., OpenAI)
+    if (provider === 'openai') {
+      // TODO: Implement OpenAI test
+      return res.json({ success: false, message: 'Test for OpenAI provider is not implemented yet.'});
+    }
     
-    res.json(response.data);
+    // Handle unknown providers
+    return res.json({ success: false, message: `Test for unknown provider '${provider}' is not supported.` });
+
   } catch (error) {
+    console.error('Error in testAIProvider:', error);
     res.status(500).json({ error: 'Failed to test AI provider', details: error.message });
   }
 };
 
-// Proxy AI queries to Python backend
+// Proxy AI queries
 exports.queryAI = async (req, res) => {
   try {
-    // Get current settings
     const settings = loadAISettings();
+    const provider = req.body.provider || settings.defaultProvider;
+    const queryText = req.body.query;
+    const connectionId = req.body.connectionId;
+
+    if (!queryText) {
+      return res.status(400).json({ error: 'Query text is required.' });
+    }
+
+    if (provider === 'sqlpal') {
+      // Platzhalter: Hier könnte SQLPal-Logik stehen
+      return res.json({
+        success: true,
+        message: 'SQLPal query placeholder. No real AI executed.',
+        sql: `SELECT \'SQLPal not implemented for query: ${queryText}\' as info;`,
+        results: [],
+        provider: 'sqlpal'
+      });
+    }
+
+    if (provider === 'perplexity') {
+      const apiKey = settings.providers.perplexity?.apiKey;
+      const model = settings.providers.perplexity?.model || 'sonar-pro';
+      if (!apiKey) {
+        return res.status(400).json({ error: 'Perplexity API key is not configured in settings.' });
+      }
+      try {
+        const aiApiResponse = await axios.post('https://api.perplexity.ai/chat/completions', {
+          model: model,
+          messages: [
+            { role: "system", content: "Generate only SQL code based on the user query and database schema (if provided). Do not add explanations or markdown formatting. Just the SQL query." },
+            { role: "user", content: queryText }
+          ],
+          max_tokens: settings.sqlGeneration?.maxTokens || 150,
+          temperature: settings.sqlGeneration?.temperature || 0.1
+        }, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const assistantMessage = aiApiResponse.data?.choices?.[0]?.message?.content;
+        const generatedSql = assistantMessage ? assistantMessage.trim() : null;
+
+        if (!generatedSql) {
+          return res.json({
+            success: false,
+            query: queryText,
+            sql: null,
+            results: [],
+            formatted_results: 'Perplexity did not return a SQL query.',
+            provider: provider
+          });
+        }
+
+        // Execute the generated SQL
+        const dbResult = await databaseService.executeDbQuery(connectionId, generatedSql);
+
+        return res.json({
+          success: dbResult.success,
+          query: queryText,
+          sql: generatedSql,
+          results: dbResult.rows || [],
+          columns: dbResult.columns || [],
+          affectedRows: dbResult.affectedRows,
+          formatted_results: dbResult.success 
+            ? `Generated SQL by ${provider}:
+${generatedSql}
+
+Execution Result:
+${JSON.stringify(dbResult.rows, null, 2)}`
+            : `Generated SQL by ${provider}:
+${generatedSql}
+
+Execution Failed: ${dbResult.message}`,
+          provider: provider,
+          db_message: dbResult.message // Include DB message for frontend
+        });
+
+      } catch (apiError) {
+        console.error('Perplexity API query error:', apiError.response?.data || apiError.message);
+        const errorMessage = apiError.response?.data?.error?.message || apiError.message;
+        return res.status(500).json({ 
+          error: `Failed to query Perplexity: ${errorMessage}`,
+          query: queryText,
+          sql: `SELECT \'Error querying Perplexity: ${errorMessage}\' as error;`,
+          results: [],
+          formatted_results: `Error: ${errorMessage}`,
+          provider: provider
+        });
+      }
+    }
     
-    // Prepare the query data
-    const queryData = {
-      query: req.body.query,
-      connectionId: req.body.connectionId,
-      provider: req.body.provider || settings.defaultProvider
-    };
-    
-    // Forward query to Python backend
-    const response = await axios.post(`${PYTHON_BACKEND_URL}/api/ai/query`, queryData);
-    
-    // Return the response from Python backend
-    res.json(response.data);
+    // Placeholder for other providers (e.g., OpenAI)
+    if (provider === 'openai') {
+      // TODO: Implement OpenAI query
+      return res.json({
+        success: false,
+        message: `Query for provider '${provider}' is not implemented yet.`,
+        sql: `SELECT \'OpenAI not implemented yet\' as info;`,
+        results: [],
+        provider
+      });
+    }
+
+    // Handle unknown providers
+    return res.status(400).json({ error: `Query for unknown provider '${provider}' is not supported.` });
+
   } catch (error) {
-    console.error('Error querying AI:', error);
-    res.status(500).json({ 
-      error: 'Failed to query AI', 
-      details: error.message,
-      query: req.body.query,
-      sql: 'SELECT "Error querying AI" as error',
-      results: [],
-      formatted_results: `Error: ${error.message}`,
-      provider: 'none'
-    });
+    console.error('Error in queryAI:', error);
+    res.status(500).json({ error: 'Failed to query AI', details: error.message });
   }
 }; 

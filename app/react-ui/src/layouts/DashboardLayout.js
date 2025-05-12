@@ -33,12 +33,12 @@ const MainStyle = styled('main', {
 })(({ theme, open }) => ({
   flexGrow: 1,
   overflow: 'auto',
-  minHeight: '100vh', // Sicherstellen, dass der Hauptinhalt die volle Höhe einnimmt
+  height: '100vh', // Zurück zu height: 100vh
   paddingTop: APP_BAR_MOBILE + NAVBAR_MARGIN_TOP + EXTRA_PADDING_TOP,
   paddingBottom: theme.spacing(10),
-  paddingLeft: theme.spacing(2), // Padding links für den Abstand zur Sidebar (wenn geschlossen)
+  paddingLeft: theme.spacing(2),
   paddingRight: theme.spacing(2),
-  marginLeft: open ? `${240 + theme.spacing(2)}px` : `calc(${theme.spacing(7)} + 1px + ${theme.spacing(2)}px)`, // Margin anpassen, um Platz für die Sidebar zu schaffen
+  marginLeft: open ? `${240 + theme.spacing(2)}px` : `calc(${theme.spacing(7)} + 1px + ${theme.spacing(2)}px)`,
   transition: theme.transitions.create('margin', {
     easing: theme.transitions.easing.sharp,
     duration: theme.transitions.duration.leavingScreen,
