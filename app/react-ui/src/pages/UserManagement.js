@@ -38,10 +38,10 @@ import UserService from '../services/UserService';
 import { styled } from '@mui/material/styles';
 
 // Styled components
-const RootStyle = styled('div')({
+const RootStyle = styled('div')(({ theme }) => ({
   height: '100%',
-  padding: '24px'
-});
+  padding: theme.spacing(0, 3, 3, 3)
+}));
 
 const ActionButton = styled(IconButton)(({ theme }) => ({
   margin: theme.spacing(0, 0.5)

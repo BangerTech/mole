@@ -42,7 +42,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 // Styled components
 const RootStyle = styled('div')(({ theme }) => ({
   height: '100%',
-  padding: theme.spacing(3)
+  padding: theme.spacing(0, 3, 3, 3)
 }));
 
 const DatabaseCard = styled(Card)(({ theme, engine }) => {
@@ -421,14 +421,24 @@ export default function DatabasesList() {
             <RefreshIcon />
           </IconButton>
         </Tooltip>
+      </Box>
 
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2, mt: 2 }}>
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={handleCreateDatabase}
+          sx={{ }}
+        >
+          New Connection
+        </Button>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={handleCreateDatabase}
-          sx={{ ml: 'auto' }}
+          onClick={() => navigate('/databases/new')}
+          sx={{ }}
         >
-          New Connection
+          Create Database
         </Button>
       </Box>
 

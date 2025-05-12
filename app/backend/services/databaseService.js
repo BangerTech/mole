@@ -108,19 +108,31 @@ async function _fetchSchemaDetails(connectionConfig) {
             const client = await pool.connect();
             try {
                 const tablesQuery = `
-                  SELECT 
-                    t.table_name AS name, 
+                  SELECT
+                    t.table_name AS name,
                     t.table_type AS type,
-                    (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = t.table_name) AS columns,
-                    pc.reltuples AS row_estimate
+                    (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = t.table_name) AS columns
                   FROM information_schema.tables t
-                  LEFT JOIN pg_class pc ON pc.relname = t.table_name
-                  LEFT JOIN pg_namespace pn ON pn.oid = pc.relnamespace
-                  WHERE t.table_schema = 'public' AND t.table_type IN ('BASE TABLE', 'VIEW') AND pn.nspname = 'public'
+                  WHERE t.table_schema = 'public' AND t.table_type IN ('BASE TABLE', 'VIEW')
                   ORDER BY t.table_name`;
                 const tablesResult = await client.query(tablesQuery);
                 console.log('[DBService_FetchSchemaPG] Raw tablesResult.rows:', JSON.stringify(tablesResult.rows.slice(0, 2), null, 2)); // Log first 2 raw rows
-                
+
+                // Fetch exact row counts separately (can be slow for many tables)
+                const countPromises = tablesResult.rows.map(table =>
+                    client.query(`SELECT count(*) AS exact_row_count FROM public."${table.name}"`)
+                        .then(res => ({ name: table.name, count: parseInt(res.rows[0].exact_row_count, 10) || 0 }))
+                        .catch(err => {
+                            console.warn(`Could not get count for table ${table.name}: ${err.message}`);
+                            return { name: table.name, count: -1 }; // Indicate error getting count
+                        })
+                );
+                const counts = await Promise.all(countPromises);
+                const countMap = counts.reduce((acc, curr) => {
+                    acc[curr.name] = curr.count;
+                    return acc;
+                }, {});
+
                 const sizeQuery = `SELECT c.relname AS name, pg_size_pretty(pg_total_relation_size(c.oid)) AS size FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v') ORDER BY c.relname`;
                 const sizeResult = await client.query(sizeQuery);
                 const sizeMap = {};
@@ -140,12 +152,12 @@ async function _fetchSchemaDetails(connectionConfig) {
                 });
 
                 tables = tablesResult.rows.map(table => {
-                    // Log individual table estimate before rounding
-                    console.log(`[DBService_FetchSchemaPG] Table: ${table.name}, Raw row_estimate: ${table.row_estimate}, Type: ${typeof table.row_estimate}`);
+                    // Log individual table estimate before rounding - REMOVED ESTIMATE LOGGING
+                    console.log(`[DBService_FetchSchemaPG] Table: ${table.name}, Exact count: ${countMap[table.name]}`);
                     return {
                         name: table.name,
                         type: table.type === 'BASE TABLE' ? 'TABLE' : 'VIEW',
-                        rows: Math.round(table.row_estimate || 0), // Verwende row_estimate
+                        rows: countMap[table.name], // Verwende exact_row_count
                         size: sizeMap[table.name]?.size || '0 KB',
                         columns: parseInt(table.columns, 10) || 0, // Stelle sicher, dass columns eine Zahl ist
                         lastUpdated: new Date().toISOString().split('T')[0]
@@ -914,9 +926,10 @@ const databaseService = {
         });
         try {
           const [rows, fields] = await mysqlConnection.query(queryString);
-          const columns = fields ? fields.map(field => ({ name: field.name, type: field.type })) : []; // Include type if available
+          // Keep MySQL format as { name, type }
+          const mysqlColumns = fields ? fields.map(field => ({ name: field.name, type: field.type })) : []; 
           return {
-            success: true, columns, rows,
+            success: true, columns: mysqlColumns, rows,
             affectedRows: rows.affectedRows !== undefined ? rows.affectedRows : (Array.isArray(rows) ? 0 : null), // MySQL specific for affected rows
             message: `Query executed successfully. ${Array.isArray(rows) ? rows.length : 0} rows returned.`
           };
@@ -932,9 +945,10 @@ const databaseService = {
         const client = await pool.connect();
         try {
           const result = await client.query(queryString);
-          const columns = result.fields ? result.fields.map(field => ({ name: field.name, dataTypeID: field.dataTypeID })) : []; // Include type if available
+          // Change the PG column format to be simpler { name }, expected by the frontend
+          const pgColumns = result.fields ? result.fields.map(field => ({ name: field.name })) : []; 
           return {
-            success: true, columns, rows: result.rows,
+            success: true, columns: pgColumns, rows: result.rows,
             affectedRows: result.rowCount !== null ? result.rowCount : 0,
             message: `Query executed successfully.`
           };

@@ -58,10 +58,10 @@ import AuthService from '../services/AuthService';
 import { UserContext } from '../components/UserContext';
 
 // Styled components
-const RootStyle = styled('div')({
+const RootStyle = styled('div')(({ theme }) => ({
   height: '100%',
-  padding: '24px'
-});
+  padding: theme.spacing(0, 3, 3, 3)
+}));
 
 const ProfileAvatar = styled(Avatar)(({ theme }) => ({
   width: 120,

@@ -603,7 +603,7 @@ export default function Settings() {
   };
 
   return (
-    <Box sx={{ py: 3, px: { xs: 2, md: 3 } }}>
+    <Box sx={{ pt: 0, pb: 3, px: { xs: 2, md: 3 } }}>
       <Typography variant="h4" gutterBottom fontWeight={600}>
         Settings
       </Typography>

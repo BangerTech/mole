@@ -103,7 +103,7 @@ const RootStyle = styled('div')(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   minHeight: '100vh', // Mindestens die volle Viewport-Höhe
-  padding: theme.spacing(3), // theme.spacing(3) anstatt '24px' für Konsistenz
+  padding: theme.spacing(0, 3, 3, 3), // Set paddingTop to 0, keep others at theme.spacing(3)
   boxSizing: 'border-box',
   // overflowY: 'auto', // Vorerst auskommentiert, da dies oft globaler gehandhabt wird
 }));

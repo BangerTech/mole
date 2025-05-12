@@ -16,11 +16,11 @@ import { UserContext } from '../components/UserContext';
 const drawerWidth = 240; // Consistent width
 const closedDrawerWidth = (theme) => `calc(${theme.spacing(8)} + 1px)`; // Width when closed
 
-const APP_BAR_MOBILE = 64;
-const APP_BAR_DESKTOP = 92;
-const NAVBAR_MARGIN_TOP = 16; // Corresponds to sidebarMarginTop in Navbar
+const APP_BAR_MOBILE = 28;
+const APP_BAR_DESKTOP = 37;
+const NAVBAR_MARGIN_TOP = 0;
 
-const EXTRA_PADDING_TOP = 16; // Added for padding
+const EXTRA_PADDING_TOP = 0;
 
 const RootStyle = styled('div')(({ theme }) => ({
   display: 'flex',

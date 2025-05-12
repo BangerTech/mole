@@ -910,3 +910,38 @@ Beispiel (verschlüsselte Felder als Platzhalter):
   "localModelPath": ""
 }
 ```
+
+### Migration 012 - UI Layout und SQL Editor Fixes (2025-05-13)
+
+In dieser Migration wurden Anpassungen am globalen Layout vorgenommen, um einen konsistenteren und reduzierten oberen Abstand auf allen Seiten zu erreichen. Zusätzlich wurden Fehlerbehebungen für den SQL Editor und die Anzeige von Tabelleninformationen implementiert.
+
+1.  **Globale Layout-Anpassungen (`mole/app/react-ui/src/layouts/DashboardLayout.js`):**
+    *   Die Konstanten `APP_BAR_MOBILE`, `APP_BAR_DESKTOP`, `NAVBAR_MARGIN_TOP` und `EXTRA_PADDING_TOP` wurden modifiziert.
+    *   Ziel war ein globaler `paddingTop` von ca. `37px` für Desktop-Ansichten und ca. `28px` für mobile Ansichten für alle Seiten, die dieses Layout verwenden.
+        *   `APP_BAR_MOBILE` geändert von `64` auf `28`.
+        *   `APP_BAR_DESKTOP` geändert von `92` auf `37`.
+        *   `NAVBAR_MARGIN_TOP` geändert von `16` auf `0`.
+        *   `EXTRA_PADDING_TOP` geändert von `16` auf `0` (und blieb bei späteren Anpassungen auf `0`).
+
+2.  **Seiten-spezifische Padding-Normalisierung (in jeweiligen Page-Komponenten unter `mole/app/react-ui/src/pages/`):**
+    *   Das Styling der jeweiligen Root-Container (`RootStyle` oder Wurzel-`Box`) in den folgenden Seitenkomponenten wurde so angepasst, dass deren eigener `paddingTop` auf `0` gesetzt wurde. Dies stellt sicher, dass der globale `paddingTop` aus `DashboardLayout.js` konsistent angewendet wird:
+        *   `Dashboard.js`: `RootStyle` padding geändert von `theme.spacing(3)` zu `theme.spacing(0, 3, 3, 3)`.
+        *   `DatabasesList.js`: `RootStyle` padding geändert von `theme.spacing(3)` zu `theme.spacing(0, 3, 3, 3)`.
+        *   `UserManagement.js`: `RootStyle` padding geändert von `'24px'` zu `theme.spacing(0, 3, 3, 3)`.
+        *   `Profile.js`: `RootStyle` padding geändert von `'24px'` zu `theme.spacing(0, 3, 3, 3)`.
+        *   `Settings.js`: Die `sx`-Prop der Wurzel-`Box` wurde von `py: 3` zu `pt: 0, pb: 3` geändert.
+    *   In `QueryEditor.js` war der `paddingTop` des `RootStyle` bereits `0` und bedurfte keiner diesbezüglichen Anpassung.
+
+3.  **SQL Editor & Datenbankdetails: Korrektur der Zeilenanzahl-Anzeige (`mole/app/backend/services/databaseService.js`):**
+    *   Die Funktion `_fetchSchemaDetails` wurde für PostgreSQL-Datenbanken so modifiziert, dass die exakte Zeilenanzahl pro Tabelle mittels `SELECT COUNT(*)` ermittelt wird.
+    *   Dies behebt das Problem, bei dem zuvor `-1` als Zeilenanzahl angezeigt wurde, da die Schätzung über `reltuples` ungenau sein konnte.
+
+4.  **SQL Editor Simple Mode: Korrektur der Spaltenanzeige in der Datenvorschau:**
+    *   **Backend (`mole/app/backend/services/databaseService.js`):** Die Funktion `executeDbQuery` gibt für PostgreSQL-Abfragen Spalteninformationen jetzt im vereinfachten Format `{ name: 'spaltenname' }` zurück (statt `{ name: 'spaltenname', dataTypeID: 123 }`).
+    *   **Frontend (`mole/app/react-ui/src/pages/QueryEditor.js`):** In der Funktion `fetchSimpleModeDataPreview` wird die `result.columns`-Liste nun korrekt zu einem Array von Strings (den Spaltennamen) transformiert, bevor sie an die Tabellenkomponente übergeben wird.
+    *   Diese Änderungen beheben den "Minified React error #31", der auftrat, weil versucht wurde, ein Objekt direkt als Spaltenüberschrift zu rendern.
+
+```sql
+-- Keine direkten SQL-Datenbankänderungen in dieser Migration.
+-- Die Änderungen betreffen primär die Frontend-Layout-Logik und Backend-Datenabrufmethoden für Metadaten.
+```

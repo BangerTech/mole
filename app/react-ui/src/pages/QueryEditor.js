@@ -650,7 +650,7 @@ export default function QueryEditor() {
       const previewQuery = `SELECT * FROM ${safeTableName} LIMIT 10;`; // Re-fetch first 10 rows
       const result = await DatabaseService.executeQuery(database.id, previewQuery);
       if (result.success) {
-        setSimpleModeTableColumns(result.columns || []);
+        setSimpleModeTableColumns(result.columns ? result.columns.map(col => col.name) : []);
         setSimpleModeTableData(result.rows || []);
       } else {
         console.error('Error refreshing table data preview:', result.message);
@@ -782,7 +782,8 @@ export default function QueryEditor() {
 
         if (result && result.success) {
             console.log(`[fetchSimpleModeDataPreview] Query successful. Setting columns and data.`);
-            setSimpleModeTableColumns(result.columns || []);
+            // Extract just the name property for the columns
+            setSimpleModeTableColumns(result.columns ? result.columns.map(col => col.name) : []);
             setSimpleModeTableData(result.rows || []);
         } else {
             console.error('[fetchSimpleModeDataPreview] Query failed or returned unsuccessful:', result?.message);
@@ -981,16 +982,17 @@ export default function QueryEditor() {
 
   return (
     <RootStyle>
-      <Box sx={{ pt: 3, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <IconButton onClick={handleBack} sx={{ mr: 2 }}>
-            <ArrowBackIcon />
-          </IconButton>
-          <Typography variant="h4">
-            SQL Editor
-          </Typography>
-        </Box>
-        {/* Reintroduce mode tabs */}
+      <Box sx={{ pt: 0, mb: 1, display: 'flex', alignItems: 'center' }}> {/* Reduced mb and removed justifyContent */} 
+        {/* <IconButton onClick={handleBack} sx={{ mr: 2 }}> // Removed ArrowBackIcon
+          <ArrowBackIcon />
+        </IconButton> */}
+        <Typography variant="h4">
+          SQL Editor
+        </Typography>
+      </Box>
+
+      {/* Tabs moved to a new Box below the title, aligned to the left */}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 3 }}> {/* Changed to flex-start */}
         <Tabs 
           value={editorMode} 
           onChange={handleModeChange}
