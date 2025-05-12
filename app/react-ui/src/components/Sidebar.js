@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { styled, useTheme } from '@mui/material/styles';
 import MuiDrawer from '@mui/material/Drawer';
@@ -16,7 +16,10 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import StorageIcon from '@mui/icons-material/Storage';
 import CodeIcon from '@mui/icons-material/Code';
 import SettingsIcon from '@mui/icons-material/Settings';
+import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
+import PersonIcon from '@mui/icons-material/Person';
 import Tooltip from '@mui/material/Tooltip';
+import { UserContext } from '../components/UserContext';
 
 const drawerWidth = 240;
 
@@ -93,12 +96,25 @@ const navConfig = [
   // },
 ];
 
+const adminConfig = [
+  {
+    title: 'User Management',
+    path: '/users',
+    icon: <SupervisorAccountIcon />
+  }
+];
+
 const settingsConfig = [
-    {
-        title: 'Settings',
-        path: '/settings',
-        icon: <SettingsIcon />
-    }
+  {
+    title: 'Profile',
+    path: '/profile',
+    icon: <PersonIcon />
+  },
+  {
+    title: 'Settings',
+    path: '/settings',
+    icon: <SettingsIcon />
+  }
 ];
 
 // Receive props from DashboardLayout
@@ -106,6 +122,7 @@ export default function Sidebar({ open, handleDrawerOpen, handleDrawerClose }) {
   const theme = useTheme();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { user } = useContext(UserContext);
 
   const renderNavItems = (items) => (
     items.map((item) => (
@@ -178,6 +195,14 @@ export default function Sidebar({ open, handleDrawerOpen, handleDrawerClose }) {
 
       <List component="nav" sx={{ flexGrow: 1, pt: 2 }}>
         {renderNavItems(navConfig)}
+        
+        {/* Admin Menüpunkte nur anzeigen, wenn der User ein Admin ist */}
+        {user?.role === 'admin' && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            {renderNavItems(adminConfig)}
+          </>
+        )}
       </List>
       
       <Divider />

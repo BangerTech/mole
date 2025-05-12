@@ -183,14 +183,6 @@ exports.updateAISettings = async (req, res) => {
       return res.status(500).json({ error: 'Failed to save AI settings' });
     }
     
-    // Try to update Python backend settings
-    try {
-      await updatePythonBackendSettings(newSettings);
-    } catch (error) {
-      console.error('Error updating Python backend settings:', error);
-      // Continue despite error, as we've already saved settings locally
-    }
-    
     // Return success with masked API keys
     const safeSettings = JSON.parse(JSON.stringify(newSettings));
     

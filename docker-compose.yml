@@ -52,8 +52,8 @@ services:
       - ./app/backend/routes:/app/routes
       - ./app/backend/middleware:/app/middleware
       - ./app/backend/server.js:/app/server.js
-      # Mount the data directory for persistent storage
-      - backend_data:/app/data
+      # Mount the data directory for persistent storage using bind mount
+      - ./app/backend/data:/app/data
     networks:
       - mole-network
     depends_on:
@@ -79,8 +79,8 @@ services:
     volumes:
       - ./app/db-sync/config:/app/config
       - ./app/db-sync/logs:/app/logs
-      # Mount the backend data volume to access mole.db
-      - backend_data:/app/backend/data
+      # Mount the backend data directory using bind mount
+      - ./app/backend/data:/app/backend/data
     networks:
       - mole-network
 
@@ -136,7 +136,6 @@ volumes:
   mysql_data:
   postgres_data:
   influxdb_data:
-  backend_data:
 
 networks:
   mole-network:

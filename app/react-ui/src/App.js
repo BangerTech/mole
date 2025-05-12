@@ -12,12 +12,16 @@ import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import UserManagement from './pages/UserManagement';
+import Setup from './pages/Setup';
 import { UserProvider, UserContext } from './components/UserContext';
 import AuthService from './services/AuthService';
 import DatabaseService from './services/DatabaseService';
 import DashboardLayout from './layouts/DashboardLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
+import { CircularProgress } from '@mui/material';
+import UserService from './services/UserService';
 
 // Create a theme context
 export const ThemeModeContext = createContext({
@@ -193,22 +197,27 @@ function App() {
         <UserProvider>
           <CssBaseline />
           <Routes>
-            {/* Authentication routes */}
+            {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            
-            {/* Protected routes using DashboardLayout */}
+            <Route path="/setup" element={<Setup />} />
+
+            {/* Root route - redirects to login if not authenticated, or setup if no admins */}
             <Route 
               path="/" 
               element={
-              <ProtectedRoute>
+                <InitialRouteHandler />
+              }
+            />
+            
+            {/* Protected routes */}
+            <Route 
+              element={
+                <ProtectedRoute>
                   <DashboardLayout /> 
-              </ProtectedRoute>
+                </ProtectedRoute>
               }
             >
-              {/* Default route within layout */}
-              <Route index element={<Navigate to="/dashboard" replace />} /> 
-              
               {/* Child routes rendered via Outlet in DashboardLayout */}
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="databases" element={<DatabasesList />} />
@@ -226,21 +235,77 @@ function App() {
               <Route path="settings" element={<Settings />} />
               <Route path="profile" element={<Profile />} />
               
+              {/* User Management Route - nur für Admins zugänglich */}
+              <Route path="users" element={<UserManagement />} />
+              
               {/* Add other nested routes here */}
-
             </Route>
 
-            {/* Fallback route for unauthenticated users or unmatched paths */}
-            <Route path="*" element={
-              AuthService.isLoggedIn() 
-                ? <Navigate to="/dashboard" replace /> 
-                : <Navigate to="/login" replace />
-            } />
+            {/* Fallback route for unmatched paths */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </UserProvider>
       </ThemeProvider>
     </ThemeModeContext.Provider>
   );
+}
+
+// Komponente zur Behandlung der initialen Route
+function InitialRouteHandler() {
+  const [isAdminSetupComplete, setIsAdminSetupComplete] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const { user } = useContext(UserContext);
+
+  useEffect(() => {
+    const performAdminCheck = async () => {
+      try {
+        console.log('[InitialRouteHandler] Checking if admin setup is complete...');
+        const response = await AuthService.checkAdminExists();
+        console.log('[InitialRouteHandler] Response from checkAdminExists:', response);
+        if (response && typeof response.adminExists === 'boolean') {
+          setIsAdminSetupComplete(response.adminExists);
+        } else {
+          // Fallback, falls die Antwort nicht das erwartete Format hat
+          console.error('[InitialRouteHandler] Invalid response from checkAdminExists, assuming setup needed.');
+          setIsAdminSetupComplete(false);
+        }
+      } catch (error) {
+        console.error('[InitialRouteHandler] Error calling checkAdminExists:', error);
+        setIsAdminSetupComplete(false); // Im Fehlerfall Setup als notwendig ansehen
+      }
+      setLoading(false);
+    };
+
+    // Diese Prüfung nur einmal beim Laden der App durchführen, oder wenn sich der User-Status ändert,
+    // um nach einem Logout ggf. wieder zum Setup zu leiten, falls der letzte Admin gelöscht wurde (hypothetisch).
+    // Für den einfachen Fall reicht die Prüfung beim initialen Laden.
+    if (isAdminSetupComplete === null) {
+      performAdminCheck();
+    } else {
+      setLoading(false); // Wenn bereits geprüft, Loading beenden
+    }
+
+  }, [isAdminSetupComplete]);
+
+  if (loading) {
+    return <CircularProgress sx={{ display: 'block', margin: 'auto', mt: '20%' }} />;
+  }
+
+  // Wenn kein Admin-Setup abgeschlossen ist (d.h. kein Admin-Account existiert), zur Setup-Seite weiterleiten
+  if (!isAdminSetupComplete) {
+    console.log('[InitialRouteHandler] Admin setup not complete, navigating to /setup.');
+    return <Navigate to="/setup" replace />;
+  }
+
+  // Wenn Admin-Setup abgeschlossen ist, aber Benutzer nicht eingeloggt ist, zum Login weiterleiten
+  if (!AuthService.isLoggedIn()) {
+    console.log('[InitialRouteHandler] Admin setup complete, user not logged in, navigating to /login.');
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Andernfalls zum Dashboard weiterleiten
+  console.log('[InitialRouteHandler] Admin setup complete, user logged in, navigating to /dashboard.');
+  return <Navigate to="/dashboard" replace />;
 }
 
 export default App; 

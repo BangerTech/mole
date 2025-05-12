@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Box,
@@ -23,6 +23,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import AuthService from '../services/AuthService';
+import { UserContext } from '../components/UserContext';
 
 // Styled components
 const RootStyle = styled(Box)(({ theme }) => ({
@@ -60,8 +61,8 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { login } = useContext(UserContext);
   
-  // Überprüfen, ob der Benutzer bereits eingeloggt ist
   useEffect(() => {
     if (AuthService.isLoggedIn()) {
       navigate('/dashboard');
@@ -72,7 +73,6 @@ export default function Register() {
     e.preventDefault();
     setError('');
     
-    // Validierung
     if (!name || !email || !password || !confirmPassword) {
       setError('All fields are required');
       return;
@@ -86,8 +86,13 @@ export default function Register() {
     setLoading(true);
     
     try {
-      await AuthService.register(name, email, password);
-      navigate('/dashboard');
+      const response = await AuthService.register(name, email, password);
+      if (response.success && response.user) {
+        login(response.user);
+        navigate('/dashboard');
+      } else {
+        setError(response.message || 'Registration failed but no specific error from server.');
+      }
     } catch (err) {
       setError(err.message || 'Failed to register. Please try again.');
     } finally {

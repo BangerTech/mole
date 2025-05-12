@@ -18,6 +18,10 @@ RUN mkdir -p /app/data
 # Copy application code
 COPY . .
 
+# WICHTIG: Rechte setzen und als node laufen (nach dem Kopieren!)
+RUN chown -R node:node /app/data
+USER node
+
 # Verify that express is installed
 RUN ls -la /app/node_modules && \
     ls -la /app/node_modules/express || echo "Express module not found"

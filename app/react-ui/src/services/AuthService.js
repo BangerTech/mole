@@ -2,13 +2,13 @@ import axios from 'axios';
 
 // Dynamically determine the API base URL based on the current hostname
 // This ensures the app works on any IP address or domain name
-const getApiBaseUrl = () => {
+export const getApiBaseUrl = () => {
   const hostname = window.location.hostname;
-  return `http://${hostname}:3001/api/auth`;
+  return `http://${hostname}:3001/api`;
 };
 
-// API Basis URL - dynamically determined
-const API_URL = getApiBaseUrl();
+// API Basis URL für Authentifizierung - dynamically determined
+const AUTH_API_URL = `${getApiBaseUrl()}/auth`;
 
 // Token-Speicherung in localStorage
 const TOKEN_KEY = 'mole_auth_token';
@@ -26,13 +26,13 @@ class AuthService {
    * @returns {Promise} Promise mit der Antwort des Servers
    */
   register(name, email, password) {
-    return axios.post(`${API_URL}/register`, {
+    return axios.post(`${AUTH_API_URL}/register`, {
       name,
       email,
       password
     })
       .then(response => {
-        if (response.data.token) {
+        if (response.data.token && response.data.user) {
           this.setToken(response.data.token);
           this.setUser(response.data.user);
         }
@@ -51,14 +51,16 @@ class AuthService {
    * @returns {Promise} Promise mit der Antwort des Servers
    */
   login(email, password) {
-    return axios.post(`${API_URL}/login`, {
+    return axios.post(`${AUTH_API_URL}/login`, {
       email,
       password
     })
       .then(response => {
-        if (response.data.token) {
+        console.log('[AuthService] Login API response:', response.data); // Log der gesamten Backend-Antwort
+        if (response.data.token && response.data.user) { // Sicherstellen, dass user-Objekt vorhanden ist
+          console.log('[AuthService] User data from backend:', response.data.user); // Log des User-Objekts
           this.setToken(response.data.token);
-          this.setUser(response.data.user);
+          this.setUser(response.data.user); // Speichert das User-Objekt im localStorage
         }
         return response.data;
       })
@@ -134,7 +136,7 @@ class AuthService {
       return Promise.reject({ message: 'No auth token found' });
     }
 
-    return axios.get(`${API_URL}/user`, {
+    return axios.get(`${AUTH_API_URL}/user`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -186,6 +188,20 @@ class AuthService {
         return Promise.reject(error);
       }
     );
+  }
+
+  // Neue Methode hinzufügen, um zu prüfen, ob ein Admin-Account existiert
+  async checkAdminExists() {
+    try {
+      const response = await axios.get(`${AUTH_API_URL}/check-admin-exists`);
+      return response.data; // Erwartet { success: true, adminExists: boolean }
+    } catch (error) {
+      console.error('Error checking if admin account exists:', error);
+      // Im Fehlerfall (z.B. Server nicht erreichbar) ist es sicherer anzunehmen,
+      // dass das Setup benötigt wird, oder einen spezifischen Fehler zu werfen.
+      // Für den InitialRouteHandler ist { adminExists: false } ein sicherer Fallback.
+      return { success: false, adminExists: false, message: error.message || 'Could not connect to server to check admin status.' };
+    }
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Box,
@@ -23,6 +23,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import AuthService from '../services/AuthService';
+import { UserContext } from '../components/UserContext';
 
 // Styled components
 const RootStyle = styled(Box)(({ theme }) => ({
@@ -53,6 +54,7 @@ const FormCard = styled(Card)(({ theme }) => ({
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login: contextLogin } = useContext(UserContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -76,8 +78,13 @@ export default function Login() {
         throw new Error('Please enter email and password');
       }
       
-      await AuthService.login(email, password);
-      navigate('/dashboard');
+      const response = await AuthService.login(email, password);
+      if (response.success && response.user) {
+        contextLogin(response.user);
+        navigate('/dashboard');
+      } else {
+        setError(response.message || 'Failed to login. Please check your credentials.');
+      }
     } catch (err) {
       setError(err.message || 'Failed to login. Please check your credentials.');
     } finally {
@@ -91,13 +98,19 @@ export default function Login() {
   
   // Login als Admin mit Demo-Daten
   const handleDemoLogin = async () => {
-    setEmail('admin@example.com');
-    setPassword('admin');
+    setEmail('demo@example.com');
+    setPassword('demo');
     
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      await AuthService.login('admin@example.com', 'admin');
-      navigate('/dashboard');
+      const response = await AuthService.login('demo@example.com', 'demo');
+      if (response.success && response.user) {
+        contextLogin(response.user);
+        navigate('/dashboard');
+      } else {
+        setError(response.message || 'Failed to login with demo account.');
+      }
     } catch (err) {
       setError(err.message || 'Failed to login with demo account.');
     } finally {

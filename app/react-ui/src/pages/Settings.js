@@ -171,9 +171,51 @@ export default function Settings() {
     setActiveTab(newValue);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    try {
+      // AI Settings speichern
+      const aiSettings = {
+        defaultProvider: aiProvider,
+        providers: {
+          openai: {
+            enabled: true,
+            apiKey: openaiApiKey,
+            model: 'gpt-3.5-turbo',
+          },
+          perplexity: {
+            enabled: true,
+            apiKey: perplexityApiKey,
+            model: 'pplx-7b-online',
+          },
+          huggingface: {
+            enabled: true,
+            apiKey: huggingfaceApiKey,
+            model: huggingfaceModel,
+          },
+          llama: {
+            enabled: true,
+            modelPath: localModelPath,
+          },
+          sqlpal: {
+            enabled: true,
+            modelPath: '/app/models/sqlpal',
+          },
+        },
+      };
+      await AIService.updateSettings(aiSettings);
+
+      // SMTP Settings speichern
+      await EmailService.saveSmtpSettings(smtpSettings);
+
     setSuccessMessage('Settings successfully saved');
     setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to save settings',
+        severity: 'error',
+      });
+    }
   };
 
   const renderApiKeyField = () => {
@@ -279,23 +321,6 @@ export default function Settings() {
       ...prev,
       [name]: value
     }));
-  };
-  
-  const handleSaveSmtpSettings = async () => {
-    try {
-      const result = await EmailService.saveSmtpSettings(smtpSettings);
-      setSnackbar({
-        open: true,
-        message: result.message,
-        severity: 'success'
-      });
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: error.message || 'Failed to save SMTP settings',
-        severity: 'error'
-      });
-    }
   };
 
   const handleSendTestEmail = async () => {
@@ -414,6 +439,65 @@ export default function Settings() {
   
   // --- End Sync Task Action Handlers ---
 
+  // --- Save-Handler für jeden Tab ---
+  // AI-Settings speichern
+  const handleSaveAISettings = async () => {
+    try {
+      const aiSettings = {
+        defaultProvider: aiProvider,
+        providers: {
+          openai: {
+            enabled: true,
+            apiKey: openaiApiKey,
+            model: 'gpt-3.5-turbo',
+          },
+          perplexity: {
+            enabled: true,
+            apiKey: perplexityApiKey,
+            model: 'pplx-7b-online',
+          },
+          huggingface: {
+            enabled: true,
+            apiKey: huggingfaceApiKey,
+            model: huggingfaceModel,
+          },
+          llama: {
+            enabled: true,
+            modelPath: localModelPath,
+          },
+          sqlpal: {
+            enabled: true,
+            modelPath: '/app/models/sqlpal',
+          },
+        },
+      };
+      await AIService.updateSettings(aiSettings);
+      setSuccessMessage('AI settings successfully saved');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to save AI settings',
+        severity: 'error',
+      });
+    }
+  };
+
+  // SMTP-Settings speichern
+  const handleSaveSmtpSettings = async () => {
+    try {
+      await EmailService.saveSmtpSettings(smtpSettings);
+      setSuccessMessage('SMTP settings successfully saved');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to save SMTP settings',
+        severity: 'error',
+      });
+    }
+  };
+
   return (
     <Box sx={{ py: 3, px: { xs: 2, md: 3 } }}>
       <Typography variant="h4" gutterBottom fontWeight={600}>
@@ -442,7 +526,6 @@ export default function Settings() {
           scrollButtons="auto"
         >
           <StyledTab icon={<NotificationsIcon sx={{ mr: 1 }} />} iconPosition="start" label="Notifications" />
-          <StyledTab icon={<StorageIcon sx={{ mr: 1 }} />} iconPosition="start" label="Databases" />
           <StyledTab icon={<SyncIcon sx={{ mr: 1 }} />} iconPosition="start" label="Synchronization" />
           <StyledTab icon={<SmartToyIcon sx={{ mr: 1 }} />} iconPosition="start" label="AI Assistant" />
           <StyledTab icon={<SecurityIcon sx={{ mr: 1 }} />} iconPosition="start" label="Security" />
@@ -538,105 +621,8 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
-      {/* Databases Tab */}
-      <TabPanel value={activeTab} index={1}>
-        <SettingCard>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Database Settings
-            </Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
-                  <InputLabel>Default Database Type</InputLabel>
-                  <Select
-                    defaultValue="mysql"
-                    label="Default Database Type"
-                  >
-                    <MenuItem value="mysql">MySQL</MenuItem>
-                    <MenuItem value="postgresql">PostgreSQL</MenuItem>
-                    <MenuItem value="sqlite">SQLite</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
-                  <InputLabel>Character Set</InputLabel>
-                  <Select
-                    defaultValue="utf8mb4"
-                    label="Character Set"
-                  >
-                    <MenuItem value="utf8mb4">UTF-8 Unicode (utf8mb4)</MenuItem>
-                    <MenuItem value="utf8">UTF-8 Unicode (utf8)</MenuItem>
-                    <MenuItem value="latin1">Latin1</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={<Switch defaultChecked color="primary" />}
-                  label="Automatically index new tables"
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Automatically creates indexes for new tables to improve performance.
-                </Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={<Switch defaultChecked color="primary" />}
-                  label="Force SSL connections (when available)"
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Increases security by using SSL for database connections.
-                </Typography>
-              </Grid>
-            </Grid>
-          </CardContent>
-        </SettingCard>
-
-        <SettingCard>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Data Backup
-            </Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={<Switch defaultChecked color="primary" />}
-                  label="Automatic Backups"
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Regularly creates backups of your databases.
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth variant="outlined" sx={{ mb: 2 }}>
-                  <InputLabel>Backup Interval</InputLabel>
-                  <Select
-                    defaultValue="weekly"
-                    label="Backup Interval"
-                  >
-                    <MenuItem value="daily">Daily</MenuItem>
-                    <MenuItem value="weekly">Weekly</MenuItem>
-                    <MenuItem value="monthly">Monthly</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Backup Location"
-                  variant="outlined"
-                  defaultValue="/backups"
-                />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </SettingCard>
-      </TabPanel>
-
       {/* Synchronization Tab */}
-      <TabPanel value={activeTab} index={2}>
+      <TabPanel value={activeTab} index={1}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -743,7 +729,7 @@ export default function Settings() {
       </TabPanel>
 
       {/* AI Assistant Tab */}
-      <TabPanel value={activeTab} index={3}>
+      <TabPanel value={activeTab} index={2}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -752,7 +738,6 @@ export default function Settings() {
             <Typography variant="body2" color="text.secondary" paragraph>
               Configure the AI assistant for natural language database queries
             </Typography>
-            
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <Typography variant="subtitle1" gutterBottom>
@@ -935,62 +920,15 @@ export default function Settings() {
               <Grid item xs={12}>
                 {renderApiKeyField()}
               </Grid>
-              
               <Grid item xs={12}>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle1" gutterBottom>
-                  Advanced Settings
-                </Typography>
-                
-                <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                  Accuracy vs. Speed
-                </Typography>
-                <Slider
-                  value={aiPrecision}
-                  onChange={(e, newValue) => setAiPrecision(newValue)}
-                  step={1}
-                  min={1}
-                  max={10}
-                  valueLabelDisplay="auto"
-                  marks={[
-                    { value: 1, label: 'Fast' },
-                    { value: 10, label: 'Precise' },
-                  ]}
-                  sx={{ mb: 3 }}
-                />
-                
-                <Typography variant="subtitle2" gutterBottom>
-                  Custom Prompt Template
-                </Typography>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  variant="outlined"
-                  value={customPromptTemplate}
-                  onChange={(e) => setCustomPromptTemplate(e.target.value)}
-                  placeholder="Use {query} as a placeholder for the user query"
-                  helperText="Use {query} as a placeholder for the user query"
-                />
-                
-                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
-                  <Button 
-                    variant="outlined" 
-                    onClick={() => {
-                      setAiProvider('sqlpal');
-                      setAiPrecision(7);
-                      setCustomPromptTemplate('Analyze the database and tell me about {query}');
-                    }}
-                  >
-                    Reset
-                  </Button>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                   <Button 
                     variant="contained" 
                     color="primary"
                     startIcon={<SaveIcon />}
-                    onClick={handleSave}
+                    onClick={handleSaveAISettings}
                   >
-                    Save
+                    Save AI Settings
                   </Button>
                 </Box>
               </Grid>
@@ -1000,7 +938,7 @@ export default function Settings() {
       </TabPanel>
 
       {/* Security Tab */}
-      <TabPanel value={activeTab} index={4}>
+      <TabPanel value={activeTab} index={3}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -1069,7 +1007,7 @@ export default function Settings() {
       </TabPanel>
 
       {/* Email Settings Tab */}
-      <TabPanel value={activeTab} index={5}>
+      <TabPanel value={activeTab} index={4}>
         <SettingCard>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -1198,7 +1136,7 @@ export default function Settings() {
                     onClick={handleSaveSmtpSettings}
                     startIcon={<SaveIcon />}
                   >
-                    Save Settings
+                    Save SMTP Settings
                   </Button>
                 </Box>
               </Grid>
@@ -1206,18 +1144,6 @@ export default function Settings() {
           </CardContent>
         </SettingCard>
       </TabPanel>
-
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          startIcon={<SaveIcon />}
-          onClick={handleSave}
-          size="large"
-        >
-          Save All Settings
-        </Button>
-      </Box>
 
       {/* Confirmation Dialog for Deletion */}
       <Dialog

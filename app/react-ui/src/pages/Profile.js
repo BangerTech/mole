@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { 
   Box, 
   Typography, 
@@ -31,7 +31,9 @@ import {
   Badge,
   Tooltip,
   ListItemAvatar,
-  Link
+  Link,
+  RadioGroup,
+  Radio
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { 
@@ -52,6 +54,8 @@ import {
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import EmailService from '../services/EmailService';
 import DatabaseService from '../services/DatabaseService';
+import AuthService from '../services/AuthService';
+import { UserContext } from '../components/UserContext';
 
 // Styled components
 const RootStyle = styled('div')({
@@ -166,6 +170,8 @@ export default function Profile() {
     success: null,
     message: ''
   });
+  
+  const { user } = useContext(UserContext);
   
   // Load database connections from API
   const fetchDatabaseConnections = async () => {
@@ -365,6 +371,44 @@ export default function Profile() {
     }
   };
 
+  useEffect(() => {
+    if (AuthService.isLoggedIn() && user) {
+      fetchDatabaseConnections();
+    } else {
+      setLoadingConnections(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    console.log('[Profile.js] User from context:', user);
+    if (user) {
+      // Map the user object from AuthService/UserContext to the format expected by Profile
+      const mappedUser = {
+        ...user, // Übernehme alle Felder aus dem user-Objekt des Contexts
+        fullName: user.name || user.fullName || '', // Nutze user.name (vom Backend) oder user.fullName (falls schon im Context gemappt)
+        username: user.username || user.email?.split('@')[0] || '', // username bleibt gleich
+        // lastLogin wird jetzt vom UserContext beim Login gesetzt, hier nicht mehr überschreiben, außer es ist wirklich notwendig
+        // lastLogin: user.lastLogin || new Date().toISOString(), 
+        // profileImage wird vom Context übernommen oder bleibt null
+        profileImage: user.profileImage || null,
+        // preferences könnten ebenfalls vom Context kommen oder hier initialisiert/gemerged werden
+        preferences: user.preferences || {
+          darkMode: true,
+          notifications: true,
+          showSampleDatabases: true
+        }
+      };
+      console.log('[Profile.js] Mapped user for profile state:', mappedUser);
+      setUserData(mappedUser);
+      setFormData(mappedUser); // formData auch mit dem gemappten User initialisieren
+    } else {
+      // Falls kein User im Context (z.B. nach Logout), mockUser oder leere Daten setzen
+      console.log('[Profile.js] No user in context, setting mockUser.');
+      setUserData(mockUser); 
+      setFormData({...mockUser});
+    }
+  }, [user]);
+
   return (
     <RootStyle>
       <Box sx={{ mb: 4 }}>
@@ -482,10 +526,8 @@ export default function Profile() {
               sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
             >
               <Tab label="Personal Information" />
-              <Tab label="Security" />
               <Tab label="Notifications" />
-              <Tab label="Email Settings" />
-              <Tab label="Connected Apps" />
+              <Tab label="Security" />
             </Tabs>
             
             <TabPanel value={activeTab} index={0}>
@@ -516,7 +558,7 @@ export default function Profile() {
                     fullWidth
                     label="Full Name"
                     name="fullName"
-                    value={formData.fullName}
+                    value={formData.fullName || ''}
                     onChange={handleInputChange}
                     disabled={!editMode}
                     margin="normal"
@@ -527,7 +569,7 @@ export default function Profile() {
                     fullWidth
                     label="Username"
                     name="username"
-                    value={formData.username}
+                    value={formData.username || ''}
                     onChange={handleInputChange}
                     disabled
                     margin="normal"
@@ -559,77 +601,6 @@ export default function Profile() {
             </TabPanel>
             
             <TabPanel value={activeTab} index={1}>
-              <Box sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Security Settings
-                </Typography>
-                
-                <Stack spacing={3}>
-                  <Box>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Change Password
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          type="password"
-                          label="Current Password"
-                          name="currentPassword"
-                          margin="normal"
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          type="password"
-                          label="New Password"
-                          name="newPassword"
-                          margin="normal"
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          type="password"
-                          label="Confirm New Password"
-                          name="confirmPassword"
-                          margin="normal"
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <Button 
-                          startIcon={<KeyIcon />}
-                          variant="contained" 
-                          color="primary"
-                        >
-                          Update Password
-                        </Button>
-                      </Grid>
-                    </Grid>
-                  </Box>
-                  
-                  <Divider />
-                  
-                  <Box>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Two-Factor Authentication
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" paragraph>
-                      Add an extra layer of security to your account
-                    </Typography>
-                    <Button 
-                      startIcon={<SecurityIcon />} 
-                      variant="outlined"
-                    >
-                      Enable 2FA
-                    </Button>
-                  </Box>
-                </Stack>
-              </Box>
-            </TabPanel>
-            
-            <TabPanel value={activeTab} index={2}>
               <Box sx={{ p: 2 }}>
                 <Typography variant="h6" gutterBottom>
                   Notification Preferences
@@ -725,155 +696,74 @@ export default function Profile() {
               </Box>
             </TabPanel>
             
-            <TabPanel value={activeTab} index={3}>
+            <TabPanel value={activeTab} index={2}>
               <Box sx={{ p: 2 }}>
                 <Typography variant="h6" gutterBottom>
-                  SMTP Configuration
-                </Typography>
-                <Typography variant="body2" color="text.secondary" paragraph>
-                  Configure your SMTP server for sending email notifications
+                  Security Settings
                 </Typography>
                 
-                <Grid container spacing={3}>
-                  <Grid item xs={12} sm={8}>
-                    <TextField
-                      fullWidth
-                      label="SMTP Server"
-                      name="host"
-                      value={smtpSettings.host}
-                      onChange={handleSmtpChange}
-                      placeholder="smtp.example.com"
-                      required
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      fullWidth
-                      label="Port"
-                      name="port"
-                      value={smtpSettings.port}
-                      onChange={handleSmtpChange}
-                      placeholder="587"
-                      required
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Username"
-                      name="username"
-                      value={smtpSettings.username}
-                      onChange={handleSmtpChange}
-                      placeholder="your-email@example.com"
-                      required
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Password"
-                      name="password"
-                      type="password"
-                      value={smtpSettings.password}
-                      onChange={handleSmtpChange}
-                      required
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="From Email"
-                      name="fromEmail"
-                      value={smtpSettings.fromEmail}
-                      onChange={handleSmtpChange}
-                      placeholder="notifications@yourdomain.com"
-                      helperText="Leave empty to use username as from address"
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="From Name"
-                      name="fromName"
-                      value={smtpSettings.fromName}
-                      onChange={handleSmtpChange}
-                      placeholder="Mole Database Manager"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <FormControl fullWidth>
-                      <InputLabel id="encryption-label">Encryption</InputLabel>
-                      <Select
-                        labelId="encryption-label"
-                        id="encryption"
-                        name="encryption"
-                        value={smtpSettings.encryption}
-                        onChange={handleSmtpChange}
-                        label="Encryption"
-                      >
-                        <MenuItem value="tls">TLS</MenuItem>
-                        <MenuItem value="ssl">SSL</MenuItem>
-                        <MenuItem value="none">None</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  
-                  {smtpTestStatus.message && (
-                    <Grid item xs={12}>
-                      <Alert 
-                        severity={smtpTestStatus.success ? "success" : "error"}
-                        sx={{ mt: 2 }}
-                      >
-                        {smtpTestStatus.message}
-                      </Alert>
+                <Stack spacing={3}>
+                  <Box>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Change Password
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          type="password"
+                          label="Current Password"
+                          name="currentPassword"
+                          margin="normal"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          type="password"
+                          label="New Password"
+                          name="newPassword"
+                          margin="normal"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          type="password"
+                          label="Confirm New Password"
+                          name="confirmPassword"
+                          margin="normal"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Button 
+                          startIcon={<KeyIcon />}
+                          variant="contained" 
+                          color="primary"
+                        >
+                          Update Password
+                        </Button>
+                      </Grid>
                     </Grid>
-                  )}
+                  </Box>
                   
-                  <Grid item xs={12}>
-                    <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                      <Button
-                        variant="outlined"
-                        onClick={handleTestSmtpConnection}
-                        disabled={smtpTestStatus.testing}
-                        startIcon={smtpTestStatus.testing ? <CircularProgress size={20} /> : <CheckIcon />}
-                      >
-                        Test Connection
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        color="secondary"
-                        onClick={handleSendTestEmail}
-                        disabled={!smtpSettings.host || !smtpSettings.username || !smtpSettings.password}
-                      >
-                        Send Test Email
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleSaveSmtpSettings}
-                        startIcon={<SaveIcon />}
-                      >
-                        Save Settings
-                      </Button>
-                    </Box>
-                  </Grid>
-                </Grid>
-              </Box>
-            </TabPanel>
-            
-            <TabPanel value={activeTab} index={4}>
-              <Box sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Connected Applications
-                </Typography>
-                <Typography variant="body2" color="text.secondary" paragraph>
-                  Manage external applications connected to your account
-                </Typography>
-                
-                {/* Connected apps would go here */}
-                <Typography variant="body1">
-                  No connected applications found.
-                </Typography>
+                  <Divider />
+                  
+                  <Box>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Two-Factor Authentication
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      Add an extra layer of security to your account
+                    </Typography>
+                    <Button 
+                      startIcon={<SecurityIcon />} 
+                      variant="outlined"
+                    >
+                      Enable 2FA
+                    </Button>
+                  </Box>
+                </Stack>
               </Box>
             </TabPanel>
           </Paper>

@@ -726,3 +726,116 @@ In dieser Migration wurde die Benutzeroberfläche für die Datenbanksynchronisat
 Diese Erweiterungen legen die Grundlage für eine vollständige Datenbanksynchronisationsfunktion, die es Benutzern ermöglicht, Daten zwischen verschiedenen Datenbanken automatisch oder manuell zu synchronisieren. Die Implementierung folgt dem bestehenden Architekturmuster mit einer klaren Trennung zwischen Frontend-UI und Backend-Services.
 
 Die vollständigen Endpunkte für die Synchronisations-API werden vom Node.js-Backend bereitgestellt und interagieren mit der `sync_tasks`-Tabelle und dem `db-sync`-Service, wie bereits in der Dokumentation beschrieben.
+
+## Benutzerbezogene Einstellungen (User Settings)
+
+Seit Version X werden alle Benutzereinstellungen (z.B. Benachrichtigungen, Security, AI, SMTP) **pro User** gespeichert und verschlüsselt abgelegt.
+
+### Speicherung
+- Die Einstellungen werden verschlüsselt (AES) in `data/user_settings/{userId}.json` gespeichert.
+- Sensible Felder wie Passwörter und API-Keys werden mit AES-256 verschlüsselt.
+
+### API-Endpunkte
+- `GET /api/user/settings` – Liefert die entschlüsselten Settings für den eingeloggten User.
+- `POST /api/user/settings` – Speichert die Settings für den eingeloggten User (verschlüsselt sensible Felder).
+
+### Beispiel für das Settings-Objekt
+```json
+{
+  "notifications": {
+    "inApp": true,
+    "email": false,
+    "events": {
+      "dbConnectionIssues": true,
+      "syncCompleted": true
+    }
+  },
+  "security": {
+    "autoLogout": true,
+    "logoutTimeout": 30
+  },
+  "ai": {
+    "provider": "openai",
+    "openaiApiKey": "<verschlüsselt>",
+    "perplexityApiKey": "<verschlüsselt>",
+    "huggingfaceApiKey": "<verschlüsselt>",
+    "huggingfaceModel": "",
+    "localModelPath": ""
+  },
+  "smtp": {
+    "host": "smtp.example.com",
+    "port": "587",
+    "username": "user@example.com",
+    "password": "<verschlüsselt>",
+    "encryption": "tls",
+    "fromEmail": "",
+    "fromName": ""
+  }
+}
+```
+
+### Frontend-Integration
+- Die React-UI lädt und speichert die Settings über `UserSettingsService`.
+- Sowohl die Settings-Seite als auch das User-Profil greifen auf dieselben User-Settings zu. Änderungen sind überall synchron.
+- Die Datenbankverbindungen im Profil werden weiterhin separat geladen und verwaltet.
+
+## Benutzerauthentifizierung und -verwaltung (Version 0.7.0+)
+
+Seit Version 0.7.0 verfügt Mole Database Manager über ein robustes System zur Benutzerauthentifizierung und -verwaltung.
+
+### Authentifizierungsablauf
+
+1.  **Initiales Setup (Erstinbetriebnahme):**
+    *   Beim allerersten Start der Anwendung (oder wenn keine Administratorkonten in `data/users.json` existieren) wird der Benutzer zur `/setup`-Seite geleitet.
+    *   Auf der Setup-Seite hat der Benutzer zwei Optionen:
+        1.  **Neuen Admin-Account erstellen:** Eingabe von Name, E-Mail und Passwort. Dieser Account erhält die Rolle `admin`.
+        2.  **Mit Demo-Account einloggen:** Ein Klick auf "Login with Demo Account" loggt den Benutzer mit den fest kodierten Demo-Zugangsdaten (`demo@example.com` / Passwort: `demo`) ein. Dieser Account hat die Rolle `user` und dient reinen Testzwecken.
+    *   Nach erfolgreicher Admin-Erstellung wird der Benutzer zur `/login`-Seite weitergeleitet. Nach erfolgreichem Demo-Login wird er zum `/dashboard` geleitet.
+
+2.  **Standard-Login (`/login`):**
+    *   Benutzer geben ihre E-Mail und ihr Passwort ein.
+    *   Das Backend prüft die Anmeldedaten gegen die in `data/users.json` gespeicherten (gehashten) Passwörter.
+    *   Bei Erfolg wird ein JWT (JSON Web Token) generiert und im `localStorage` (`mole_auth_token`) gespeichert. Die Benutzerdaten (ohne Passwort) werden ebenfalls im `localStorage` (`moleUser`) gespeichert und im `UserContext` der Anwendung bereitgestellt.
+    *   Der Benutzer wird zum `/dashboard` weitergeleitet.
+
+3.  **Registrierung (`/register`):**
+    *   Benutzer können sich jederzeit über das Registrierungsformular (Name, E-Mail, Passwort) einen neuen Account erstellen.
+    *   Diese Accounts erhalten standardmäßig die Rolle `user`.
+    *   Nach erfolgreicher Registrierung wird der Benutzer automatisch eingeloggt und zum Dashboard weitergeleitet.
+
+4.  **Logout:**
+    *   Entfernt den JWT und die Benutzerdaten aus dem `localStorage`.
+    *   Leitet zur `/login`-Seite weiter.
+
+### Benutzerdaten
+
+*   Benutzerinformationen (ID, Name, E-Mail, gehashtes Passwort, Rolle, Erstellungsdatum) werden in der Datei `mole/app/backend/data/users.json` gespeichert.
+*   **Wichtig:** Beim ersten Start der Anwendung (wenn `users.json` nicht existiert) wird automatisch ein `demo@example.com`-Benutzer (Rolle: `user`, Passwort: `demo`) erstellt.
+
+### Admin-Funktionen (`/users` - nur für Admins)
+
+Eingeloggte Administratoren haben Zugriff auf die Benutzerverwaltungsseite (`/users`), erreichbar über einen eigenen Menüpunkt in der Sidebar. Dort können sie:
+
+*   Alle existierenden Benutzer auflisten (ID, Name, E-Mail, Rolle, Erstellungsdatum).
+*   Neue Benutzer erstellen (und ihnen die Rolle `user` oder `admin` zuweisen).
+*   Bestehende Benutzer bearbeiten (Name, E-Mail, Passwort (optional ändern), Rolle).
+*   Benutzer löschen (mit Bestätigungsdialog). Das Löschen des letzten verbleibenden Admin-Accounts wird verhindert.
+
+### Sicherheitsaspekte
+
+*   Passwörter werden mit `bcryptjs` gehasht gespeichert.
+*   API-Endpunkte für die Benutzerverwaltung sind durch Authentifizierungs- (`authMiddleware`) und Admin-Rollen-Middleware (`adminMiddleware`) geschützt.
+*   Der Endpunkt zum Erstellen des ersten Admin-Accounts (`POST /api/users` während des Setups) ist nur dann ungeschützt, wenn noch kein Admin-Account existiert. Sobald ein Admin vorhanden ist, erfordert auch dieser Endpunkt Admin-Rechte.
+*   Ein ungeschützter Endpunkt `GET /api/auth/check-admin-exists` erlaubt dem Frontend beim Start zu prüfen, ob ein Admin-Setup notwendig ist, ohne dass bereits ein Benutzer eingeloggt sein muss.
+
+### API-Endpunkte für Benutzerverwaltung (geschützt)
+
+Alle Endpunkte unter `/api/users` erfordern Authentifizierung und Admin-Rechte, mit Ausnahme des initialen `POST`-Requests während des Setups.
+
+| Methode | Pfad        | Beschreibung                       |
+|---------|-------------|------------------------------------|
+| GET     | `/`         | Alle Benutzer auflisten            |
+| GET     | `/:id`      | Einen spezifischen Benutzer abrufen |
+| POST    | `/`         | Neuen Benutzer erstellen           |
+| PUT     | `/:id`      | Bestehenden Benutzer aktualisieren |
+| DELETE  | `/:id`      | Benutzer löschen                   |

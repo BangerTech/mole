@@ -12,7 +12,8 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PersonIcon from '@mui/icons-material/Person';
 import { useThemeMode } from '../App';
-import UserContext from './UserContext';
+import { UserContext } from './UserContext';
+import AuthService from '../services/AuthService';
 
 const closedDrawerWidth = (theme) => `calc(${theme.spacing(8)} + 1px)`;
 const drawerWidth = 240;
@@ -124,6 +125,7 @@ export default function Navbar() {
   const handleLogout = () => {
     handleAccountMenuClose();
     contextLogout(); // Call logout from context
+    AuthService.logout(); // Entferne auch Token/User aus AuthService
     navigate('/login'); // Redirect to login
   };
 
@@ -169,7 +171,7 @@ export default function Navbar() {
           </Tooltip>
 
           <Typography variant="subtitle1" color="text.primary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-            {user?.username || 'Admin'}
+            {user?.name || 'Guest'}
           </Typography>
           
           <Tooltip title="Account settings">

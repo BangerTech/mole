@@ -17,15 +17,15 @@ if (!fs.existsSync(dataDir)) {
 
 // Initialize users file if it doesn't exist
 if (!fs.existsSync(usersPath)) {
-  // Create admin user by default
-  const adminPassword = bcrypt.hashSync('admin', 10);
+  // Create demo user by default
+  const demoPassword = bcrypt.hashSync('demo', 10);
   const users = [
     {
       id: 1,
-      email: 'admin@example.com',
-      password: adminPassword,
-      name: 'Administrator',
-      role: 'admin',
+      email: 'demo@example.com',
+      password: demoPassword,
+      name: 'Demo User',
+      role: 'user',
       createdAt: new Date().toISOString()
     }
   ];
@@ -55,6 +55,8 @@ const saveUsers = (users) => {
     fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
   } catch (error) {
     console.error('Error writing users file:', error);
+    console.error('Current users array:', users);
+    console.error('Stacktrace:', error.stack);
     throw error;
   }
 };
@@ -125,6 +127,7 @@ module.exports = {
       
       // Add to users array and save
       users.push(newUser);
+      console.log('[AUTH DEBUG] Users array before saving:', JSON.stringify(users, null, 2));
       saveUsers(users);
       
       // Create token
@@ -241,6 +244,24 @@ module.exports = {
         success: false, 
         message: 'Error getting user' 
       });
+    }
+  },
+
+  /**
+   * Prüfen, ob ein Admin-Benutzer existiert (ungeschützt)
+   * @param {Object} req - Request-Objekt
+   * @param {Object} res - Response-Objekt
+   */
+  checkAdminExists: async (req, res) => {
+    try {
+      const users = getUsers(); // getUsers() ist bereits im Controller definiert
+      const adminUserExists = users.some(user => user.role === 'admin');
+      res.json({ success: true, adminExists: adminUserExists });
+    } catch (error) {
+      console.error('Error checking if admin exists:', error);
+      // Im Fehlerfall (z.B. users.json nicht lesbar) ist es sicherer anzunehmen, dass kein Admin existiert,
+      // um den Setup-Flow zu ermöglichen.
+      res.status(500).json({ success: false, adminExists: false, message: 'Error checking admin status' });
     }
   }
 }; 

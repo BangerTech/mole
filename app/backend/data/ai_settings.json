@@ -1,0 +1,28 @@
+{
+  "defaultProvider": "perplexity",
+  "providers": {
+    "openai": {
+      "enabled": true,
+      "apiKey": "",
+      "model": "gpt-3.5-turbo"
+    },
+    "perplexity": {
+      "enabled": true,
+      "apiKey": "f606bfb1eb299d335b2e40a98b1db5e0:58297c76993d659f5b9ee3a03905051914f43dac02aa479d06024f2fdf54b965e591e6d90f455f9845d72b97d9a58d7b307acf7b304530c9adc4d29eb76f7000",
+      "model": "pplx-7b-online"
+    },
+    "huggingface": {
+      "enabled": true,
+      "apiKey": "",
+      "model": "mistralai/Mistral-7B-Instruct-v0.2"
+    },
+    "llama": {
+      "enabled": true,
+      "modelPath": "/models/llama-2-7b"
+    },
+    "sqlpal": {
+      "enabled": true,
+      "modelPath": "/app/models/sqlpal"
+    }
+  }
+}
