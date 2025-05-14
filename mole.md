@@ -945,3 +945,53 @@ In dieser Migration wurden Anpassungen am globalen Layout vorgenommen, um einen 
 -- Keine direkten SQL-Datenbankänderungen in dieser Migration.
 -- Die Änderungen betreffen primär die Frontend-Layout-Logik und Backend-Datenabrufmethoden für Metadaten.
 ```
+
+### Migration 013 - Benutzer-Avatar Upload & Anzeige (2025-05-14)
+
+Mit dieser Migration wurde die Möglichkeit geschaffen, dass Benutzer ihr Profilbild (Avatar) im User-Profil hochladen und ändern können. Das Bild wird serverseitig gespeichert und in der gesamten Anwendung (z.B. Navbar, Profilseite) angezeigt.
+
+**Technische Umsetzung:**
+
+1. **Backend (Node.js/Express):**
+   - Neuer API-Endpunkt: `POST /api/users/:userId/avatar` (authentifiziert, nur für eingeloggte User)
+   - Avatar-Upload via `multer`-Middleware, Speicherung im Verzeichnis `backend/data/avatars/`
+   - Der Dateiname enthält die User-ID und einen Zeitstempel, z.B. `user-2-1747206030075.png`
+   - Nach erfolgreichem Upload wird der Pfad (`/data/avatars/xyz.png`) im User-Objekt (`users.json`) gespeichert
+   - Alte Avatare werden beim Hochladen eines neuen Bildes automatisch gelöscht
+   - Das Verzeichnis `data/avatars` wird beim Serverstart automatisch angelegt (sofern nicht vorhanden)
+   - Die Avatare werden über den statischen Pfad `/data/avatars/...` ausgeliefert
+
+2. **Frontend (React UI):**
+   - Im User-Profil kann das Profilbild geändert werden (Dateiauswahl, Vorschau, Upload beim Speichern)
+   - Nach erfolgreichem Upload wird das neue Bild sofort im Profil und in der Navbar angezeigt
+   - Die URL zum Bild wird dynamisch aus der API-Basis-URL und dem im User-Objekt gespeicherten Pfad zusammengesetzt
+   - Die UserContext-Logik sorgt dafür, dass das aktualisierte User-Objekt nach Upload und Profil-Update überall synchron angezeigt wird
+   - Fallback: Wenn kein Bild vorhanden ist, werden die Initialen angezeigt
+
+3. **Sicherheit & Rechte:**
+   - Nur authentifizierte Benutzer können ihr eigenes Profilbild hochladen/ändern
+   - Die maximale Dateigröße ist auf 5 MB begrenzt, es sind nur Bildformate erlaubt (PNG, JPG, JPEG, GIF)
+   - Die Avatar-URLs sind nicht geheim, aber nur eingeloggte User können sie ändern
+
+**API-Beispiel:**
+
+```
+POST /api/users/2/avatar
+Header: Authorization: Bearer <JWT>
+Body (multipart/form-data): avatar=<Datei>
+Response: { success: true, user: { ...updatedUser, profileImage: "/data/avatars/user-2-1747206030075.png" } }
+```
+
+**Dateispeicherung:**
+- Avatare werden im Verzeichnis `mole/app/backend/data/avatars/` gespeichert (persistentes Docker-Volume empfohlen)
+- Die Referenz zum Bild wird im User-Objekt (`profileImage`) gespeichert
+
+**Frontend-Komponenten:**
+- `Profile.js` (Profilseite, Bildauswahl und Upload)
+- `Navbar.js` (Anzeige des Avatars in der Navigation)
+- `AuthService.js` (API-Call für Avatar-Upload)
+- `UserContext.js` (Synchronisierung des User-Objekts)
+
+**Wichtige Hinweise:**
+- Das Design und bestehende Funktionen bleiben unverändert
+- Die Funktion ist vollständig Docker-kompatibel (Volume für `/app/backend/data` empfohlen)

@@ -5,6 +5,7 @@ const path = require('path');
 const dotenv = require('dotenv');
 const axios = require('axios');
 const { initDatabase } = require('./models/database');
+const fs = require('fs');
 
 // Load environment variables
 dotenv.config();
@@ -31,6 +32,16 @@ const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://db-sync:500
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// Ensure data/avatars directory exists (changed from public/avatars)
+const dataAvatarsDir = path.join(__dirname, 'data/avatars');
+if (!fs.existsSync(dataAvatarsDir)){
+    fs.mkdirSync(dataAvatarsDir, { recursive: true });
+    console.log(`Created directory: ${dataAvatarsDir}`);
+}
+
+// Serve static files from 'data' directory (for avatars etc. accessible via /data/avatars/...)
+app.use('/data', express.static(path.join(__dirname, 'data')));
 
 // Initialize database
 initDatabase().catch(err => {

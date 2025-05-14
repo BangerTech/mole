@@ -54,7 +54,7 @@ import {
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import EmailService from '../services/EmailService';
 import DatabaseService from '../services/DatabaseService';
-import AuthService from '../services/AuthService';
+import AuthService, { getApiBaseUrl } from '../services/AuthService';
 import { UserContext } from '../components/UserContext';
 
 // Styled components
@@ -149,7 +149,9 @@ export default function Profile() {
   const [formData, setFormData] = useState({...mockUser});
   const [databaseConnections, setDatabaseConnections] = useState([]);
   const [loadingConnections, setLoadingConnections] = useState(true);
+  const [profileImageFile, setProfileImageFile] = useState(null);
   const [profileImagePreview, setProfileImagePreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
@@ -171,7 +173,7 @@ export default function Profile() {
     message: ''
   });
   
-  const { user } = useContext(UserContext);
+  const { user, updateUser: updateUserContext } = useContext(UserContext);
   
   // Load database connections from API
   const fetchDatabaseConnections = async () => {
@@ -197,31 +199,93 @@ export default function Profile() {
 
   const handleEditToggle = () => {
     if (editMode) {
-      // If we're exiting edit mode without saving, reset form data
-      setFormData({...userData});
+      // If we're exiting edit mode without saving, reset form data and preview
+      setFormData({...userData}); // Reset formData to current actual userData
       setProfileImagePreview(null);
+      setProfileImageFile(null);
     }
     setEditMode(!editMode);
   };
 
-  const handleSaveProfile = () => {
-    // In a real application, this would make an API call to update user data
-    const updatedUserData = {...formData};
-    
-    // Save profile image if there's a preview
-    if (profileImagePreview) {
-      updatedUserData.profileImage = profileImagePreview;
+  const handleSaveProfile = async () => {
+    setIsUploading(true);
+    let latestUserData = { ...user }; // Start with current user from context
+    let avatarUpdated = false;
+
+    try {
+      // Step 1: Handle Avatar Upload if a new file is selected
+      if (profileImageFile && user && user.id) {
+        const uploadResponse = await AuthService.uploadAvatar(user.id, profileImageFile);
+        if (uploadResponse.success && uploadResponse.user) {
+          latestUserData = uploadResponse.user; // This now has the new profileImage URL
+          avatarUpdated = true;
+          setSnackbar({
+            open: true,
+            message: 'Profile image updated successfully!',
+            severity: 'success'
+          });
+          setProfileImagePreview(null);
+          setProfileImageFile(null);
+        } else {
+          throw new Error(uploadResponse.message || 'Avatar upload failed during processing.');
+        }
+      }
+
+      // Step 2: Handle other profile data changes (currently mocked by applying formData)
+      // In a real app, this would be a separate API call if formData fields (name, email etc.) changed.
+      // For example: if (formData.fullName !== latestUserData.fullName || formData.email !== latestUserData.email) {
+      //   const detailsUpdateResponse = await AuthService.updateUserDetails(latestUserData.id, { fullName: formData.fullName, email: formData.email });
+      //   latestUserData = detailsUpdateResponse.user;
+      // }
+
+      // Merge other form data changes into latestUserData
+      // Ensure profileImage from avatar upload (if any) or existing is preserved.
+      const otherFieldsChanged = formData.fullName !== latestUserData.fullName || formData.email !== latestUserData.email; // Add other fields as needed
+
+      latestUserData = {
+        ...latestUserData, // Contains new profileImage if avatar was uploaded, or original from context
+        fullName: formData.fullName,
+        email: formData.email
+        // any other editable fields from formData must be explicitly merged here
+        // Important: profileImage is already set correctly in latestUserData if uploaded,
+        // or it's the original value from user context. This line doesn't overwrite it with an old formData value.
+      };
+      
+      // Step 3: Update context and local state ONCE with the final user data
+      // Only update if there were actual changes (avatar or other fields)
+      if (avatarUpdated || otherFieldsChanged) {
+        updateUserContext(latestUserData);
+        setUserData(latestUserData); 
+        setFormData(latestUserData); // Reset form with latest data for next edit
+
+        // If only other fields were changed and no avatar message was shown
+        if (otherFieldsChanged && !avatarUpdated) {
+            setSnackbar({
+              open: true,
+              message: 'Profile details updated.',
+              severity: 'success'
+            });
+        }
+      } else if (!avatarUpdated) {
+        // No changes were made
+        setSnackbar({
+            open: true,
+            message: 'No changes to save.',
+            severity: 'info'
+          });
+      }
+
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to save profile.',
+        severity: 'error'
+      });
+    } finally {
+      setEditMode(false);
+      setIsUploading(false);
     }
-    
-    setUserData(updatedUserData);
-    setEditMode(false);
-    
-    // Show success message
-    setSnackbar({
-      open: true,
-      message: 'Profile updated successfully',
-      severity: 'success'
-    });
   };
 
   const handleInputChange = (e) => {
@@ -256,11 +320,15 @@ export default function Profile() {
   const handleProfileImageChange = (e) => {
     const file = e.target.files[0];
     if (file && file.type.startsWith('image/')) {
+      setProfileImageFile(file);
       const reader = new FileReader();
       reader.onload = (event) => {
         setProfileImagePreview(event.target.result);
       };
       reader.readAsDataURL(file);
+    } else {
+      setProfileImageFile(null);
+      setProfileImagePreview(null);
     }
   };
 
@@ -382,32 +450,33 @@ export default function Profile() {
   useEffect(() => {
     console.log('[Profile.js] User from context:', user);
     if (user) {
-      // Map the user object from AuthService/UserContext to the format expected by Profile
+      // User data from context is now the source of truth
       const mappedUser = {
-        ...user, // Übernehme alle Felder aus dem user-Objekt des Contexts
-        fullName: user.name || user.fullName || '', // Nutze user.name (vom Backend) oder user.fullName (falls schon im Context gemappt)
-        username: user.username || user.email?.split('@')[0] || '', // username bleibt gleich
-        // lastLogin wird jetzt vom UserContext beim Login gesetzt, hier nicht mehr überschreiben, außer es ist wirklich notwendig
-        // lastLogin: user.lastLogin || new Date().toISOString(), 
-        // profileImage wird vom Context übernommen oder bleibt null
-        profileImage: user.profileImage || null,
-        // preferences könnten ebenfalls vom Context kommen oder hier initialisiert/gemerged werden
+        id: user.id,
+        fullName: user.name || user.fullName || '', 
+        username: user.username || user.email?.split('@')[0] || '', 
+        email: user.email || '',
+        role: user.role || '',
+        createdAt: user.createdAt || '',
+        lastLogin: user.lastLogin || '',
+        profileImage: user.profileImage || null, // Crucial: use profileImage from context
         preferences: user.preferences || {
           darkMode: true,
           notifications: true,
           showSampleDatabases: true
         }
       };
-      console.log('[Profile.js] Mapped user for profile state:', mappedUser);
+      console.log('[Profile.js] Mapped user for profile state from context:', mappedUser);
       setUserData(mappedUser);
-      setFormData(mappedUser); // formData auch mit dem gemappten User initialisieren
+      setFormData(mappedUser); 
+      setProfileImagePreview(null); // Reset preview when user context changes
+      setProfileImageFile(null);   // Reset file when user context changes
     } else {
-      // Falls kein User im Context (z.B. nach Logout), mockUser oder leere Daten setzen
       console.log('[Profile.js] No user in context, setting mockUser.');
       setUserData(mockUser); 
       setFormData({...mockUser});
     }
-  }, [user]);
+  }, [user]); // Depend on user from context
 
   return (
     <RootStyle>
@@ -446,13 +515,14 @@ export default function Profile() {
                         }}
                         size="small"
                         onClick={handleProfileImageClick}
+                        disabled={isUploading}
                       >
-                        <PhotoCameraIcon fontSize="small" />
+                        {isUploading ? <CircularProgress size={16} color="inherit" /> : <PhotoCameraIcon fontSize="small" />}
                       </IconButton>
                     }
                   >
                     <LargeAvatar 
-                      src={profileImagePreview || userData.profileImage}
+                      src={profileImagePreview || (userData.profileImage ? `${getApiBaseUrl().replace('/api', '')}${userData.profileImage}` : null)}
                       sx={{ cursor: 'pointer' }}
                       onClick={handleProfileImageClick}
                     >
@@ -461,7 +531,7 @@ export default function Profile() {
                   </StyledBadge>
                 </>
               ) : (
-                <LargeAvatar src={userData.profileImage}>
+                <LargeAvatar src={userData.profileImage ? `${getApiBaseUrl().replace('/api', '')}${userData.profileImage}` : null}>
                   {!userData.profileImage && getInitials(userData.fullName)}
                 </LargeAvatar>
               )}
@@ -542,12 +612,13 @@ export default function Profile() {
                   </Button>
                 ) : (
                   <Button 
-                    startIcon={<SaveIcon />} 
+                    startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />} 
                     variant="contained" 
                     color="primary" 
                     onClick={handleSaveProfile}
+                    disabled={isUploading}
                   >
-                    Save Changes
+                    {isUploading ? 'Saving...' : 'Save Changes'}
                   </Button>
                 )}
               </Box>

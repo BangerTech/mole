@@ -1,9 +1,43 @@
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
 
 // Pfad zur Benutzerdatei
 const usersPath = path.join(__dirname, '../data/users.json');
+const avatarsDir = path.join(__dirname, '../data/avatars');
+
+// Ensure avatars directory exists
+if (!fs.existsSync(avatarsDir)) {
+  fs.mkdirSync(avatarsDir, { recursive: true });
+}
+
+// Multer storage configuration
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, avatarsDir);
+  },
+  filename: function (req, file, cb) {
+    const userId = req.params.userId || req.user.id; // Prefer userId from params, fallback to authenticated user
+    const timestamp = Date.now();
+    const extension = path.extname(file.originalname);
+    cb(null, `user-${userId}-${timestamp}${extension}`);
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB file size limit
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = /jpeg|jpg|png|gif/;
+    const mimetype = allowedTypes.test(file.mimetype);
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    cb(new Error('Error: File upload only supports the following filetypes - ' + allowedTypes));
+  }
+});
 
 /**
  * Alle Benutzer aus der Datei abrufen
@@ -39,10 +73,87 @@ const saveUsers = (users) => {
  */
 const findUserById = (id) => {
   const users = getUsers();
-  return users.find(user => user.id === id) || null;
+  return users.find(user => user.id === parseInt(id)) || null; // Ensure ID is integer for comparison
 };
 
 module.exports = {
+  // Middleware for multer, can be used in routes
+  uploadAvatarMiddleware: upload.single('avatar'),
+
+  /**
+   * Uploads or updates a user's avatar.
+   * @param {Object} req - Request-Objekt
+   * @param {Object} res - Response-Objekt
+   */
+  uploadAvatar: async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+
+      if (isNaN(userId)) {
+        return res.status(400).json({ success: false, message: 'Invalid user ID.' });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No avatar file uploaded.' });
+      }
+
+      const users = getUsers();
+      const userIndex = users.findIndex(user => user.id === userId);
+
+      if (userIndex === -1) {
+        // Optionally remove uploaded file if user not found
+        fs.unlinkSync(req.file.path); 
+        return res.status(404).json({ success: false, message: 'User not found.' });
+      }
+
+      // Construct the web-accessible path for the avatar
+      // Assuming 'data' is served as static root for this path, so path starts with '/data/avatars/'
+      const avatarUrl = `/data/avatars/${req.file.filename}`;
+
+      // Remove old avatar if it exists and is different
+      const oldAvatarPath = users[userIndex].profileImage;
+      if (oldAvatarPath && oldAvatarPath !== avatarUrl) {
+        const oldAvatarFsPath = path.join(__dirname, '..', oldAvatarPath.startsWith('/data/') ? '' : 'public', oldAvatarPath.replace('/data/', ''));
+        if (fs.existsSync(oldAvatarFsPath)) {
+          try {
+            fs.unlinkSync(oldAvatarFsPath);
+            console.log(`Old avatar ${oldAvatarFsPath} deleted.`);
+          } catch (err) {
+            console.error(`Failed to delete old avatar ${oldAvatarFsPath}:`, err);
+          }
+        }
+      }
+      
+      users[userIndex].profileImage = avatarUrl;
+      saveUsers(users);
+
+      // Exclude password from the returned user object
+      const { password, ...userWithoutPassword } = users[userIndex];
+      
+      res.json({ 
+        success: true, 
+        message: 'Avatar uploaded successfully.',
+        user: userWithoutPassword, // Send back updated user
+        avatarUrl: avatarUrl // Explicitly send new URL
+      });
+
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      // If an error occurs after file upload, attempt to delete the uploaded file
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkErr) {
+          console.error('Failed to delete file after upload error:', unlinkErr);
+        }
+      }
+      if (error.message.startsWith('Error: File upload only supports')) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Error uploading avatar.' });
+    }
+  },
+
   /**
    * Alle Benutzer abrufen (für Admin)
    * @param {Object} req - Request-Objekt

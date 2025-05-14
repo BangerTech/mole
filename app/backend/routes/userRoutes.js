@@ -44,6 +44,16 @@ const createUserMiddleware = (req, res, next) => {
 // POST /api/users (Benutzer erstellen) - Spezielle Middleware für initiales Setup
 router.post('/', createUserMiddleware, userController.createUser);
 
+// Route for avatar upload - should be authenticated
+// The userController.uploadAvatarMiddleware handles the file parsing via multer
+// authMiddleware ensures the user is logged in
+router.post(
+  '/:userId/avatar',
+  authMiddleware, // Ensure user is authenticated
+  userController.uploadAvatarMiddleware, // Multer middleware for file handling
+  userController.uploadAvatar // The actual controller function
+);
+
 // Alle anderen /api/users Routen mit Auth- und Admin-Middleware schützen
 router.use(authMiddleware);
 router.use(adminMiddleware);

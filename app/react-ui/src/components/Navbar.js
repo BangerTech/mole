@@ -13,7 +13,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import PersonIcon from '@mui/icons-material/Person';
 import { useThemeMode } from '../App';
 import { UserContext } from './UserContext';
-import AuthService from '../services/AuthService';
+import AuthService, { getApiBaseUrl } from '../services/AuthService';
 
 const closedDrawerWidth = (theme) => `calc(${theme.spacing(8)} + 1px)`;
 const drawerWidth = 240;
@@ -183,7 +183,14 @@ export default function Navbar() {
               aria-haspopup="true"
               aria-expanded={accountMenuOpen ? 'true' : undefined}
             >
-              {user?.avatarUrl ? <Avatar src={user.avatarUrl} sx={{ width: 32, height: 32 }} /> : <AccountCircle />}
+              {user?.profileImage ? (
+                <Avatar 
+                  src={`${getApiBaseUrl().replace('/api', '')}${user.profileImage}`}
+                  sx={{ width: 32, height: 32 }}
+                />
+              ) : (
+                <AccountCircle />
+              )}
             </IconButton>
           </Tooltip>
         </Stack>

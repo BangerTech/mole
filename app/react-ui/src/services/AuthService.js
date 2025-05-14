@@ -9,6 +9,7 @@ export const getApiBaseUrl = () => {
 
 // API Basis URL für Authentifizierung - dynamically determined
 const AUTH_API_URL = `${getApiBaseUrl()}/auth`;
+const USER_API_URL = `${getApiBaseUrl()}/users`; // Added for user-specific actions
 
 // Token-Speicherung in localStorage
 const TOKEN_KEY = 'mole_auth_token';
@@ -202,6 +203,43 @@ class AuthService {
       // Für den InitialRouteHandler ist { adminExists: false } ein sicherer Fallback.
       return { success: false, adminExists: false, message: error.message || 'Could not connect to server to check admin status.' };
     }
+  }
+
+  /**
+   * Uploads a user's avatar.
+   * @param {number} userId - The ID of the user.
+   * @param {File} avatarFile - The avatar file to upload.
+   * @returns {Promise} Promise with the server response (including updated user).
+   */
+  uploadAvatar(userId, avatarFile) {
+    const formData = new FormData();
+    formData.append('avatar', avatarFile);
+
+    const token = this.getToken(); // Get token for authorization
+
+    return axios.post(`${USER_API_URL}/${userId}/avatar`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}` // Add Authorization header
+      }
+    })
+    .then(response => {
+      // Assuming the backend returns the updated user object in response.data.user
+      // And the new avatar URL in response.data.avatarUrl
+      if (response.data.user && response.data.user.profileImage) {
+        // Update the user in localStorage if needed, or let UserContext handle it
+        const currentUser = this.getCurrentUser();
+        if (currentUser && currentUser.id === response.data.user.id) {
+          const updatedUser = { ...currentUser, profileImage: response.data.user.profileImage };
+          this.setUser(updatedUser);
+        }
+      }
+      return response.data; 
+    })
+    .catch(error => {
+      console.error('Avatar upload error:', error.response?.data || error.message);
+      throw error.response?.data || { success: false, message: 'Avatar upload failed' };
+    });
   }
 }
 
