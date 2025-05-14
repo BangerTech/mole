@@ -995,3 +995,74 @@ Response: { success: true, user: { ...updatedUser, profileImage: "/data/avatars/
 **Wichtige Hinweise:**
 - Das Design und bestehende Funktionen bleiben unverändert
 - Die Funktion ist vollständig Docker-kompatibel (Volume für `/app/backend/data` empfohlen)
+
+### Migration 014 - User Table, Notification System & Avatar Refactoring (2025-05-14)
+
+Mit dieser Migration wurde das Benutzersystem vollständig auf eine relationale SQLite-Tabelle umgestellt und die Verwaltung von Benutzer-Avataren sowie Benachrichtigungen vereinheitlicht und verbessert.
+
+**Backend:**
+- Die Tabelle `users` wird jetzt wie folgt verwaltet:
+
+| Spaltenname     | Typ      | Beschreibung                                 |
+|-----------------|----------|----------------------------------------------|
+| id              | INTEGER  | Primärschlüssel                             |
+| name            | TEXT     | Name des Benutzers                          |
+| email           | TEXT     | E-Mail-Adresse (eindeutig)                  |
+| password_hash   | TEXT     | Gehashtes Passwort                          |
+| role            | TEXT     | Benutzerrolle (user/admin)                  |
+| profile_image   | TEXT     | Pfad zum Profilbild (z.B. /data/avatars/...)|
+| created_at      | DATETIME | Erstellungszeit                             |
+| last_login      | DATETIME | Letzter Login                               |
+| preferences     | TEXT     | JSON-String für UI- und Benachrichtigungseinstellungen |
+
+- Die Spalte `profile_image` (snake_case) wird für alle Avatar-URLs verwendet. Die Migration aus `users.json` übernimmt ggf. alte Felder (`profileImage` → `profile_image`).
+- Avatar-Uploads werden über den Endpunkt `POST /api/users/:userId/avatar` (mit Authentifizierung) abgewickelt. Die Bilder werden im Verzeichnis `backend/data/avatars/` gespeichert und als `/data/avatars/...` ausgeliefert. Beim Upload wird der alte Avatar automatisch gelöscht.
+- Die Referenz zum Bild wird in `profile_image` gespeichert und überall im Backend/Frontend verwendet.
+- Die Tabelle `user_notifications` speichert Benachrichtigungen pro User (siehe models/database.js für Details).
+
+**Frontend:**
+- Die React-Komponenten (u.a. `Profile.js`, `Navbar.js`, `UserContext.js`) verwenden jetzt ausschließlich das Feld `profile_image` (snake_case) für Avatare.
+- Beim Laden, Login und Update werden alle camelCase-Altlasten entfernt und das User-Objekt konsistent gehalten.
+- Die Anzeige von Datum/Uhrzeit im Profil wurde auf das Format `DD.MM.YYYY - HH:mm Uhr` umgestellt.
+- Nach Avatar-Upload wird das neue Bild sofort im Profil und in der Navbar angezeigt.
+
+**Wichtige Hinweise:**
+- Die Migration aus `users.json` läuft automatisch, falls die Tabelle leer ist und eine JSON-Datei existiert.
+- Die Avatare werden im Docker-Volume persistiert.
+- Die Notification-Logik ist an die neue User-Tabelle gekoppelt und verwendet die User-ID als Fremdschlüssel.
+
+**SQL für die User-Tabelle:**
+```sql
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user',
+  profile_image TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_login DATETIME,
+  preferences TEXT
+);
+```
+
+**SQL für die User-Notifications:**
+```sql
+CREATE TABLE IF NOT EXISTS user_notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT,
+  link TEXT,
+  read_status BOOLEAN DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  preferences_key TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+**Frontend-Refactoring:**
+- `UserContext.js` entfernt alle camelCase-Altlasten und sorgt für einheitliche Verwendung von `profile_image`.
+- Die Synchronisierung von Userdaten nach Avatar-Upload ist jetzt robust und konsistent.
+- Die Anzeige von Avataren in Navbar und Profil ist immer aktuell.

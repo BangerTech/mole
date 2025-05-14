@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { alpha, styled } from '@mui/material/styles';
-import { Box, Stack, AppBar, Toolbar, IconButton, Typography, Menu, MenuItem, Tooltip, Divider, ListItemIcon, List, ListItemText, Snackbar, Alert as MuiAlert, Avatar } from '@mui/material';
+import { Box, Stack, AppBar, Toolbar, IconButton, Typography, Menu, MenuItem, Tooltip, Divider, ListItemIcon, List, ListItemText, Snackbar, Alert as MuiAlert, Avatar, CircularProgress } from '@mui/material';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
@@ -23,13 +23,6 @@ const APPBAR_DESKTOP = 92;
 // Sidebar margins (assuming theme.spacing(2) = 16px)
 const sidebarMarginLeft = 16;
 const sidebarMarginTop = 16;
-
-// Dummy initial notifications - replace with actual data fetching later
-const initialNotifications = [
-  { id: 1, title: 'New DB connection established', read: false, timestamp: '2 hours ago' },
-  { id: 2, title: 'Sync complete', read: false, timestamp: '3 hours ago' },
-  { id: 3, title: 'System update available', read: true, timestamp: '1 day ago' },
-];
 
 // ForwardRef for Alert
 const Alert = React.forwardRef(function Alert(props, ref) {
@@ -59,12 +52,19 @@ const ToolbarStyle = styled(Toolbar)(({ theme }) => ({
 
 export default function Navbar() {
   const { mode, toggleThemeMode } = useThemeMode();
-  const { user, logout: contextLogout } = useContext(UserContext);
+  const {
+    user,
+    logout: contextLogout,
+    notifications,
+    unreadNotificationsCount,
+    notificationsLoading,
+    handleMarkNotificationAsRead,
+    handleMarkAllNotificationsAsRead
+  } = useContext(UserContext);
   const navigate = useNavigate();
 
   const [accountMenuAnchor, setAccountMenuAnchor] = useState(null);
   const [notificationMenuAnchor, setNotificationMenuAnchor] = useState(null);
-  const [notifications, setNotifications] = useState(initialNotifications);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
@@ -73,7 +73,6 @@ export default function Navbar() {
 
   const accountMenuOpen = Boolean(accountMenuAnchor);
   const notificationMenuOpen = Boolean(notificationMenuAnchor);
-  const unreadCount = notifications.filter(n => !n.read).length;
 
   const handleAccountMenuOpen = (event) => {
     setAccountMenuAnchor(event.currentTarget);
@@ -91,27 +90,19 @@ export default function Navbar() {
     setNotificationMenuAnchor(null);
   };
 
-  // --- Notification Handlers ---
-  const handleNotificationRead = (id) => {
-    setNotifications(prevNotifications => 
-      prevNotifications.map(notification => 
-        notification.id === id ? { ...notification, read: true } : notification
-      )
-    );
-    // In a real app, mark as read on the backend too
+  // --- Notification Handlers (now using context functions) ---
+  const handleLocalNotificationRead = (id) => {
+    handleMarkNotificationAsRead(id);
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(prevNotifications => 
-      prevNotifications.map(notification => ({ ...notification, read: true }))
-    );
+  const handleLocalMarkAllAsRead = () => {
+    handleMarkAllNotificationsAsRead();
     handleNotificationMenuClose();
     setSnackbar({
       open: true,
-      message: 'All notifications marked as read',
-      severity: 'success'
+      message: 'All notifications marked as read (request sent)',
+      severity: 'info'
     });
-    // In a real app, mark all as read on the backend too
   };
 
   const handleSnackbarClose = (event, reason) => {
@@ -164,8 +155,8 @@ export default function Navbar() {
               aria-haspopup="true"
               aria-expanded={notificationMenuOpen ? 'true' : undefined}
             >
-              <Badge badgeContent={unreadCount} color="error">
-                <NotificationsIcon />
+              <Badge badgeContent={unreadNotificationsCount} color="error">
+                {notificationsLoading ? <CircularProgress size={20} color="inherit" /> : <NotificationsIcon />}
               </Badge>
             </IconButton>
           </Tooltip>
@@ -183,9 +174,9 @@ export default function Navbar() {
               aria-haspopup="true"
               aria-expanded={accountMenuOpen ? 'true' : undefined}
             >
-              {user?.profileImage ? (
+              {user?.profile_image ? (
                 <Avatar 
-                  src={`${getApiBaseUrl().replace('/api', '')}${user.profileImage}`}
+                  src={`${getApiBaseUrl().replace('/api', '')}${user.profile_image}`}
                   sx={{ width: 32, height: 32 }}
                 />
               ) : (
@@ -256,20 +247,29 @@ export default function Navbar() {
           <Typography variant="h6" component="div">
             Notifications
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {unreadCount} New
-          </Typography>
+          {unreadNotificationsCount > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {unreadNotificationsCount} New
+            </Typography>
+          )}
         </Box>
         <Divider sx={{ borderStyle: 'dashed' }} />
 
         <List sx={{ maxHeight: 340, overflow: 'auto', p: 0 }}>
-          {notifications.length === 0 && (
+          {notificationsLoading && notifications.length === 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 2 }}>
+              <CircularProgress size={24} />
+              <Typography sx={{ ml: 1 }} color="text.secondary">Loading...</Typography>
+            </Box>
+          )}
+          {!notificationsLoading && notifications.length === 0 && (
               <Typography sx={{ p: 2, textAlign: 'center' }} color="text.secondary">No notifications</Typography>
           )}
           {notifications.map((notification) => (
             <MenuItem 
               key={notification.id} 
-              onClick={() => handleNotificationRead(notification.id)}
+              onClick={() => handleLocalNotificationRead(notification.id)}
+              disabled={notificationsLoading}
               sx={(theme) => ({ 
                 bgcolor: !notification.read ? alpha(theme.palette.primary.main, 0.08) : 'transparent', 
                 py: 1.5, 
@@ -288,9 +288,9 @@ export default function Navbar() {
         
         <Divider sx={{ borderStyle: 'dashed' }} />
 
-        {unreadCount > 0 && (
+        {unreadNotificationsCount > 0 && !notificationsLoading && (
             <MenuItem 
-                onClick={handleMarkAllAsRead} 
+                onClick={handleLocalMarkAllAsRead} 
                 sx={{ justifyContent: 'center', py: 1, color: 'primary.main' }}
             >
                 <ListItemIcon sx={{ minWidth: 'auto', mr: 0.5, color: 'primary.main' }}>

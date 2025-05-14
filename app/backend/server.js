@@ -21,6 +21,7 @@ const syncRoutes = require('./routes/syncRoutes');
 const userSettingsRoutes = require('./routes/userSettingsRoutes');
 // Import user management routes
 const userRoutes = require('./routes/userRoutes');
+const notificationRoutes = require('./routes/notificationRoutes'); // Import notification routes
 
 // Create Express app
 const app = express();
@@ -65,6 +66,7 @@ app.use('/api/sync', syncRoutes);
 app.use('/api/user/settings', userSettingsRoutes);
 // Mount user management routes under /api/users
 app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes); // Mount notification routes
 
 // --- System Info Proxy Routes --- 
 // Proxy GET /api/system/info to Python backend

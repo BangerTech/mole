@@ -68,6 +68,7 @@ import { styled } from '@mui/material/styles';
 import EmailService from '../services/EmailService';
 import AIService from '../services/AIService';
 import DatabaseService from '../services/DatabaseService';
+import UserSettingsService from '../services/UserSettingsService';
 
 // Styled Components
 const StyledTab = styled(Tab)(({ theme }) => ({
@@ -111,7 +112,6 @@ export default function Settings() {
   const [language, setLanguage] = useState('en');
   const [autoSync, setAutoSync] = useState(true);
   const [syncInterval, setSyncInterval] = useState(24);
-  const [notifications, setNotifications] = useState(true);
   const [successMessage, setSuccessMessage] = useState('');
   const [aiProvider, setAiProvider] = useState('sqlpal');
   const [openaiApiKey, setOpenaiApiKey] = useState('');
@@ -121,12 +121,33 @@ export default function Settings() {
   const [localModelPath, setLocalModelPath] = useState('/models/llama-2-7b');
   const [aiPrecision, setAiPrecision] = useState(7);
   const [customPromptTemplate, setCustomPromptTemplate] = useState('Analyze the database and tell me about {query}');
+  const [userSettings, setUserSettings] = useState({
+    notifications: {
+      inApp: true,
+      email: false,
+      events: {
+        dbConnectionIssues: true,
+        syncCompleted: true,
+        newDbConnections: true,
+        systemUpdates: true,
+      },
+    },
+    ai: {},
+    smtp: {},
+    security: {},
+  });
+  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(true);
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(false);
+  const [notifyDbConnectionIssues, setNotifyDbConnectionIssues] = useState(true);
+  const [notifySyncCompleted, setNotifySyncCompleted] = useState(true);
+  const [notifyNewDbConnections, setNotifyNewDbConnections] = useState(true);
+  const [notifySystemUpdates, setNotifySystemUpdates] = useState(true);
   const [smtpSettings, setSmtpSettings] = useState({
     host: '',
     port: '587',
     username: '',
     password: '',
-    encryption: 'tls', // 'tls', 'ssl', oder 'none'
+    encryption: 'tls',
     fromEmail: '',
     fromName: 'Mole Database Manager'
   });
@@ -146,7 +167,7 @@ export default function Settings() {
   const [taskBeingProcessed, setTaskBeingProcessed] = useState(null);
   const [confirmDeleteDialogOpen, setConfirmDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
-  const [aiTestStatus, setAiTestStatus] = useState({}); // Zustand für Test-Status (pro Provider)
+  const [aiTestStatus, setAiTestStatus] = useState({});
 
   // Handle tab selection from URL query parameters
   useEffect(() => {
@@ -174,42 +195,9 @@ export default function Settings() {
 
   const handleSave = async () => {
     try {
-      // AI Settings speichern
-      const aiSettings = {
-        defaultProvider: aiProvider,
-        providers: {
-          openai: {
-            enabled: true,
-            apiKey: openaiApiKey,
-            model: 'gpt-3.5-turbo',
-          },
-          perplexity: {
-            enabled: true,
-            apiKey: perplexityApiKey,
-            model: 'sonar-pro',
-          },
-          huggingface: {
-            enabled: true,
-            apiKey: huggingfaceApiKey,
-            model: huggingfaceModel,
-          },
-          llama: {
-            enabled: true,
-            modelPath: localModelPath,
-          },
-          sqlpal: {
-            enabled: true,
-            modelPath: '/app/models/sqlpal',
-          },
-        },
-      };
-      await AIService.updateSettings(aiSettings);
-
-      // SMTP Settings speichern
-      await EmailService.saveSmtpSettings(smtpSettings);
-
-    setSuccessMessage('Settings successfully saved');
-    setTimeout(() => setSuccessMessage(''), 3000);
+      await UserSettingsService.saveSettings(userSettings);
+      setSuccessMessage('Settings successfully saved');
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       setSnackbar({
         open: true,
@@ -219,36 +207,60 @@ export default function Settings() {
     }
   };
 
-  // useEffect für das Laden der AI-Einstellungen
   useEffect(() => {
-    const loadSettings = async () => {
+    const loadAllUserSettings = async () => {
       try {
-        const settings = await AIService.getSettings();
-        console.log("Loaded AI settings:", settings);
-        if (settings) {
-          setAiProvider(settings.defaultProvider || 'sqlpal');
-          setOpenaiApiKey(settings.providers.openai?.apiKey || '');
-          setPerplexityApiKey(settings.providers.perplexity?.apiKey || '');
-          setHuggingfaceApiKey(settings.providers.huggingface?.apiKey || '');
-          setHuggingfaceModel(settings.providers.huggingface?.model || 'mistralai/Mistral-7B-Instruct-v0.2');
-          setLocalModelPath(settings.providers.llama?.modelPath || '/models/llama-2-7b');
-          // Setze das Perplexity-Modell auf den Standard, falls keins geladen wurde
-          if (!settings.providers.perplexity?.model) {
-            // Dies wird normalerweise nicht passieren, wenn der Backend-Standard gesetzt ist,
-            // aber zur Sicherheit
-          }
-          // Beachte: hasApiKey wird hier nicht direkt gesetzt, das ist nur für die Anzeige
+        const settings = await UserSettingsService.getSettings();
+        console.log("Loaded UserSettings:", settings);
+        setUserSettings(settings);
+
+        setInAppNotificationsEnabled(settings.notifications?.inApp ?? true);
+        setEmailNotificationsEnabled(settings.notifications?.email ?? false);
+        setNotifyDbConnectionIssues(settings.notifications?.events?.dbConnectionIssues ?? true);
+        setNotifySyncCompleted(settings.notifications?.events?.syncCompleted ?? true);
+        setNotifyNewDbConnections(settings.notifications?.events?.newDbConnections ?? true);
+        setNotifySystemUpdates(settings.notifications?.events?.systemUpdates ?? true);
+        
+        if (settings.ai) {
+          setAiProvider(settings.ai.defaultProvider || settings.ai.provider || 'sqlpal');
+          setOpenaiApiKey(settings.ai.providers?.openai?.apiKey || settings.ai.openaiApiKey || '');
+          setPerplexityApiKey(settings.ai.providers?.perplexity?.apiKey || settings.ai.perplexityApiKey || '');
+          setHuggingfaceApiKey(settings.ai.providers?.huggingface?.apiKey || settings.ai.huggingfaceApiKey || '');
+          setHuggingfaceModel(settings.ai.providers?.huggingface?.model || settings.ai.huggingfaceModel || 'mistralai/Mistral-7B-Instruct-v0.2');
+          setLocalModelPath(settings.ai.providers?.llama?.modelPath || settings.ai.localModelPath || '/models/llama-2-7b');
         }
+
+        if (settings.smtp) {
+          setSmtpSettings(prev => ({ ...prev, ...settings.smtp }));
+        }
+
       } catch (error) {
-        console.error('Error loading AI settings:', error);
+        console.error('Error loading UserSettings:', error);
         setSnackbar({
           open: true,
-          message: 'Could not load AI settings.',
+          message: 'Could not load user settings. Using defaults.',
           severity: 'warning',
         });
+        setInAppNotificationsEnabled(userSettings.notifications.inApp);
+        setEmailNotificationsEnabled(userSettings.notifications.email);
+        setNotifyDbConnectionIssues(userSettings.notifications.events.dbConnectionIssues);
+        setNotifySyncCompleted(userSettings.notifications.events.syncCompleted);
+        setNotifyNewDbConnections(userSettings.notifications.events.newDbConnections);
+        setNotifySystemUpdates(userSettings.notifications.events.systemUpdates);
       }
     };
-    loadSettings();
+    loadAllUserSettings();
+  }, []);
+
+  useEffect(() => {
+    const loadAiSpecificSettings = async () => {
+      try {
+        const settings = await AIService.getSettings();
+        console.log("Loaded AI specific settings (AIService):", settings);
+      } catch (error) {
+        console.error('Error loading AI specific settings (AIService):', error);
+      }
+    };
   }, []);
 
   const handleTestAIProvider = async (provider) => {
@@ -257,7 +269,7 @@ export default function Settings() {
       case 'openai': apiKeyToTest = openaiApiKey; break;
       case 'perplexity': apiKeyToTest = perplexityApiKey; break;
       case 'huggingface': apiKeyToTest = huggingfaceApiKey; break;
-      default: return; // Kein Test für sqlpal oder local
+      default: return;
     }
 
     if (!apiKeyToTest) {
@@ -285,145 +297,18 @@ export default function Settings() {
     }
   };
 
-  const renderApiKeyField = () => {
-    const provider = aiProvider; // Verwende den aktuellen State
-    const currentTestStatus = aiTestStatus[provider] || {};
-
-    switch (provider) {
-      case 'openai':
-        return (
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', mt: 2, gap: 2 }}>
-            <TextField
-              fullWidth
-              label="OpenAI API Key"
-              variant="outlined"
-              value={openaiApiKey}
-              onChange={(e) => setOpenaiApiKey(e.target.value)}
-              type="password"
-              placeholder="sk-..."
-              disabled={currentTestStatus.testing}
-            />
-            <Button
-              variant="outlined"
-              onClick={() => handleTestAIProvider('openai')}
-              disabled={currentTestStatus.testing}
-              startIcon={currentTestStatus.testing ? <CircularProgress size={20} /> : <CheckIcon />}
-              sx={{ height: '56px' }} // Höhe an TextField anpassen
-            >
-              Test
-            </Button>
-          </Box>
-        );
-      case 'perplexity':
-        return (
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', mt: 2, gap: 2 }}>
-            <TextField
-              fullWidth
-              label="Perplexity API Key"
-              variant="outlined"
-              value={perplexityApiKey}
-              onChange={(e) => setPerplexityApiKey(e.target.value)}
-              type="password"
-              placeholder="pplx-..."
-              disabled={currentTestStatus.testing}
-            />
-            <Button
-              variant="outlined"
-              onClick={() => handleTestAIProvider('perplexity')}
-              disabled={currentTestStatus.testing}
-              startIcon={currentTestStatus.testing ? <CircularProgress size={20} /> : <CheckIcon />}
-              sx={{ height: '56px' }} // Höhe an TextField anpassen
-            >
-              Test
-            </Button>
-          </Box>
-        );
-      case 'huggingface':
-        return (
-          <Box sx={{ mt: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2, gap: 2 }}>
-              <TextField
-                fullWidth
-                label="Hugging Face API Key (optional for some models)"
-                variant="outlined"
-                value={huggingfaceApiKey}
-                onChange={(e) => setHuggingfaceApiKey(e.target.value)}
-                type="password"
-                placeholder="hf_..."
-                disabled={currentTestStatus.testing}
-              />
-              <Button
-                variant="outlined"
-                onClick={() => handleTestAIProvider('huggingface')}
-                disabled={currentTestStatus.testing}
-                startIcon={currentTestStatus.testing ? <CircularProgress size={20} /> : <CheckIcon />}
-                sx={{ height: '56px' }} // Höhe an TextField anpassen
-              >
-                Test
-              </Button>
-            </Box>
-            <FormControl fullWidth variant="outlined">
-              <InputLabel>Model</InputLabel>
-              <Select
-                value={huggingfaceModel}
-                onChange={(e) => setHuggingfaceModel(e.target.value)}
-                label="Model"
-                disabled={currentTestStatus.testing}
-              >
-                <MenuItem value="mistralai/Mistral-7B-Instruct-v0.2">Mistral 7B Instruct</MenuItem>
-                <MenuItem value="microsoft/phi-2">Phi-2</MenuItem>
-                <MenuItem value="meta-llama/Llama-2-7b-chat-hf">Llama 2 7B Chat</MenuItem>
-                <MenuItem value="tiiuae/falcon-7b-instruct">Falcon 7B Instruct</MenuItem>
-                <MenuItem value="bigcode/starcoder2-15b">StarCoder2 15B</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-        );
-      case 'local': // Renamed from 'local' to 'llama' to match backend logic
-        return (
-          <TextField
-            fullWidth
-            label="Local Model Path (Llama)"
-            variant="outlined"
-            value={localModelPath}
-            onChange={(e) => setLocalModelPath(e.target.value)}
-            placeholder="/path/to/model or /models/llama-2-7b"
-            sx={{ mt: 2 }}
-          />
-        );
-      default:
-        return null;
-    }
-  };
-
-  const handleTestSmtpConnection = async () => {
-    setSmtpTestStatus({
-      testing: true,
-      success: null,
-      message: 'Testing connection...'
-    });
-    
-    try {
-      const result = await EmailService.testSmtpConnection(smtpSettings);
-      setSmtpTestStatus({
-        testing: false,
-        success: result.success,
-        message: result.message
-      });
-    } catch (error) {
-      setSmtpTestStatus({
-        testing: false,
-        success: false,
-        message: error.message || 'An error occurred during the test'
-      });
-    }
-  };
-  
   const handleSmtpChange = (e) => {
     const { name, value } = e.target;
     setSmtpSettings(prev => ({
       ...prev,
       [name]: value
+    }));
+    setUserSettings(currentSettings => ({
+      ...currentSettings,
+      smtp: {
+        ...currentSettings.smtp,
+        [name]: value,
+      }
     }));
   };
 
@@ -453,27 +338,152 @@ export default function Settings() {
     }
   };
 
-  // useEffect für das Laden der SMTP-Einstellungen
   useEffect(() => {
-    // Lade SMTP-Einstellungen
-    const loadSmtpSettings = async () => {
+    const loadSmtpSpecificSettings = async () => {
       try {
-        const settings = await EmailService.getSmtpSettings();
-        setSmtpSettings(settings);
       } catch (error) {
-        console.error('Error loading SMTP settings:', error);
+        console.error('Error loading SMTP settings (EmailService):', error);
       }
     };
-    
-    loadSmtpSettings();
   }, []);
 
-  // Function to fetch sync tasks
+  const handleSaveAISettings = async () => {
+    try {
+      const aiSettingsToSave = {
+        defaultProvider: aiProvider,
+        provider: aiProvider,
+        providers: {
+          openai: { apiKey: openaiApiKey, model: 'gpt-3.5-turbo' },
+          perplexity: { apiKey: perplexityApiKey, model: 'sonar-pro' },
+          huggingface: { apiKey: huggingfaceApiKey, model: huggingfaceModel },
+          llama: { modelPath: localModelPath },
+          sqlpal: { modelPath: '/app/models/sqlpal' },
+        },
+      };
+      
+      const updatedUserSettings = {
+        ...userSettings,
+        ai: aiSettingsToSave,
+      };
+      await UserSettingsService.saveSettings(updatedUserSettings);
+      setUserSettings(updatedUserSettings);
+
+      setSuccessMessage('AI settings successfully saved');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to save AI settings',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleSaveSmtpSettings = async () => {
+    try {
+      const updatedUserSettings = {
+        ...userSettings,
+        smtp: smtpSettings,
+      };
+      await UserSettingsService.saveSettings(updatedUserSettings);
+      setUserSettings(updatedUserSettings);
+
+      setSuccessMessage('SMTP settings successfully saved');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to save SMTP settings',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleSaveNotificationSettings = async () => {
+    try {
+      const notificationSettingsPayload = {
+        inApp: inAppNotificationsEnabled,
+        email: emailNotificationsEnabled,
+        events: {
+          dbConnectionIssues: notifyDbConnectionIssues,
+          syncCompleted: notifySyncCompleted,
+          newDbConnections: notifyNewDbConnections,
+          systemUpdates: notifySystemUpdates,
+        },
+      };
+      const updatedUserSettings = {
+        ...userSettings,
+        notifications: notificationSettingsPayload,
+      };
+      await UserSettingsService.saveSettings(updatedUserSettings);
+      setUserSettings(updatedUserSettings);
+
+      setSnackbar({
+        open: true,
+        message: 'Notification settings saved successfully!',
+        severity: 'success',
+      });
+    } catch (error) {
+      console.error('Error saving notification settings:', error);
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to save notification settings.',
+        severity: 'error',
+      });
+    }
+  };
+  
+  const createToggleHandler = (setter, settingsKey, eventKey) => (event) => {
+    const newValue = event.target.checked;
+    setter(newValue);
+    setUserSettings(prev => {
+      const newSettings = JSON.parse(JSON.stringify(prev));
+      if (!newSettings.notifications) newSettings.notifications = {};
+      if (eventKey) {
+        if (!newSettings.notifications.events) newSettings.notifications.events = {};
+        newSettings.notifications.events[eventKey] = newValue;
+      } else {
+        newSettings.notifications[settingsKey] = newValue;
+      }
+      return newSettings;
+    });
+  };
+
+  const handleInAppNotificationsChange = createToggleHandler(setInAppNotificationsEnabled, 'inApp');
+  const handleEmailNotificationsChange = createToggleHandler(setEmailNotificationsEnabled, 'email');
+  const handleDbConnectionIssuesChange = createToggleHandler(setNotifyDbConnectionIssues, 'events', 'dbConnectionIssues');
+  const handleSyncCompletedChange = createToggleHandler(setNotifySyncCompleted, 'events', 'syncCompleted');
+  const handleNewDbConnectionsChange = createToggleHandler(setNotifyNewDbConnections, 'events', 'newDbConnections');
+  const handleSystemUpdatesChange = createToggleHandler(setNotifySystemUpdates, 'events', 'systemUpdates');
+
+  const handleTestSmtpConnection = async () => {
+    setSmtpTestStatus({
+      testing: true,
+      success: null,
+      message: 'Testing connection...'
+    });
+    
+    try {
+      const result = await EmailService.testSmtpConnection(smtpSettings);
+      setSmtpTestStatus({
+        testing: false,
+        success: result.success,
+        message: result.message
+      });
+    } catch (error) {
+      setSmtpTestStatus({
+        testing: false,
+        success: false,
+        message: error.message || 'An error occurred during the test'
+      });
+    }
+  };
+
   const fetchSyncTasks = async () => {
     setLoadingSyncTasks(true);
     setErrorSyncTasks(null);
     try {
-      const data = await DatabaseService.getAllSyncTasks(); // Assuming method exists
+      const data = await DatabaseService.getAllSyncTasks();
       if (data.success) {
         setSyncTasks(data.tasks);
       } else {
@@ -482,29 +492,26 @@ export default function Settings() {
     } catch (error) {
       console.error('Error fetching sync tasks:', error);
       setErrorSyncTasks(error.message || 'Could not load synchronization tasks.');
-      setSyncTasks([]); // Clear tasks on error
+      setSyncTasks([]);
     } finally {
       setLoadingSyncTasks(false);
     }
   };
 
-  // Fetch sync tasks when the sync tab becomes active
   useEffect(() => {
-    if (activeTab === 2) { // Index of Synchronization tab
+    if (activeTab === 2) {
       fetchSyncTasks();
     }
   }, [activeTab]);
 
-  // --- Sync Task Action Handlers ---
-
   const handleToggleSyncTask = async (taskId, currentEnabledStatus) => {
     setTaskBeingProcessed(taskId);
-    setSnackbar({ open: false, message: '', severity: 'info' }); // Close previous snackbar
+    setSnackbar({ open: false, message: '', severity: 'info' });
     try {
       const updates = { enabled: !currentEnabledStatus };
       await DatabaseService.updateSyncTask(taskId, updates);
       setSnackbar({ open: true, message: `Sync task ${currentEnabledStatus ? 'disabled' : 'enabled'} successfully.`, severity: 'success' });
-      fetchSyncTasks(); // Refresh the list
+      fetchSyncTasks();
     } catch (error) {
       console.error(`Error toggling sync task ${taskId}:`, error);
       setSnackbar({ open: true, message: error.message || 'Failed to update task status.', severity: 'error' });
@@ -532,7 +539,7 @@ export default function Settings() {
     try {
       await DatabaseService.deleteSyncTask(taskId);
       setSnackbar({ open: true, message: 'Sync task deleted successfully.', severity: 'success' });
-      fetchSyncTasks(); // Refresh the list
+      fetchSyncTasks();
     } catch (error) {
       console.error(`Error deleting sync task ${taskId}:`, error);
       setSnackbar({ open: true, message: error.message || 'Failed to delete task.', severity: 'error' });
@@ -540,65 +547,129 @@ export default function Settings() {
       setTaskBeingProcessed(null);
     }
   };
-  
-  // --- End Sync Task Action Handlers ---
 
-  // --- Save-Handler für jeden Tab ---
-  // AI-Settings speichern
-  const handleSaveAISettings = async () => {
-    try {
-      const aiSettings = {
-        defaultProvider: aiProvider,
-        providers: {
-          openai: {
-            enabled: true,
-            apiKey: openaiApiKey,
-            model: 'gpt-3.5-turbo',
-          },
-          perplexity: {
-            enabled: true,
-            apiKey: perplexityApiKey,
-            model: 'sonar-pro',
-          },
-          huggingface: {
-            enabled: true,
-            apiKey: huggingfaceApiKey,
-            model: huggingfaceModel,
-          },
-          llama: {
-            enabled: true,
-            modelPath: localModelPath,
-          },
-          sqlpal: {
-            enabled: true,
-            modelPath: '/app/models/sqlpal',
-          },
-        },
-      };
-      await AIService.updateSettings(aiSettings);
-      setSuccessMessage('AI settings successfully saved');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: error.message || 'Failed to save AI settings',
-        severity: 'error',
-      });
-    }
-  };
-
-  // SMTP-Settings speichern
-  const handleSaveSmtpSettings = async () => {
-    try {
-      await EmailService.saveSmtpSettings(smtpSettings);
-      setSuccessMessage('SMTP settings successfully saved');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: error.message || 'Failed to save SMTP settings',
-        severity: 'error',
-      });
+  const renderApiKeyField = () => {
+    switch (aiProvider) {
+      case 'openai':
+        return (
+          <Paper sx={{ p: 2, mt: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" gutterBottom>OpenAI API Key</Typography>
+            <TextField
+              fullWidth
+              type="password"
+              label="OpenAI API Key"
+              value={openaiApiKey}
+              onChange={(e) => setOpenaiApiKey(e.target.value)}
+              variant="outlined"
+              sx={{ mb: 1 }}
+              helperText="Enter your OpenAI API key."
+            />
+            <Button 
+              variant="outlined" 
+              onClick={() => handleTestAIProvider('openai')}
+              disabled={aiTestStatus.openai?.testing}
+              startIcon={aiTestStatus.openai?.testing ? <CircularProgress size={20}/> : (aiTestStatus.openai?.success === true ? <CheckIcon color="success"/> : aiTestStatus.openai?.success === false ? <HelpIcon color="error"/> : null) }
+            >
+              Test OpenAI Key
+            </Button>
+            {aiTestStatus.openai?.message && (
+                <Alert severity={aiTestStatus.openai.success ? 'success' : 'error'} sx={{mt:1}}>
+                    {aiTestStatus.openai.message}
+                </Alert>
+            )}
+          </Paper>
+        );
+      case 'perplexity':
+        return (
+          <Paper sx={{ p: 2, mt: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" gutterBottom>Perplexity API Key</Typography>
+            <TextField
+              fullWidth
+              type="password"
+              label="Perplexity API Key"
+              value={perplexityApiKey}
+              onChange={(e) => setPerplexityApiKey(e.target.value)}
+              variant="outlined"
+              sx={{ mb: 1 }}
+              helperText="Enter your Perplexity API key."
+            />
+            <Button 
+              variant="outlined" 
+              onClick={() => handleTestAIProvider('perplexity')}
+              disabled={aiTestStatus.perplexity?.testing}
+              startIcon={aiTestStatus.perplexity?.testing ? <CircularProgress size={20}/> : (aiTestStatus.perplexity?.success === true ? <CheckIcon color="success"/> : aiTestStatus.perplexity?.success === false ? <HelpIcon color="error"/> : null) }
+            >
+              Test Perplexity Key
+            </Button>
+             {aiTestStatus.perplexity?.message && (
+                <Alert severity={aiTestStatus.perplexity.success ? 'success' : 'error'} sx={{mt:1}}>
+                    {aiTestStatus.perplexity.message}
+                </Alert>
+            )}
+          </Paper>
+        );
+      case 'huggingface':
+        return (
+          <Paper sx={{ p: 2, mt: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" gutterBottom>Hugging Face</Typography>
+            <TextField
+              fullWidth
+              type="password"
+              label="Hugging Face API Key (Optional)"
+              value={huggingfaceApiKey}
+              onChange={(e) => setHuggingfaceApiKey(e.target.value)}
+              variant="outlined"
+              sx={{ mb: 1 }}
+              helperText="Enter your Hugging Face API key if required by the model."
+            />
+            <TextField
+              fullWidth
+              label="Hugging Face Model ID"
+              value={huggingfaceModel}
+              onChange={(e) => setHuggingfaceModel(e.target.value)}
+              variant="outlined"
+              sx={{ mb: 1 }}
+              helperText="e.g., mistralai/Mistral-7B-Instruct-v0.2"
+            />
+            <Button 
+              variant="outlined" 
+              onClick={() => handleTestAIProvider('huggingface')}
+              disabled={aiTestStatus.huggingface?.testing || !huggingfaceApiKey} // Disable if no key for HF generally
+              startIcon={aiTestStatus.huggingface?.testing ? <CircularProgress size={20}/> : (aiTestStatus.huggingface?.success === true ? <CheckIcon color="success"/> : aiTestStatus.huggingface?.success === false ? <HelpIcon color="error"/> : null) }
+            >
+              Test Hugging Face Key
+            </Button>
+            {aiTestStatus.huggingface?.message && (
+                <Alert severity={aiTestStatus.huggingface.success ? 'success' : 'error'} sx={{mt:1}}>
+                    {aiTestStatus.huggingface.message}
+                </Alert>
+            )}
+          </Paper>
+        );
+      case 'local':
+         return (
+          <Paper sx={{ p: 2, mt: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" gutterBottom>Local Model Path</Typography>
+            <TextField
+              fullWidth
+              label="Local Model Path"
+              value={localModelPath}
+              onChange={(e) => setLocalModelPath(e.target.value)}
+              variant="outlined"
+              sx={{ mb: 1 }}
+              helperText="Path to the local model directory or file."
+            />
+            {/* No test button for local model for now, could be complex to implement client-side */}
+          </Paper>
+        );
+      case 'sqlpal':
+        return (
+            <Alert severity="info" sx={{mt:1}}>
+                SQLPal is an integrated model and requires no additional API key configuration.
+            </Alert>
+        );
+      default:
+        return null;
     }
   };
 
@@ -637,7 +708,6 @@ export default function Settings() {
         </Tabs>
       </Box>
 
-      {/* Notifications Tab */}
       <TabPanel value={activeTab} index={0}>
         <SettingCard>
           <CardContent>
@@ -649,8 +719,8 @@ export default function Settings() {
                 <FormControlLabel
                   control={
                     <Switch 
-                      checked={notifications} 
-                      onChange={() => setNotifications(!notifications)}
+                      checked={inAppNotificationsEnabled} 
+                      onChange={handleInAppNotificationsChange}
                       color="primary"
                     />
                   }
@@ -663,7 +733,8 @@ export default function Settings() {
                 <FormControlLabel
                   control={
                     <Switch 
-                      defaultChecked 
+                      checked={emailNotificationsEnabled}
+                      onChange={handleEmailNotificationsChange}
                       color="primary"
                     />
                   }
@@ -684,25 +755,45 @@ export default function Settings() {
                 </Typography>
                 
                 <FormControlLabel
-                  control={<Switch defaultChecked color="primary" />}
+                  control={
+                    <Switch 
+                      checked={notifyDbConnectionIssues} 
+                      onChange={handleDbConnectionIssuesChange}
+                      color="primary" 
+                    />}
                   label="Database connection issues"
                   sx={{ display: 'block', mb: 1 }}
                 />
                 
                 <FormControlLabel
-                  control={<Switch defaultChecked color="primary" />}
+                  control={
+                    <Switch 
+                      checked={notifySyncCompleted} 
+                      onChange={handleSyncCompletedChange}
+                      color="primary" 
+                    />}
                   label="Completed synchronizations"
                   sx={{ display: 'block', mb: 1 }}
                 />
                 
                 <FormControlLabel
-                  control={<Switch defaultChecked color="primary" />}
+                  control={
+                    <Switch 
+                      checked={notifyNewDbConnections} 
+                      onChange={handleNewDbConnectionsChange}
+                      color="primary" 
+                    />}
                   label="New database connections"
                   sx={{ display: 'block', mb: 1 }}
                 />
                 
                 <FormControlLabel
-                  control={<Switch defaultChecked color="primary" />}
+                  control={
+                    <Switch 
+                      checked={notifySystemUpdates} 
+                      onChange={handleSystemUpdatesChange}
+                      color="primary" 
+                    />}
                   label="System updates"
                   sx={{ display: 'block', mb: 1 }}
                 />
@@ -714,7 +805,7 @@ export default function Settings() {
                     variant="contained" 
                     color="primary"
                     startIcon={<SaveIcon />}
-                    onClick={handleSave}
+                    onClick={handleSaveNotificationSettings}
                   >
                     Save Notification Settings
                   </Button>
@@ -725,7 +816,6 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
-      {/* Synchronization Tab */}
       <TabPanel value={activeTab} index={1}>
         <SettingCard>
           <CardContent>
@@ -832,7 +922,6 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
-      {/* AI Assistant Tab */}
       <TabPanel value={activeTab} index={2}>
         <SettingCard>
           <CardContent>
@@ -1051,7 +1140,6 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
-      {/* Security Tab */}
       <TabPanel value={activeTab} index={3}>
         <SettingCard>
           <CardContent>
@@ -1120,7 +1208,6 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
-      {/* Email Settings Tab */}
       <TabPanel value={activeTab} index={4}>
         <SettingCard>
           <CardContent>
@@ -1259,7 +1346,76 @@ export default function Settings() {
         </SettingCard>
       </TabPanel>
 
-      {/* Confirmation Dialog for Deletion */}
+      <TabPanel value={activeTab} index={5}>
+        <SettingCard>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              User Settings
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Configure user-specific settings
+            </Typography>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Auto Sync
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch 
+                      checked={autoSync} 
+                      onChange={(e) => setAutoSync(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label="Enable Auto Sync"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Sync Interval
+                </Typography>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Sync Interval (hours)"
+                  value={syncInterval}
+                  onChange={(e) => setSyncInterval(Number(e.target.value))}
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Language
+                </Typography>
+                <TextField
+                  fullWidth
+                  label="Language"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Dark Mode
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch 
+                      checked={darkMode} 
+                      onChange={(e) => setDarkMode(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label="Enable Dark Mode"
+                />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </SettingCard>
+      </TabPanel>
+
       <Dialog
         open={confirmDeleteDialogOpen}
         onClose={closeDeleteConfirmDialog}
@@ -1283,7 +1439,6 @@ export default function Settings() {
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar for notifications */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}

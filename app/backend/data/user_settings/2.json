@@ -1,0 +1,15 @@
+{
+  "notifications": {
+    "inApp": true,
+    "email": false,
+    "events": {
+      "dbConnectionIssues": true,
+      "syncCompleted": true,
+      "newDbConnections": true,
+      "systemUpdates": true
+    }
+  },
+  "security": {},
+  "ai": {},
+  "smtp": {}
+}

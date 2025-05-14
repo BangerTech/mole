@@ -175,6 +175,24 @@ export default function Profile() {
   
   const { user, updateUser: updateUserContext } = useContext(UserContext);
   
+  // Helper function to format date and time
+  const formatDateTime = (isoString) => {
+    if (!isoString) return 'N/A';
+    try {
+      const date = new Date(isoString);
+      const optionsDate = { day: '2-digit', month: '2-digit', year: 'numeric' };
+      const optionsTime = { hour: '2-digit', minute: '2-digit', hour12: false }; // Use hour12: false for 24-hour format
+      
+      const formattedDate = date.toLocaleDateString('de-DE', optionsDate);
+      const formattedTime = date.toLocaleTimeString('de-DE', optionsTime);
+      
+      return `${formattedDate} - ${formattedTime} Uhr`;
+    } catch (e) {
+      console.error("Error formatting date:", isoString, e);
+      return 'Invalid Date';
+    }
+  };
+  
   // Load database connections from API
   const fetchDatabaseConnections = async () => {
     setLoadingConnections(true);
@@ -459,7 +477,7 @@ export default function Profile() {
         role: user.role || '',
         createdAt: user.createdAt || '',
         lastLogin: user.lastLogin || '',
-        profileImage: user.profileImage || null, // Crucial: use profileImage from context
+        profile_image: user.profile_image || null, // CORRECTED: use profile_image from context
         preferences: user.preferences || {
           darkMode: true,
           notifications: true,
@@ -522,17 +540,17 @@ export default function Profile() {
                     }
                   >
                     <LargeAvatar 
-                      src={profileImagePreview || (userData.profileImage ? `${getApiBaseUrl().replace('/api', '')}${userData.profileImage}` : null)}
+                      src={profileImagePreview || (userData.profile_image ? `${getApiBaseUrl().replace('/api', '')}${userData.profile_image}` : null)}
                       sx={{ cursor: 'pointer' }}
                       onClick={handleProfileImageClick}
                     >
-                      {!profileImagePreview && !userData.profileImage && getInitials(userData.fullName)}
+                      {!profileImagePreview && !userData.profile_image && getInitials(userData.fullName)}
                     </LargeAvatar>
                   </StyledBadge>
                 </>
               ) : (
-                <LargeAvatar src={userData.profileImage ? `${getApiBaseUrl().replace('/api', '')}${userData.profileImage}` : null}>
-                  {!userData.profileImage && getInitials(userData.fullName)}
+                <LargeAvatar src={userData.profile_image ? `${getApiBaseUrl().replace('/api', '')}${userData.profile_image}` : null}>
+                  {!userData.profile_image && getInitials(userData.fullName)}
                 </LargeAvatar>
               )}
               
@@ -549,10 +567,10 @@ export default function Profile() {
                 <Typography variant="body2" gutterBottom>{userData.email}</Typography>
                 
                 <Typography variant="subtitle2" sx={{ mt: 1 }}>Member Since</Typography>
-                <Typography variant="body2" gutterBottom>{userData.createdAt}</Typography>
+                <Typography variant="body2" gutterBottom>{formatDateTime(userData.createdAt)}</Typography>
                 
                 <Typography variant="subtitle2" sx={{ mt: 1 }}>Last Login</Typography>
-                <Typography variant="body2">{userData.lastLogin}</Typography>
+                <Typography variant="body2">{formatDateTime(userData.lastLogin)}</Typography>
               </Box>
             </CardContent>
           </ProfileCard>
