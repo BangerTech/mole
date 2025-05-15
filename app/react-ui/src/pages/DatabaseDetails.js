@@ -178,7 +178,8 @@ const DatabaseDetails = () => {
             setError(`Error fetching schema: ${schemaError.message}`);
             setTables([]);
             setStructure([]);
-             setTableColumns({});
+            setTableColumns({});
+            return; // Stop execution in this path if schema fetch fails
           }
         } else {
           // For sample database, use mock data for tables/structure

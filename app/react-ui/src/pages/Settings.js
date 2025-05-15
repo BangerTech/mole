@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Box,
@@ -69,6 +69,24 @@ import EmailService from '../services/EmailService';
 import AIService from '../services/AIService';
 import DatabaseService from '../services/DatabaseService';
 import UserSettingsService from '../services/UserSettingsService';
+import { UserContext } from '../components/UserContext';
+
+// Define default preferences structure locally for fallbacks if needed, mirroring UserContext
+// This is useful for initial render before context might be fully populated
+const defaultUserPreferences = {
+  notifications: {
+    inApp: true,
+    email: false,
+    events: {
+      dbConnectionIssues: true,
+      syncCompleted: true,
+      newDbConnections: true,
+      systemUpdates: true,
+    },
+  },
+  // ... (other defaults like ai, smtp, security, darkMode, showSampleDatabases can be added if Settings.js directly manipulates them)
+  // For now, focusing on notifications as per the task.
+};
 
 // Styled Components
 const StyledTab = styled(Tab)(({ theme }) => ({
@@ -169,6 +187,8 @@ export default function Settings() {
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [aiTestStatus, setAiTestStatus] = useState({});
 
+  const { user, updateUserPreferences } = useContext(UserContext);
+
   // Handle tab selection from URL query parameters
   useEffect(() => {
     const query = new URLSearchParams(location.search);
@@ -195,7 +215,6 @@ export default function Settings() {
 
   const handleSave = async () => {
     try {
-      await UserSettingsService.saveSettings(userSettings);
       setSuccessMessage('Settings successfully saved');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
@@ -399,62 +418,44 @@ export default function Settings() {
     }
   };
 
-  const handleSaveNotificationSettings = async () => {
-    try {
-      const notificationSettingsPayload = {
-        inApp: inAppNotificationsEnabled,
-        email: emailNotificationsEnabled,
-        events: {
-          dbConnectionIssues: notifyDbConnectionIssues,
-          syncCompleted: notifySyncCompleted,
-          newDbConnections: notifyNewDbConnections,
-          systemUpdates: notifySystemUpdates,
-        },
-      };
-      const updatedUserSettings = {
-        ...userSettings,
-        notifications: notificationSettingsPayload,
-      };
-      await UserSettingsService.saveSettings(updatedUserSettings);
-      setUserSettings(updatedUserSettings);
+  // Generic handler for notification switch changes
+  const handleNotificationPreferenceChange = async (key, value, isEvent = false) => {
+    if (!user || !updateUserPreferences) return;
 
+    let newNotificationSettings = { ...(user.preferences?.notifications || defaultUserPreferences.notifications) };
+
+    if (isEvent) {
+      newNotificationSettings.events = {
+        ...(newNotificationSettings.events || defaultUserPreferences.notifications.events),
+        [key]: value,
+      };
+    } else {
+      newNotificationSettings[key] = value;
+    }
+    
+    try {
+      await updateUserPreferences({ notifications: newNotificationSettings });
       setSnackbar({
         open: true,
-        message: 'Notification settings saved successfully!',
+        message: 'Notification preference updated.',
         severity: 'success',
       });
     } catch (error) {
-      console.error('Error saving notification settings:', error);
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to save notification settings.',
+        message: error.message || 'Failed to update notification preference.',
         severity: 'error',
       });
     }
   };
-  
-  const createToggleHandler = (setter, settingsKey, eventKey) => (event) => {
-    const newValue = event.target.checked;
-    setter(newValue);
-    setUserSettings(prev => {
-      const newSettings = JSON.parse(JSON.stringify(prev));
-      if (!newSettings.notifications) newSettings.notifications = {};
-      if (eventKey) {
-        if (!newSettings.notifications.events) newSettings.notifications.events = {};
-        newSettings.notifications.events[eventKey] = newValue;
-      } else {
-        newSettings.notifications[settingsKey] = newValue;
-      }
-      return newSettings;
-    });
-  };
 
-  const handleInAppNotificationsChange = createToggleHandler(setInAppNotificationsEnabled, 'inApp');
-  const handleEmailNotificationsChange = createToggleHandler(setEmailNotificationsEnabled, 'email');
-  const handleDbConnectionIssuesChange = createToggleHandler(setNotifyDbConnectionIssues, 'events', 'dbConnectionIssues');
-  const handleSyncCompletedChange = createToggleHandler(setNotifySyncCompleted, 'events', 'syncCompleted');
-  const handleNewDbConnectionsChange = createToggleHandler(setNotifyNewDbConnections, 'events', 'newDbConnections');
-  const handleSystemUpdatesChange = createToggleHandler(setNotifySystemUpdates, 'events', 'systemUpdates');
+  // Specific handlers now call the generic one
+  const handleInAppNotificationsChange = (event) => handleNotificationPreferenceChange('inApp', event.target.checked);
+  const handleEmailNotificationsChange = (event) => handleNotificationPreferenceChange('email', event.target.checked);
+  const handleDbConnectionIssuesChange = (event) => handleNotificationPreferenceChange('dbConnectionIssues', event.target.checked, true);
+  const handleSyncCompletedChange = (event) => handleNotificationPreferenceChange('syncCompleted', event.target.checked, true);
+  const handleNewDbConnectionsChange = (event) => handleNotificationPreferenceChange('newDbConnections', event.target.checked, true);
+  const handleSystemUpdatesChange = (event) => handleNotificationPreferenceChange('systemUpdates', event.target.checked, true);
 
   const handleTestSmtpConnection = async () => {
     setSmtpTestStatus({
@@ -719,7 +720,7 @@ export default function Settings() {
                 <FormControlLabel
                   control={
                     <Switch 
-                      checked={inAppNotificationsEnabled} 
+                      checked={user?.preferences?.notifications?.inApp ?? defaultUserPreferences.notifications.inApp} 
                       onChange={handleInAppNotificationsChange}
                       color="primary"
                     />
@@ -733,7 +734,7 @@ export default function Settings() {
                 <FormControlLabel
                   control={
                     <Switch 
-                      checked={emailNotificationsEnabled}
+                      checked={user?.preferences?.notifications?.email ?? defaultUserPreferences.notifications.email}
                       onChange={handleEmailNotificationsChange}
                       color="primary"
                     />
@@ -757,9 +758,10 @@ export default function Settings() {
                 <FormControlLabel
                   control={
                     <Switch 
-                      checked={notifyDbConnectionIssues} 
+                      checked={user?.preferences?.notifications?.events?.dbConnectionIssues ?? defaultUserPreferences.notifications.events.dbConnectionIssues} 
                       onChange={handleDbConnectionIssuesChange}
                       color="primary" 
+                      disabled={!(user?.preferences?.notifications?.inApp || user?.preferences?.notifications?.email)}
                     />}
                   label="Database connection issues"
                   sx={{ display: 'block', mb: 1 }}
@@ -768,9 +770,10 @@ export default function Settings() {
                 <FormControlLabel
                   control={
                     <Switch 
-                      checked={notifySyncCompleted} 
+                      checked={user?.preferences?.notifications?.events?.syncCompleted ?? defaultUserPreferences.notifications.events.syncCompleted} 
                       onChange={handleSyncCompletedChange}
                       color="primary" 
+                      disabled={!(user?.preferences?.notifications?.inApp || user?.preferences?.notifications?.email)}
                     />}
                   label="Completed synchronizations"
                   sx={{ display: 'block', mb: 1 }}
@@ -779,9 +782,10 @@ export default function Settings() {
                 <FormControlLabel
                   control={
                     <Switch 
-                      checked={notifyNewDbConnections} 
+                      checked={user?.preferences?.notifications?.events?.newDbConnections ?? defaultUserPreferences.notifications.events.newDbConnections} 
                       onChange={handleNewDbConnectionsChange}
                       color="primary" 
+                      disabled={!(user?.preferences?.notifications?.inApp || user?.preferences?.notifications?.email)}
                     />}
                   label="New database connections"
                   sx={{ display: 'block', mb: 1 }}
@@ -790,9 +794,10 @@ export default function Settings() {
                 <FormControlLabel
                   control={
                     <Switch 
-                      checked={notifySystemUpdates} 
+                      checked={user?.preferences?.notifications?.events?.systemUpdates ?? defaultUserPreferences.notifications.events.systemUpdates} 
                       onChange={handleSystemUpdatesChange}
                       color="primary" 
+                      disabled={!(user?.preferences?.notifications?.inApp || user?.preferences?.notifications?.email)}
                     />}
                   label="System updates"
                   sx={{ display: 'block', mb: 1 }}
@@ -801,14 +806,16 @@ export default function Settings() {
               
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  {/* Removed the specific save button for notifications as changes are now saved on toggle 
                   <Button 
                     variant="contained" 
                     color="primary"
                     startIcon={<SaveIcon />}
-                    onClick={handleSaveNotificationSettings}
+                    onClick={handleSaveNotificationSettings} // This handler was removed
                   >
                     Save Notification Settings
                   </Button>
+                  */}
                 </Box>
               </Grid>
             </Grid>
@@ -1443,6 +1450,7 @@ export default function Settings() {
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert 
           onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 

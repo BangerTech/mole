@@ -25,6 +25,10 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
+  Avatar,
+  Breadcrumbs,
+  Link as MuiLink,
+  Chip,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
@@ -38,6 +42,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import HomeIcon from '@mui/icons-material/Home';
+import LinkIcon from '@mui/icons-material/Link';
+import StorageIcon from '@mui/icons-material/Storage';
 
 // Styled components
 const RootStyle = styled('div')(({ theme }) => ({
@@ -89,6 +96,44 @@ const NoConnectionsBox = styled(Box)(({ theme }) => ({
   gap: theme.spacing(2)
 }));
 
+// Helper functions
+const getEngineIcon = (engine) => {
+  if (!engine) return <StorageIcon sx={{ color: 'action.active' }} />;
+  const engineLower = engine.toLowerCase();
+  if (engineLower.includes('postgres')) return <StorageIcon sx={{ color: '#336791' }} />;
+  if (engineLower.includes('mysql')) return <StorageIcon sx={{ color: '#4479A1' }} />;
+  if (engineLower.includes('sqlite')) return <StorageIcon sx={{ color: '#003B57' }} />;
+  if (engineLower.includes('influx')) return <StorageIcon sx={{ color: '#22ADF6' }} />;
+  return <StorageIcon sx={{ color: 'action.active' }} />;
+};
+
+const getEngineColor = (engine) => {
+  if (!engine) return '#757575'; // Default grey
+  const engineLower = engine.toLowerCase();
+  if (engineLower.includes('postgres')) return '#336791';
+  if (engineLower.includes('mysql')) return '#4479A1';
+  if (engineLower.includes('sqlite')) return '#003B57';
+  if (engineLower.includes('influx')) return '#22ADF6';
+  return '#757575';
+};
+
+const formatLastConnectedDate = (dateString) => {
+  if (!dateString) return 'N/A';
+  try {
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${day}.${month}.${year} - ${hours}:${minutes}:${seconds} Uhr`;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return dateString; // Fallback to original string if formatting fails
+  }
+};
+
 export default function DatabasesList() {
   const navigate = useNavigate();
   const [databases, setDatabases] = useState([]);
@@ -101,56 +146,33 @@ export default function DatabasesList() {
   const [sortOption, setSortOption] = useState('name');
   const [sortAnchorEl, setSortAnchorEl] = useState(null);
 
-  // Fetch database connections
-    const fetchDatabases = async () => {
-      setLoading(true);
+  const fetchDatabases = async () => {
+    setLoading(true);
     setError(null);
-      try {
-      // Fetch connections using the service (API)
+    try {
       const connections = await DatabaseService.getDatabaseConnections();
-      
-      // If API returns an empty array, show the sample database
-      if (connections && connections.length > 0) {
-         setDatabases(connections); // Assuming API only returns real connections
-        } else {
-        // API returned no connections, show sample database
-          const sampleDatabase = {
-          id: '1', // Use a distinct ID for the sample
-            name: 'Sample Database',
-            engine: 'PostgreSQL',
-            host: 'localhost',
-            port: 5432,
-            database: 'sample_db',
-            lastConnected: '2023-05-20',
-          isSample: true 
-          };
-          setDatabases([sampleDatabase]);
-        }
-        
-      } catch (err) {
-      // Handle potential errors during fetching
-      setError('Failed to load database connections. Please check API connectivity.');
-      console.error('Error fetching databases:', err);
-      setDatabases([]); // Clear databases on error
-      } finally {
-        setLoading(false);
-      }
-    };
-    
+      console.log("[DatabasesList.js] Fetched connections in fetchData (Log E):", connections);
+      setDatabases(Array.isArray(connections) ? connections : []);
+    } catch (err) {
+      console.error('[DatabasesList.js] Error fetching connections:', err);
+      setError(err.message || 'Failed to load database connections.');
+      setDatabases([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    console.log('[DatabasesList.js] useEffect (for fetchData) is running (Log D)');
     fetchDatabases();
-  }, []); // Fetch only on mount
+  }, []);
 
   const handleCreateDatabase = () => {
     navigate('/databases/create');
   };
 
   const handleDatabaseClick = (id) => {
-    // Navigate to details page - no localStorage interaction needed here anymore
-    // The DatabaseDetails component will fetch the data itself using the ID.
-    // Check if it's the sample database ID
-    if (id === '1') { 
-      // Navigate to a potentially specific route or handle sample display in DatabaseDetails
+    if (id === '1') {
       navigate(`/database/id/${id}`);
     } else {
       navigate(`/database/id/${id}`);
@@ -159,8 +181,7 @@ export default function DatabasesList() {
 
   const handleMenuOpen = (event, database) => {
     event.stopPropagation();
-    // Don't allow menu actions on the sample database
-    if (database.isSample) return; 
+    if (database.isSample) return;
     setAnchorEl(event.currentTarget);
     setSelectedDatabase(database);
   };
@@ -192,22 +213,17 @@ export default function DatabasesList() {
     }
     
     const idToDelete = selectedDatabase.id;
-    setLoading(true); // Indicate loading state during deletion
-    setDeleteDialogOpen(false); // Close dialog immediately
+    setLoading(true);
+    setDeleteDialogOpen(false);
     
     try {
-      // Use the service to delete the connection via API
       await DatabaseService.deleteConnection(idToDelete);
-      
-      // Refetch the list to show the updated state
-      await fetchDatabases(); 
-      
+      await fetchDatabases();
     } catch (error) {
       console.error('Error deleting database connection:', error);
       setError(error.message || 'Failed to delete connection. Please try again.');
-      setLoading(false); // Stop loading indicator on error
+      setLoading(false);
     }
-    // setLoading(false) is handled by fetchDatabases finally block
   };
 
   const handleSortMenuOpen = (event) => {
@@ -224,22 +240,18 @@ export default function DatabasesList() {
   };
 
   const handleRefresh = () => {
-    // Refetch the database list from the API
     fetchDatabases();
   };
 
-  // Filter databases based on search query
   const filteredDatabases = databases.filter(db => 
-    (!db.isSample || searchQuery === '') && // Show sample only if no search query
+    (!db.isSample || searchQuery === '') &&
     (db.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     db.engine.toLowerCase().includes(searchQuery.toLowerCase()) ||
     db.host?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     db.database.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  // Sort databases based on selected option
   const sortedDatabases = [...filteredDatabases].sort((a, b) => {
-    // Keep sample database always at the end if present
     if (a.isSample) return 1;
     if (b.isSample) return -1;
 
@@ -249,29 +261,14 @@ export default function DatabasesList() {
       case 'engine':
         return a.engine.localeCompare(b.engine);
       case 'lastConnected':
-        // Handle potentially null/undefined dates
-        const dateA = a.lastConnected ? new Date(a.lastConnected) : 0;
-        const dateB = b.lastConnected ? new Date(b.lastConnected) : 0;
+        const dateA = a.last_connected ? new Date(a.last_connected) : 0;
+        const dateB = b.last_connected ? new Date(b.last_connected) : 0;
         return dateB - dateA;
       default:
         return 0;
     }
   });
 
-  const getEngineIcon = (engine) => {
-    switch (engine.toLowerCase()) {
-      case 'postgresql':
-        return <PostgreSQLIcon sx={{ color: 'info.main' }} />;
-      case 'mysql':
-        return <MySQLIcon sx={{ color: 'warning.main' }} />;
-      case 'sqlite':
-        return <SQLiteIcon sx={{ color: 'success.main' }} />;
-      default:
-        return <PostgreSQLIcon />;
-    }
-  };
-
-  // Add button description for sample database
   const renderDatabaseCard = (db) => (
     <Grid item xs={12} sm={6} md={4} key={db.id}>
       <DatabaseCard 
@@ -327,7 +324,7 @@ export default function DatabasesList() {
               <strong>Database:</strong> {db.database}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              <strong>Last Connected:</strong> {db.lastConnected}
+              <strong>Last Connected:</strong> {formatLastConnectedDate(db.last_connected)}
             </Typography>
           </Box>
         </DatabaseCardContent>

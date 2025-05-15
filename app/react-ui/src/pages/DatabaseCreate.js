@@ -95,10 +95,13 @@ export default function DatabaseCreate() {
     const createUrl = `${apiBaseUrl}/create-instance`;
     console.log(`[DatabaseCreate] Sending request to ${createUrl}`, createData);
 
+    const token = localStorage.getItem('mole_auth_token');
+
     fetch(createUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
       },
       body: JSON.stringify(createData)
     })

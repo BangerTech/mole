@@ -57,6 +57,21 @@ import DatabaseService from '../services/DatabaseService';
 import AuthService, { getApiBaseUrl } from '../services/AuthService';
 import { UserContext } from '../components/UserContext';
 
+// Define default preferences structure locally for fallbacks if needed, mirroring UserContext
+const defaultUserPreferences = {
+  notifications: {
+    inApp: true,
+    email: false,
+    events: {
+      dbConnectionIssues: true,
+      syncCompleted: true,
+      newDbConnections: true,
+      systemUpdates: true,
+    },
+  },
+  // other defaults can be added if Profile.js interacts with them directly via UserContext
+};
+
 // Styled components
 const RootStyle = styled('div')(({ theme }) => ({
   height: '100%',
@@ -173,7 +188,7 @@ export default function Profile() {
     message: ''
   });
   
-  const { user, updateUser: updateUserContext } = useContext(UserContext);
+  const { user, updateUser: updateUserContext, updateUserPreferences } = useContext(UserContext);
   
   // Helper function to format date and time
   const formatDateTime = (isoString) => {
@@ -468,7 +483,6 @@ export default function Profile() {
   useEffect(() => {
     console.log('[Profile.js] User from context:', user);
     if (user) {
-      // User data from context is now the source of truth
       const mappedUser = {
         id: user.id,
         fullName: user.name || user.fullName || '', 
@@ -477,24 +491,65 @@ export default function Profile() {
         role: user.role || '',
         createdAt: user.createdAt || '',
         lastLogin: user.lastLogin || '',
-        profile_image: user.profile_image || null, // CORRECTED: use profile_image from context
-        preferences: user.preferences || {
-          darkMode: true,
-          notifications: true,
-          showSampleDatabases: true
-        }
+        profile_image: user.profile_image || null,
+        preferences: user.preferences || defaultUserPreferences // Ensure preferences exist, using defaults from context
       };
       console.log('[Profile.js] Mapped user for profile state from context:', mappedUser);
       setUserData(mappedUser);
       setFormData(mappedUser); 
-      setProfileImagePreview(null); // Reset preview when user context changes
-      setProfileImageFile(null);   // Reset file when user context changes
+      setProfileImagePreview(null); 
+      setProfileImageFile(null);   
+
+      // Local notification states are removed, values will be read directly from user.preferences.notifications
+      // const userNotificationsPrefs = mappedUser.preferences.notifications || {};
+      // setProfileInAppNotifications(userNotificationsPrefs.inApp !== undefined ? userNotificationsPrefs.inApp : true);
+      // setProfileEmailNotifications(userNotificationsPrefs.email !== undefined ? userNotificationsPrefs.email : false);
+      // const userEventsPrefs = userNotificationsPrefs.events || {};
+      // setProfileNotifyDbConnectionIssues(userEventsPrefs.dbConnectionIssues !== undefined ? userEventsPrefs.dbConnectionIssues : true);
+      // setProfileNotifySyncCompleted(userEventsPrefs.syncCompleted !== undefined ? userEventsPrefs.syncCompleted : true);
+      // setProfileNotifyNewDbConnections(userEventsPrefs.newDbConnections !== undefined ? userEventsPrefs.newDbConnections : true);
+      // setProfileNotifySystemUpdates(userEventsPrefs.systemUpdates !== undefined ? userEventsPrefs.systemUpdates : true);
+
     } else {
-      console.log('[Profile.js] No user in context, setting mockUser.');
-      setUserData(mockUser); 
-      setFormData({...mockUser});
+      console.log('[Profile.js] No user in context, setting mockUser with default prefs.');
+      const mockWithPrefs = {...mockUser, preferences: defaultUserPreferences };
+      setUserData(mockWithPrefs); 
+      setFormData(mockWithPrefs);
     }
-  }, [user]); // Depend on user from context
+  }, [user]); 
+
+  // Generic handler for profile notification switch changes
+  const handleProfileNotificationPreferenceChange = async (key, value, isEvent = false) => {
+    if (!user || !updateUserPreferences) return;
+
+    // Get current notification settings from user context, or fall back to defaults
+    const currentNotifications = user.preferences?.notifications || defaultUserPreferences.notifications;
+    let newNotificationSettings = { ...currentNotifications };
+
+    if (isEvent) {
+      newNotificationSettings.events = {
+        ...(currentNotifications.events || defaultUserPreferences.notifications.events),
+        [key]: value,
+      };
+    } else {
+      newNotificationSettings[key] = value;
+    }
+    
+    try {
+      await updateUserPreferences({ notifications: newNotificationSettings });
+      setSnackbar({
+        open: true,
+        message: 'Notification preference updated.',
+        severity: 'success',
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to update notification preference.',
+        severity: 'error',
+      });
+    }
+  };
 
   return (
     <RootStyle>
@@ -695,7 +750,7 @@ export default function Profile() {
                   Notification Preferences
                 </Typography>
                 <Typography variant="body2" color="text.secondary" paragraph>
-                  Choose what notifications you want to receive
+                  Choose what notifications you want to receive. These settings are synced with the main application settings.
                 </Typography>
                 
                 <Grid container spacing={3}>
@@ -703,35 +758,47 @@ export default function Profile() {
                     <FormControlLabel
                       control={
                         <Switch 
-                          checked={userData.preferences?.notifications || false} 
-                          onChange={(e) => {
-                            setFormData({
-                              ...formData,
-                              preferences: {
-                                ...formData.preferences,
-                                notifications: e.target.checked
-                              }
-                            });
-                          }}
+                          checked={user?.preferences?.notifications?.inApp ?? defaultUserPreferences.notifications.inApp} 
+                          onChange={(e) => handleProfileNotificationPreferenceChange('inApp', e.target.checked)}
                           color="primary"
                         />
                       }
-                      label="Enable Notifications"
+                      label="Enable In-App Notifications"
                     />
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 3 }}>
-                      Enable notifications to stay informed about important events and updates.
-                    </Typography>
-                    
-                    <Divider sx={{ my: 2 }} />
-                    
-                    <Typography variant="subtitle1" gutterBottom>
-                      Notifications for
+                      Receive notifications within the application for important events.
                     </Typography>
                     
                     <FormControlLabel
                       control={
-                        <Switch defaultChecked color="primary" 
-                          disabled={!formData.preferences?.notifications}
+                        <Switch 
+                          checked={user?.preferences?.notifications?.email ?? defaultUserPreferences.notifications.email}
+                          onChange={(e) => handleProfileNotificationPreferenceChange('email', e.target.checked)}
+                          color="primary"
+                        />
+                      }
+                      label="Enable Email Notifications"
+                    />
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1 }}>
+                      Receive important notifications via email.
+                    </Typography>
+                    <Alert severity="info" sx={{ mb: 3 }}>
+                      To configure email notifications, please set up your SMTP server in the main <strong>Application Settings &gt; Email Settings</strong> tab.
+                    </Alert>
+                    
+                    <Divider sx={{ my: 2 }} />
+                    
+                    <Typography variant="subtitle1" gutterBottom>
+                      Notify me about
+                    </Typography>
+                    
+                    <FormControlLabel
+                      control={
+                        <Switch 
+                          checked={user?.preferences?.notifications?.events?.dbConnectionIssues ?? defaultUserPreferences.notifications.events.dbConnectionIssues} 
+                          onChange={(e) => handleProfileNotificationPreferenceChange('dbConnectionIssues', e.target.checked, true)}
+                          color="primary" 
+                          disabled={!(user?.preferences?.notifications?.inApp || user?.preferences?.notifications?.email)}
                         />
                       }
                       label="Database connection issues"
@@ -740,8 +807,11 @@ export default function Profile() {
                     
                     <FormControlLabel
                       control={
-                        <Switch defaultChecked color="primary" 
-                          disabled={!formData.preferences?.notifications}
+                        <Switch 
+                          checked={user?.preferences?.notifications?.events?.syncCompleted ?? defaultUserPreferences.notifications.events.syncCompleted} 
+                          onChange={(e) => handleProfileNotificationPreferenceChange('syncCompleted', e.target.checked, true)}
+                          color="primary" 
+                          disabled={!(user?.preferences?.notifications?.inApp || user?.preferences?.notifications?.email)}
                         />
                       }
                       label="Completed synchronizations"
@@ -750,35 +820,44 @@ export default function Profile() {
                     
                     <FormControlLabel
                       control={
-                        <Switch defaultChecked color="primary" 
-                          disabled={!formData.preferences?.notifications}
+                        <Switch 
+                          checked={user?.preferences?.notifications?.events?.newDbConnections ?? defaultUserPreferences.notifications.events.newDbConnections} 
+                          onChange={(e) => handleProfileNotificationPreferenceChange('newDbConnections', e.target.checked, true)}
+                          color="primary" 
+                          disabled={!(user?.preferences?.notifications?.inApp || user?.preferences?.notifications?.email)}
                         />
                       }
-                      label="New database connections"
+                      label="New database connections (globally created)"
                       sx={{ display: 'block', mb: 1 }}
                     />
                     
                     <FormControlLabel
                       control={
-                        <Switch defaultChecked color="primary" 
-                          disabled={!formData.preferences?.notifications}
+                        <Switch 
+                          checked={user?.preferences?.notifications?.events?.systemUpdates ?? defaultUserPreferences.notifications.events.systemUpdates} 
+                          onChange={(e) => handleProfileNotificationPreferenceChange('systemUpdates', e.target.checked, true)}
+                          color="primary" 
+                          disabled={!(user?.preferences?.notifications?.inApp || user?.preferences?.notifications?.email)}
                         />
                       }
-                      label="System updates"
+                      label="System updates and new features"
                       sx={{ display: 'block', mb: 1 }}
                     />
                   </Grid>
 
                   <Grid item xs={12}>
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <Button 
-                        startIcon={<NotificationsIcon />}
+                       {/* Save button for notifications is no longer needed as changes are instant via context 
+                       <Button 
+                        startIcon={<SaveIcon />}
                         variant="contained" 
                         color="primary"
-                        onClick={handleSaveProfile}
+                        onClick={handleSaveProfileNotificationSettings} // This handler was removed/repurposed
+                        disabled={isUploading} 
                       >
-                        Save Notification Preferences
-                      </Button>
+                        Save Notification Settings
+                      </Button> 
+                      */}
                     </Box>
                   </Grid>
                 </Grid>

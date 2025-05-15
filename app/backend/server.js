@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const axios = require('axios');
 const { initDatabase } = require('./models/database');
 const fs = require('fs');
+const authMiddleware = require('./middleware/authMiddleware'); // Import authMiddleware
 
 // Load environment variables
 dotenv.config();
@@ -56,7 +57,7 @@ console.log(`Serving static files from: ${buildPath}`);
 app.use(express.static(buildPath));
 
 // --- API Routes --- 
-app.use('/api/databases', databaseRoutes);
+app.use('/api/databases', authMiddleware, databaseRoutes); // Apply authMiddleware
 app.use('/api/email', emailRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import DatabaseService from '../services/DatabaseService';
+import { UserContext } from '../components/UserContext';
 import {
   Box,
   Typography,
@@ -43,6 +44,7 @@ export default function DatabaseForm() {
   const navigate = useNavigate();
   const { id } = useParams(); // For edit mode
   const isEditMode = Boolean(id);
+  const { fetchNotifications } = useContext(UserContext);
   
   const [loading, setLoading] = useState(isEditMode);
   const [error, setError] = useState(null);
@@ -188,6 +190,12 @@ export default function DatabaseForm() {
         savedConnection = await DatabaseService.updateConnection(id, formValues);
       } else {
         savedConnection = await DatabaseService.saveConnection(formValues);
+        if (savedConnection && savedConnection.id) {
+          if (fetchNotifications) {
+            console.log('[DatabaseForm] Fetching notifications after new connection save...');
+            await fetchNotifications();
+          }
+        }
       }
       
       // Basic check if save/update returned something expected

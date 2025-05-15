@@ -331,7 +331,7 @@ const databaseService = {
       await db.close();
       
       // Log event
-      await eventLogService.addEntry('CONNECTION_CREATED', `Connection \"${newConnection.name}\" created.`, newConnection.id);
+      await eventLogService.addEntry('CONNECTION_CREATED', `Connection "${newConnection.name}" (ID: ${newConnection.id}) created.`, newConnection.id);
 
       // Sanitize password
       if (newConnection) {
@@ -428,7 +428,7 @@ const databaseService = {
       await db.close();
       
       // Log event
-      await eventLogService.addEntry('CONNECTION_UPDATED', `Connection \"${updatedConnection.name}\" updated.`, id);
+      await eventLogService.addEntry('CONNECTION_UPDATED', `Connection "${updatedConnection.name}" updated.`, id);
 
       // Sanitize password
       if (updatedConnection) {
@@ -459,9 +459,9 @@ const databaseService = {
       // Direct SQLite implementation
       const db = await getDbConnection();
       
-      // Check if connection exists
+      // Check if connection exists and get its name for logging
       const connection = await db.get(
-        'SELECT id FROM database_connections WHERE id = ?',
+        'SELECT id, name FROM database_connections WHERE id = ?',
         id
       );
       
@@ -478,8 +478,8 @@ const databaseService = {
       
       await db.close();
       
-      // Log event
-      await eventLogService.addEntry('CONNECTION_DELETED', `Connection with ID ${id} deleted.`, id);
+      // Log event with name and ID
+      await eventLogService.addEntry('CONNECTION_DELETED', `Connection "${connection.name}" (ID: ${connection.id}) deleted.`, id);
 
       return true;
     }
@@ -970,6 +970,38 @@ const databaseService = {
       };
     }
   },
+
+  /**
+   * Update the last_connected timestamp for a database connection
+   * @param {number} id - Connection ID
+   * @returns {Promise<void>}
+   */
+  async updateLastConnected(id) {
+    const now = new Date().toISOString();
+    if (USE_SEQUELIZE) {
+      // Sequelize implementation (if/when applicable)
+      // const connection = await DatabaseConnection.findByPk(id);
+      // if (connection) {
+      //   await connection.update({ last_connected: now });
+      // }
+      console.warn('[databaseService.updateLastConnected] Sequelize path not fully implemented yet.');
+    } else {
+      // Direct SQLite implementation
+      const db = await getDbConnection();
+      try {
+        await db.run(
+          'UPDATE database_connections SET last_connected = ? WHERE id = ?',
+          [now, id]
+        );
+        console.log(`[databaseService.updateLastConnected] Updated last_connected for connection ID ${id}`);
+      } catch (error) {
+        console.error(`[databaseService.updateLastConnected] Error updating last_connected for ID ${id}:`, error);
+        // Optionally re-throw or handle as needed
+      } finally {
+        await db.close();
+      }
+    }
+  }
 };
 
 module.exports = databaseService; 

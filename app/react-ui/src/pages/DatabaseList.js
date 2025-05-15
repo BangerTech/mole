@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+console.log('[DatabaseList.js] File execution start (Log A)');
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -75,6 +76,7 @@ const getEngineColor = (engine) => {
 };
 
 const DatabaseList = () => {
+  console.log('[DatabaseList.js] DatabaseList component function entered (Log B)');
   const theme = useTheme();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
@@ -85,28 +87,25 @@ const DatabaseList = () => {
   const [selectedDatabase, setSelectedDatabase] = useState(null);
   const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
 
-  // Function to fetch data
   const fetchData = async () => {
+    console.log('[DatabaseList.js] fetchData called (Log C)');
     setLoading(true);
     setError(null);
     try {
-      console.log("Fetching database connections...");
       const connections = await databaseService.getDatabaseConnections();
-      console.log("Fetched connections:", connections);
-      // Check if the response includes the sample database if no real connections exist
-      // The backend service should handle returning sample data if needed
+      console.log("[DatabaseList.js] Fetched connections in fetchData (Log E):", connections);
       setDatabases(Array.isArray(connections) ? connections : []);
     } catch (err) {
-      console.error('Error fetching connections:', err);
+      console.error('[DatabaseList.js] Error fetching connections:', err);
       setError(err.message || 'Failed to load database connections.');
-      setDatabases([]); // Clear data on error
+      setDatabases([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Load data on component mount
   useEffect(() => {
+    console.log('[DatabaseList.js] useEffect (for fetchData) is running (Log D)');
     fetchData();
   }, []);
 
@@ -189,8 +188,12 @@ const DatabaseList = () => {
     return acc;
   }, {});
 
+  console.log('[DatabaseList.js] Before return statement (Log F)');
   return (
     <Box sx={{ p: { xs: 2, sm: 3 } }}>
+      {/* Test log directly in JSX to see if render function body is reached */}
+      {false && console.log('[DatabaseList.js] JSX rendering started (Log G)')}
+      
       {/* Breadcrumbs */}
       <Breadcrumbs
         aria-label="breadcrumb"
@@ -383,12 +386,15 @@ const DatabaseList = () => {
                            </Typography>
                            {/* Add Last Connected if available */}
                            {database.last_connected && (
+                             <>
+                               {console.log('[DatabaseList.js] Rendering Last Connected for CARD:', database.name, 'Value:', database.last_connected, 'Formatted:', new Date(database.last_connected).toLocaleString())}
                                <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
                                    <span>Last Connected:</span>
                                    <span style={{ fontWeight: 500 }}>
                                        {new Date(database.last_connected).toLocaleString()}
                                    </span>
                                </Typography>
+                             </>
                            )}
                         </Box>
                       </CardContent>

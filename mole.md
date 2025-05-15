@@ -405,7 +405,7 @@ Um die Navigation im Codebase zu erleichtern, hier eine Übersicht der wichtigst
    - Burger-Menü-Button: `/app/frontend/src/components/Header.js`
 
 2. **Datenbankansicht:**
-   - Datenbankverbindungsliste: `/app/frontend/src/components/DatabaseList.js`
+   - Datenbankverbindungsliste: `/app/react-ui/src/pages/DatabasesList.js`
    - Verbindungsdetails: `/app/frontend/src/components/ConnectionDetails.js`
    - Tabellenansicht: `/app/frontend/src/components/TableView.js`
    - Abfrageeditor: `/app/frontend/src/components/QueryEditor.js`
@@ -1001,20 +1001,7 @@ Response: { success: true, user: { ...updatedUser, profileImage: "/data/avatars/
 Mit dieser Migration wurde das Benutzersystem vollständig auf eine relationale SQLite-Tabelle umgestellt und die Verwaltung von Benutzer-Avataren sowie Benachrichtigungen vereinheitlicht und verbessert.
 
 **Backend:**
-- Die Tabelle `users` wird jetzt wie folgt verwaltet:
-
-| Spaltenname     | Typ      | Beschreibung                                 |
-|-----------------|----------|----------------------------------------------|
-| id              | INTEGER  | Primärschlüssel                             |
-| name            | TEXT     | Name des Benutzers                          |
-| email           | TEXT     | E-Mail-Adresse (eindeutig)                  |
-| password_hash   | TEXT     | Gehashtes Passwort                          |
-| role            | TEXT     | Benutzerrolle (user/admin)                  |
-| profile_image   | TEXT     | Pfad zum Profilbild (z.B. /data/avatars/...)|
-| created_at      | DATETIME | Erstellungszeit                             |
-| last_login      | DATETIME | Letzter Login                               |
-| preferences     | TEXT     | JSON-String für UI- und Benachrichtigungseinstellungen |
-
+- Die Tabelle `users` wird jetzt wie oben dokumentiert verwaltet.
 - Die Spalte `profile_image` (snake_case) wird für alle Avatar-URLs verwendet. Die Migration aus `users.json` übernimmt ggf. alte Felder (`profileImage` → `profile_image`).
 - Avatar-Uploads werden über den Endpunkt `POST /api/users/:userId/avatar` (mit Authentifizierung) abgewickelt. Die Bilder werden im Verzeichnis `backend/data/avatars/` gespeichert und als `/data/avatars/...` ausgeliefert. Beim Upload wird der alte Avatar automatisch gelöscht.
 - Die Referenz zum Bild wird in `profile_image` gespeichert und überall im Backend/Frontend verwendet.
@@ -1062,7 +1049,13 @@ CREATE TABLE IF NOT EXISTS user_notifications (
 );
 ```
 
-**Frontend-Refactoring:**
-- `UserContext.js` entfernt alle camelCase-Altlasten und sorgt für einheitliche Verwendung von `profile_image`.
-- Die Synchronisierung von Userdaten nach Avatar-Upload ist jetzt robust und konsistent.
-- Die Anzeige von Avataren in Navbar und Profil ist immer aktuell.
+## Technische Outcomes (Zusammenfassung der letzten Entwicklungsphase)
+- Das Benutzersystem basiert jetzt vollständig auf einer SQL-Tabelle (`users`), keine Nutzung von `users.json` mehr.
+- Persistente, user-spezifische Benachrichtigungen werden in `user_notifications` gespeichert und sind mit User-IDs verknüpft.
+- Die Verwaltung und Anzeige von Avataren ist konsistent und robust, alle Komponenten nutzen das Feld `profile_image`.
+- Die Notification-Logik ist persistent, badge- und UI-Status werden in Echtzeit synchronisiert.
+- Die User-Settings (inkl. Notification Preferences) werden zentral im UserContext verwaltet und sind überall synchron.
+- Alle Änderungen und Migrationen sind in dieser Datei dokumentiert, inkl. vollständigem Schema und SQL für alle neuen Tabellen.
+
+**Frontend-Hinweis:**
+Das Feld `last_connected` wird im Frontend (React UI) im Format `TT.MM.JJJJ - HH:MM:SS Uhr` angezeigt (z.B. 14.05.2025 - 13:33:59 Uhr). In der Datenbank bleibt das Feld im ISO-DATETIME-Format gespeichert.

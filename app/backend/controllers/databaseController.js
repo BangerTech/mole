@@ -10,6 +10,7 @@ const { Pool } = require('pg');
 const databaseService = require('../services/databaseService');
 const { encrypt, decrypt } = require('../utils/encryptionUtil');
 const { InfluxDB, Point } = require('@influxdata/influxdb-client');
+const notificationController = require('./notificationController'); // Import notificationController
 
 // Path for storing database connections in a JSON file (for migration/fallback)
 const DB_FILE_PATH = path.join(__dirname, '../data/database_connections.json');
@@ -126,6 +127,31 @@ exports.getConnectionById = async (req, res) => {
 exports.createConnection = async (req, res) => {
   try {
     const newConnection = await databaseService.createConnection(req.body);
+    
+    console.log('[databaseController.createConnection] newConnection created:', newConnection); // NEUES LOG
+    console.log('[databaseController.createConnection] req.userId:', req.userId); // NEUES LOG
+
+    // Create a notification for the new connection
+    if (req.userId && newConnection && newConnection.id) {
+      console.log('[databaseController.createConnection] Attempting to create notification...'); // NEUES LOG
+      try {
+        await notificationController.createNotification(
+          req.userId, // Assuming userId is available on req object via auth middleware
+          'new_db_connection', // Type of the notification
+          `Connection '${newConnection.name}' Created`, // More specific title
+          `Details: A new database connection named "${newConnection.name}" (Engine: ${newConnection.engine}) has been successfully created.`,
+          `/databases/${newConnection.id}`, // Link to the new connection
+          'newDbConnections' // preferencesKey matching user settings
+        );
+        console.log('[databaseController.createConnection] Notification creation call completed.'); // NEUES LOG
+      } catch (notificationError) {
+        // Log the error but don't let it fail the main operation
+        console.error('[databaseController.createConnection] Failed to create notification for new connection:', notificationError);
+      }
+    } else {
+      console.log('[databaseController.createConnection] Skipping notification creation due to missing userId, newConnection, or newConnection.id.'); // NEUES LOG
+    }
+    
     res.status(201).json(newConnection);
   } catch (error) {
     res.status(500).json({ message: 'Error creating database connection', error: error.message });
@@ -256,6 +282,13 @@ exports.getDatabaseSchema = async (req, res) => {
 
     // Return the result from the service
     if (schemaInfo.success) {
+        if (connectionId !== 'sample') {
+            try {
+                await databaseService.updateLastConnected(connectionId);
+            } catch (updateError) {
+                console.error(`[databaseController.getDatabaseSchema] Failed to update last_connected for ${connectionId}:`, updateError);
+            }
+        }
         res.status(200).json(schemaInfo); // Contains { success, tables, tableColumns, totalSize, message? }
     } else {
         // Determine appropriate status code based on message or keep it simple
@@ -398,6 +431,14 @@ exports.getDatabaseHealth = async (req, res) => {
     }
     
     // Return 200 OK with the status payload
+    if (healthStatus.status === 'OK' && connectionId !== 'sample') {
+      try {
+        await databaseService.updateLastConnected(connectionId);
+      } catch (updateError) {
+        console.error(`[databaseController.getDatabaseHealth] Failed to update last_connected for ${connectionId}:`, updateError);
+        // Non-critical error, so we don't fail the health check response itself.
+      }
+    }
     res.status(200).json(healthStatus);
 
   } catch (error) {
@@ -422,6 +463,13 @@ exports.executeQuery = async (req, res) => {
     const result = await databaseService.executeDbQuery(connectionId, query);
 
     if (result.success) {
+      if (connectionId !== 'sample') {
+        try {
+          await databaseService.updateLastConnected(connectionId);
+        } catch (updateError) {
+          console.error(`[databaseController.executeQuery] Failed to update last_connected for ${connectionId}:`, updateError);
+        }
+      }
       res.status(200).json(result);
     } else {
       // Determine status code based on the error message or type if available

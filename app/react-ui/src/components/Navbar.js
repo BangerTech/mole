@@ -278,7 +278,7 @@ export default function Navbar() {
             >
               <ListItemText
                 primary={notification.title}
-                secondary={notification.timestamp}
+                secondary={notification.created_at ? new Date(notification.created_at).toLocaleString() : ''}
                 primaryTypographyProps={{ variant: 'body2', fontWeight: notification.read ? 'normal' : 'medium' }}
                 secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
               />
