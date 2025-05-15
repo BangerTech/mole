@@ -485,6 +485,7 @@ export default function Settings() {
     setErrorSyncTasks(null);
     try {
       const data = await DatabaseService.getAllSyncTasks();
+      console.log('[Settings.js] Data received from getAllSyncTasks:', data);
       if (data.success) {
         setSyncTasks(data.tasks);
       } else {
@@ -500,7 +501,7 @@ export default function Settings() {
   };
 
   useEffect(() => {
-    if (activeTab === 2) {
+    if (activeTab === 1) {
       fetchSyncTasks();
     }
   }, [activeTab]);

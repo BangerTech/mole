@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DatabaseService from '../services/DatabaseService';
+import { UserContext } from '../components/UserContext';
 import {
   Box,
   Typography,
@@ -134,8 +135,36 @@ const formatLastConnectedDate = (dateString) => {
   }
 };
 
+// Function to fetch Sample Database details (mocked for now, ideally from backend)
+const fetchSampleDatabase = async () => {
+  // In a real app, this might fetch from a dedicated backend endpoint
+  // For now, returning a structure that mimics a connection object
+  console.log('[DatabasesList.js] Mock fetching Sample Database...');
+  return {
+    id: 'sample', // Use the special 'sample' ID
+    name: 'Sample Database (SQLite)',
+    engine: 'SQLite',
+    host: null,
+    port: null,
+    database: '/app/data/sample_mole.db', // Or relevant path
+    username: null,
+    password: undefined,
+    ssl_enabled: false,
+    notes: 'A read-only sample database.',
+    isSample: true,
+    created_at: 'N/A',
+    last_connected: 'N/A', // Or a mock date
+    encrypted_password: null,
+    user_id: null, // Sample DB is not tied to a specific user
+    // Add other fields if needed for display, e.g., table count, size (mocked or fetched)
+    tables: 6, // Mock value based on backend definition
+    size: '128 MB' // Mock value based on backend definition
+  };
+};
+
 export default function DatabasesList() {
   const navigate = useNavigate();
+  const { user } = useContext(UserContext);
   const [databases, setDatabases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -149,14 +178,48 @@ export default function DatabasesList() {
   const fetchDatabases = async () => {
     setLoading(true);
     setError(null);
+    let userConnections = [];
+    let sampleDb = null;
+
     try {
-      const connections = await DatabaseService.getDatabaseConnections();
-      console.log("[DatabasesList.js] Fetched connections in fetchData (Log E):", connections);
-      setDatabases(Array.isArray(connections) ? connections : []);
+      // Fetch connections for the current user from the backend
+      // The backend should now return only connections owned by req.userId
+      userConnections = await DatabaseService.getDatabaseConnections();
+      console.log("[DatabasesList.js] Fetched user connections (Log E):", userConnections);
+      
+      // Fetch Sample Database details separately (mocked or from new endpoint)
+      // We should always try to fetch the sample DB, as its visibility might depend on backend rules
+      sampleDb = await fetchSampleDatabase(); // Use the helper function
+      console.log('[DatabasesList.js] Fetched Sample Database:', sampleDb);
+
+      // Combine user connections and Sample Database if valid
+      // Only add sampleDb if it was successfully fetched and is marked as isSample
+      const allConnections = Array.isArray(userConnections) ? [...userConnections] : [];
+
+      // Logic to show Sample Database
+      // Condition 1: User is the "Demo User" (check by name or a specific role/id if available)
+      // Condition 2: User has no other connections
+      const isDemoUser = user && (user.name === 'Demo User' || user.role === 'demo'); // Adjust condition as needed
+      const userHasNoConnections = userConnections.length === 0;
+
+      if (sampleDb && sampleDb.id === 'sample' && sampleDb.isSample) {
+        if (isDemoUser || userHasNoConnections) {
+          // Add sample DB if it's not already in the list (e.g., if backend sometimes sends it)
+          if (!allConnections.some(conn => conn.id === 'sample')) {
+            allConnections.unshift(sampleDb); // Add to the beginning
+          }
+        } else {
+          // If not demo user and has other connections, ensure sample isn't shown (unless searched for)
+          // This part might need adjustment based on how search interacts with sample DB visibility
+        }
+      }
+
+      setDatabases(allConnections);
+
     } catch (err) {
       console.error('[DatabasesList.js] Error fetching connections:', err);
       setError(err.message || 'Failed to load database connections.');
-      setDatabases([]);
+      setDatabases([]); // Clear connections on error
     } finally {
       setLoading(false);
     }

@@ -6,11 +6,14 @@
 const express = require('express');
 const router = express.Router();
 const databaseController = require('../controllers/databaseController');
+const authMiddleware = require('../middleware/authMiddleware'); // Import authMiddleware
 
-// Test a database connection - specific routes should come before parameterized routes
+// --- Public Routes (No Authentication Required) ---
+// Test a database connection
 router.post('/test', databaseController.testConnection);
 router.post('/test-connection', databaseController.testConnection); // Maintain backward compatibility
 
+// --- Authenticated Routes ---
 // Route for all database connections
 // Compatibility with both new and old API paths
 router.get('/', databaseController.getAllConnections);

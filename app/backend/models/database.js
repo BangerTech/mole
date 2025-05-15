@@ -83,11 +83,23 @@ const User = sequelize.define('User', {
 });
 
 // Initialize database and tables
+let isDatabaseInitialized = false;
+
 const initDatabase = async () => {
+  if (isDatabaseInitialized) {
+    console.log('initDatabase already called. Skipping.');
+    return;
+  }
+  isDatabaseInitialized = true;
+
   ensureDataDirExists();
   
   // Open database connection
   const db = await getDirectSqliteConnection();
+  
+  // Ensure foreign key support is on
+  await db.exec('PRAGMA foreign_keys = ON;');
+  console.log('PRAGMA foreign_keys = ON; executed.');
   
   // Create tables if they don't exist
   await db.exec(`
@@ -107,6 +119,7 @@ const initDatabase = async () => {
       last_connected DATETIME,
       updated_at DATETIME,
       encrypted_password TEXT
+      -- FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE -- Added in migration below
     );
     
     CREATE TABLE IF NOT EXISTS sync_tasks (
@@ -120,8 +133,8 @@ const initDatabase = async () => {
       enabled BOOLEAN DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (source_connection_id) REFERENCES database_connections(id),
-      FOREIGN KEY (target_connection_id) REFERENCES database_connections(id)
+      FOREIGN KEY (source_connection_id) REFERENCES database_connections(id) ON DELETE CASCADE,
+      FOREIGN KEY (target_connection_id) REFERENCES database_connections(id) ON DELETE CASCADE
     );
     
     CREATE TABLE IF NOT EXISTS sync_logs (
@@ -132,7 +145,7 @@ const initDatabase = async () => {
       status TEXT,
       message TEXT,
       rows_synced INTEGER,
-      FOREIGN KEY (task_id) REFERENCES sync_tasks(id)
+      FOREIGN KEY (task_id) REFERENCES sync_tasks(id) ON DELETE CASCADE
     );
     
     -- Add new table for event logs
@@ -155,7 +168,7 @@ const initDatabase = async () => {
       read_status BOOLEAN DEFAULT 0, -- 0 for unread, 1 for read
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       preferences_key TEXT, -- To match against user notification settings
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE -- Assuming a users table exists or will exist
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
     
     CREATE TABLE IF NOT EXISTS users (
@@ -173,6 +186,42 @@ const initDatabase = async () => {
     -- Index for faster queries
     CREATE INDEX IF NOT EXISTS idx_is_sample ON database_connections(isSample);
   `);
+  
+  // Migration step 1: Add user_id column to database_connections if it doesn't exist
+  try {
+    const columnExists = await db.get('SELECT COUNT(*) AS count FROM PRAGMA_TABLE_INFO(\'database_connections\') WHERE name=\'user_id\'');
+
+    if (columnExists.count === 0) {
+        console.log('Migration: Adding user_id column to database_connections table...');
+        await db.exec('ALTER TABLE database_connections ADD COLUMN user_id INTEGER');
+        console.log('Migration: user_id column added.');
+        
+        // Note: Adding FOREIGN KEY constraint via ALTER TABLE is complex in SQLite
+        // A separate step/tool might be needed for existing databases if strict FK enforcement is required.
+        // For now, rely on application-level checks and the constraint in the CREATE TABLE for new installs.
+    } else {
+        console.log('Migration: user_id column already exists in database_connections table.');
+    }
+  } catch (migrationError) {
+    console.error('Migration Error (Add user_id column):', migrationError);
+  }
+
+  // Migration step 2: Assign existing connections (with NULL user_id) to the first user
+  try {
+    const firstUser = await db.get('SELECT id FROM users LIMIT 1');
+    if (firstUser) {
+        console.log(`Migration: Assigning existing database connections without user_id to user ${firstUser.id}...`);
+        const result = await db.run(
+            'UPDATE database_connections SET user_id = ? WHERE user_id IS NULL',
+            firstUser.id
+        );
+        console.log(`Migration: Assigned ${result.changes} connections to user ${firstUser.id}.`);
+    } else {
+        console.warn('Migration: No users found in the users table. Cannot assign existing connections.');
+    }
+  } catch (migrationError) {
+    console.error('Migration Error (Assign user_id):', migrationError);
+  }
   
   // Migration logic for users from users.json to users table
   try {

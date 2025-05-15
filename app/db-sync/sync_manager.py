@@ -52,6 +52,7 @@ scheduler = BackgroundScheduler(daemon=True) # daemon=True allows app to exit ev
 
 # --- Global Constants ---
 BACKEND_DB_PATH = "/app/backend/data/mole.db"
+NODE_BACKEND_JOB_STATUS_URL = os.getenv("NODE_CALLBACK_URL", "http://backend:3001/api/sync/job-status-update")
 
 # --- Key Derivation for Decryption (Matches Node.js) ---
 ENCRYPTION_KEY_RAW = os.getenv("MOLE_ENCRYPTION_KEY", 'a-default-key-that-should-be-changed-in-prod')
@@ -347,8 +348,6 @@ def update_last_sync_time(task_id: int, sync_time: datetime):
 
 # --- Main Sync Execution Logic --- (Remains mostly the same)
 def perform_database_sync(task_payload: Dict):
-    # ... (logic from previous version: get details, decrypt, call sync_postgresql_to_postgresql, log) ...
-    # Ensure it uses the task_payload directly and calls the global update_sync_log and update_last_sync_time
     task_id = task_payload['taskId']
     source_conn_payload = task_payload['source']
     target_conn_payload = task_payload['target']
@@ -358,28 +357,101 @@ def perform_database_sync(task_payload: Dict):
     source_password_to_use = source_conn_payload.get('password')
     dec_src_pass = decrypt_password(source_password_to_use) if source_password_to_use and ':' in source_password_to_use else source_password_to_use
     if source_password_to_use and ':' in source_password_to_use and dec_src_pass is None:
-        logger.error(f"[TASK {task_id}] Failed to decrypt source password. Aborting."); update_sync_log(task_id, datetime.now(timezone.utc), datetime.now(timezone.utc), "error", "Decrypt source pass failed",0); return
+        logger.error(f"[TASK {task_id}] Failed to decrypt source password. Aborting.")
+        # Prepare for callback even on early exit
+        start_time_for_log = datetime.now(timezone.utc)
+        end_time_for_log = datetime.now(timezone.utc)
+        status_for_log = "error"
+        message_for_log = "Decrypt source pass failed"
+        rows_synced_for_log = 0
+        update_sync_log(task_id, start_time_for_log, end_time_for_log, status_for_log, message_for_log, rows_synced_for_log)
+        # Attempt to send status update back to Node.js backend
+        try:
+            callback_payload = {
+                "taskId": task_id,
+                "status": status_for_log,
+                "message": message_for_log,
+                "rows_synced": rows_synced_for_log,
+                "start_time": start_time_for_log.isoformat(),
+                "end_time": end_time_for_log.isoformat()
+            }
+            requests.post(NODE_BACKEND_JOB_STATUS_URL, json=callback_payload, timeout=10)
+            logger.info(f"[TASK {task_id}] Successfully sent job status update to Node.js backend after decryption error.")
+        except Exception as cb_exc:
+            logger.error(f"[TASK {task_id}] Failed to send job status update to Node.js backend after decryption error: {cb_exc}")
+        return
     source_conn_payload['password'] = dec_src_pass
     
     target_password_to_use = target_conn_payload.get('password')
     dec_tgt_pass = decrypt_password(target_password_to_use) if target_password_to_use and ':' in target_password_to_use else target_password_to_use
     if target_password_to_use and ':' in target_password_to_use and dec_tgt_pass is None:
-        logger.error(f"[TASK {task_id}] Failed to decrypt target password. Aborting."); update_sync_log(task_id, datetime.now(timezone.utc), datetime.now(timezone.utc), "error", "Decrypt target pass failed",0); return
+        logger.error(f"[TASK {task_id}] Failed to decrypt target password. Aborting.")
+        start_time_for_log = datetime.now(timezone.utc) # Assuming error happened before any real start
+        end_time_for_log = datetime.now(timezone.utc)
+        status_for_log = "error"
+        message_for_log = "Decrypt target pass failed"
+        rows_synced_for_log = 0
+        update_sync_log(task_id, start_time_for_log, end_time_for_log, status_for_log, message_for_log, rows_synced_for_log)
+        try:
+            callback_payload = {
+                "taskId": task_id,
+                "status": status_for_log,
+                "message": message_for_log,
+                "rows_synced": rows_synced_for_log,
+                "start_time": start_time_for_log.isoformat(),
+                "end_time": end_time_for_log.isoformat()
+            }
+            requests.post(NODE_BACKEND_JOB_STATUS_URL, json=callback_payload, timeout=10)
+            logger.info(f"[TASK {task_id}] Successfully sent job status update to Node.js backend after decryption error.")
+        except Exception as cb_exc:
+            logger.error(f"[TASK {task_id}] Failed to send job status update to Node.js backend after decryption error: {cb_exc}")
+        return
     target_conn_payload['password'] = dec_tgt_pass
     
     source_engine = source_conn_payload.get("engine", "").lower()
     target_engine = target_conn_payload.get("engine", "").lower()
     start_time = datetime.now(timezone.utc)
-    status = "error"; message = ""; rows_synced = 0
+    status = "error"; message = ""; rows_synced = 0 # Initialize for the finally block
+    end_time = start_time # Initialize end_time
     try:
         if source_engine == "postgresql" and target_engine == "postgresql":
             status, message, rows_synced = sync_postgresql_to_postgresql(task_id, source_conn_payload, target_conn_payload, options)
-        else: message = f"Unsupported sync: {source_engine} to {target_engine}"; raise NotImplementedError(message)
-        if status == "success": update_last_sync_time(task_id, start_time); logger.info(f"[TASK {task_id}] Sync success.")
-        else: logger.error(f"[TASK {task_id}] Sync failed. Status: {status}, Msg: {message}")
-    except Exception as e: message = str(e); logger.error(f"[TASK {task_id}] Sync exception: {e}", exc_info=True); status = "error"
-    finally: update_sync_log(task_id, start_time, datetime.now(timezone.utc), status, message, rows_synced)
-
+        else: 
+            message = f"Unsupported sync: {source_engine} to {target_engine}"
+            status = "error"
+            raise NotImplementedError(message)
+        
+        end_time = datetime.now(timezone.utc)
+        if status == "success": 
+            update_last_sync_time(task_id, start_time) # or end_time, depending on definition of last_sync
+            logger.info(f"[TASK {task_id}] Sync success.")
+        else: 
+            logger.error(f"[TASK {task_id}] Sync failed. Status: {status}, Msg: {message}")
+    except Exception as e: 
+        message = str(e) 
+        status = "error"
+        end_time = datetime.now(timezone.utc)
+        logger.error(f"[TASK {task_id}] Sync exception: {e}", exc_info=True)
+    finally: 
+        update_sync_log(task_id, start_time, end_time, status, message, rows_synced)
+        # Attempt to send status update back to Node.js backend
+        try:
+            callback_payload = {
+                "taskId": task_id,
+                "status": status.upper(), # Ensure status is uppercase for consistency
+                "message": message,
+                "rows_synced": rows_synced,
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat()
+            }
+            logger.info(f"[TASK {task_id}] Sending job status update to Node.js backend: {callback_payload}")
+            response = requests.post(NODE_BACKEND_JOB_STATUS_URL, json=callback_payload, timeout=10) # 10 second timeout
+            response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+            logger.info(f"[TASK {task_id}] Successfully sent job status update to Node.js backend. Response: {response.status_code}")
+        except requests.exceptions.RequestException as cb_exc:
+            logger.error(f"[TASK {task_id}] Failed to send job status update to Node.js backend: {cb_exc}")
+        except Exception as gen_cb_exc:
+            logger.error(f"[TASK {task_id}] An unexpected error occurred while sending job status update: {gen_cb_exc}")
 
 # --- Specific Sync Implementations (e.g., sync_postgresql_to_postgresql) ---
 # This function definition should be identical to the one you confirmed was working for manual syncs.

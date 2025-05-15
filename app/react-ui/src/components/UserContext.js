@@ -128,6 +128,19 @@ const UserProvider = ({ children }) => {
     }
   }, [user, fetchNotifications]);
 
+  // Add polling for notifications
+  useEffect(() => {
+    console.log('[UserContext] Polling useEffect triggered. User object:', user);
+    if (user) {
+      const intervalId = setInterval(() => {
+        console.log('[UserContext] Polling for new notifications...');
+        fetchNotifications();
+      }, 30000); // Poll every 30 seconds
+
+      return () => clearInterval(intervalId); // Cleanup interval on component unmount or when user changes
+    }
+  }, [user, fetchNotifications]);
+
   const login = (userData) => {
     console.log('[UserContext] Data received by login function (userData):', userData);
     const userToStore = {

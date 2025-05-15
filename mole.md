@@ -1059,3 +1059,132 @@ CREATE TABLE IF NOT EXISTS user_notifications (
 
 **Frontend-Hinweis:**
 Das Feld `last_connected` wird im Frontend (React UI) im Format `TT.MM.JJJJ - HH:MM:SS Uhr` angezeigt (z.B. 14.05.2025 - 13:33:59 Uhr). In der Datenbank bleibt das Feld im ISO-DATETIME-Format gespeichert.
+
+### Migration 015 - Benutzerzuordnung für Datenbankverbindungen (2025-05-14)
+
+In dieser Migration wird die Tabelle `database_connections` erweitert, um jede Verbindung einem spezifischen Benutzer zuzuordnen. Dies ist ein kritischer Schritt für die Implementierung von Benutzerberechtigungen und Datensicherheit.
+
+**Änderungen:**
+- Hinzufügung der Spalte `user_id` zur Tabelle `database_connections`.
+- Der `user_id` wird die ID des Benutzers zugewiesen, der die Verbindung erstellt hat.
+- Ein Fremdschlüssel auf die `users`-Tabelle wird definiert, um die referenzielle Integrität sicherzustellen (`ON DELETE CASCADE`).
+
+**Behandlung bestehender Verbindungen:**
+- Bestehende Einträge in `database_connections` (die vor dieser Migration erstellt wurden) haben noch keine `user_id`.
+- Beim ersten Start des Backends nach dieser Migration sollte eine Logik implementiert werden, die diesen bestehenden Verbindungen einen `user_id` zuweist. Eine pragmatische Lösung könnte sein, sie dem ersten gefundenen Admin-Benutzer zuzuweisen. (Hinweis: Diese Zuweisungslogik muss im Backend-Start-Skript oder einer separaten Initialisierungsroutine hinzugefügt werden).
+
+**SQL für die Migration:**
+```sql
+ALTER TABLE database_connections ADD COLUMN user_id INTEGER;
+
+-- OPTIONAL: Update existing connections. This part requires backend logic 
+-- to decide WHICH user to assign. A simple example assigning to user with ID 1:
+-- UPDATE database_connections SET user_id = 1 WHERE user_id IS NULL;
+
+-- Add foreign key constraint AFTER potentially updating existing rows
+-- Note: Adding a NOT NULL constraint AND a foreign key at the same time 
+-- with existing NULLs is tricky in SQLite ALTER TABLE. It's often done in steps:
+-- 1. Add column (nullable)
+-- 2. Update existing rows with a valid user_id
+-- 3. Add NOT NULL constraint (requires SQLite version 3.35.0 or later)
+-- 4. Add foreign key constraint
+
+-- For simplicity in the migration script documentation, we show the final state goal:
+-- ALTER TABLE database_connections ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+-- ALTER TABLE database_connections ALTER COLUMN user_id SET NOT NULL; -- Not a standard SQLite ALTER syntax
+
+-- A more robust SQLite approach might involve creating a new table, copying data,
+-- adding constraints, dropping the old, and renaming the new. 
+-- For now, documenting the ADD COLUMN step is sufficient as the first part of the migration.
+-- The NOT NULL and FOREIGN KEY constraints, and backfilling user_ids, will need 
+-- careful handling in the backend's migration execution logic if done purely in SQL.
+
+```
+
+**Auswirkungen auf das System:**
+- Nur der Benutzer, dem eine Verbindung zugeordnet ist, kann diese sehen, bearbeiten oder löschen.
+- Backend-Endpunkte für Datenbankverbindungen (`/api/databases`) müssen die `user_id` des eingeloggten Benutzers für alle Operationen berücksichtigen.
+- Frontend-Komponenten zeigen nur Verbindungen des eingeloggten Benutzers an.
+
+### Migration 015 - Benutzerbezogene Synchronisationsjobs & user_id in sync_tasks (2025-06-XX)
+
+Mit dieser Migration werden alle Synchronisationsjobs (sync_tasks) benutzerspezifisch. Das bedeutet, dass jeder Benutzer nur seine eigenen Synchronisationsaufgaben sehen, erstellen und verwalten kann. Die API-Endpunkte für Synchronisation sind nun authentifiziert und verwenden die userId aus dem JWT-Token. Die Tabelle sync_tasks erhält eine neue Spalte user_id.
+
+**Technische Änderungen:**
+
+1. **sync_tasks Schema-Erweiterung:**
+   - Neue Spalte `user_id INTEGER` (FK auf users.id, NULL für alte Tasks, Pflichtfeld für neue Tasks)
+   - Alle neuen und aktualisierten Tasks werden mit der user_id des eingeloggten Benutzers gespeichert
+   - Die API-Endpunkte filtern und bearbeiten nur Tasks des eingeloggten Users
+
+2. **API-Änderungen:**
+   - Alle Endpunkte unter `/api/sync` erfordern jetzt Authentifizierung
+   - Die Controller verwenden die userId aus dem JWT, um nur die eigenen Tasks zu listen, zu erstellen, zu ändern oder zu löschen
+   - Die Frontend-Komponenten (Settings.js, DatabaseSyncTab.js) zeigen nur noch die eigenen Sync-Jobs an
+
+3. **Migration:**
+   - Bestehende Tasks erhalten user_id = NULL (können manuell zugewiesen werden)
+   - Neue Tasks erfordern user_id
+   - SQL für Migration:
+
+```sql
+ALTER TABLE sync_tasks ADD COLUMN user_id INTEGER;
+-- Optional: UPDATE sync_tasks SET user_id = 1 WHERE user_id IS NULL; -- (z.B. für Demo-User)
+```
+
+4. **Aktualisiertes sync_tasks Schema:**
+
+| Spaltenname        | Typ      | Beschreibung                       |
+|--------------------|----------|-----------------------------------|
+| id                 | INTEGER  | Primärschlüssel                   |
+| user_id            | INTEGER  | FK auf users.id (neu, Pflichtfeld für neue Tasks) |
+| name               | TEXT     | Name der Synchronisierungsaufgabe |
+| source_connection_id | INTEGER | FK auf database_connections.id   |
+| target_connection_id | INTEGER | FK auf database_connections.id   |
+| tables             | TEXT     | Zu synchronisierende Tabellen (JSON) |
+| schedule           | TEXT     | Cron-Expression für die Planung   |
+| last_sync          | DATETIME | Letzte erfolgreiche Synchronisierung |
+| enabled            | BOOLEAN  | Aufgabe aktiviert                 |
+| created_at         | DATETIME | Erstellungszeit                   |
+| updated_at         | DATETIME | Letzte Aktualisierung             |
+
+5. **Auswirkungen auf die Anwendung:**
+   - Synchronisationsjobs sind jetzt strikt benutzerbezogen
+   - Demo-User und echte User sehen nur ihre eigenen Jobs
+   - Settings.js und alle Sync-Tabellen im Frontend zeigen nur noch die eigenen Tasks
+   - Die Sicherheit und Mandantenfähigkeit der Anwendung ist verbessert
+
+**Hinweis:**
+Die Migration muss manuell in der SQLite-Datenbank ausgeführt werden:
+
+```sh
+sqlite3 mole/app/backend/data/mole.db "ALTER TABLE sync_tasks ADD COLUMN user_id INTEGER;"
+```
+
+Danach können bestehende Tasks optional einem User zugeordnet werden.
+
+### Migration 016 - Zentraler API Client und Korrektur der Notification Timestamps (2025-05-15)
+
+In dieser Migration wurden zwei wesentliche Verbesserungen im Frontend implementiert:
+
+1.  **Einführung eines zentralen API-Clients (`apiClient`):**
+    *   **Problem:** Zuvor verwendeten verschiedene Frontend-Services (z.B. `NotificationService`, `DatabaseService`) ihre eigenen `axios`-Importe. Dies führte zu Inkonsistenzen bei der Anwendung von globalen Axios-Konfigurationen, insbesondere bei Request-Interceptors für Authentifizierungs-Header. Zeitweise wurden API-Anfragen (z.B. an `/api/notifications`) ohne den notwendigen `Authorization`-Header gesendet, was zu `401 Unauthorized`-Fehlern führte.
+    *   **Lösung:** Es wurde eine zentrale, konfigurierte Axios-Instanz namens `apiClient` in `mole/app/react-ui/src/services/api.js` erstellt.
+        *   Dieser `apiClient` enthält einen globalen Request-Interceptor, der automatisch den JWT (`mole_auth_token`) aus dem `localStorage` liest und als `Bearer`-Token in den `Authorization`-Header aller ausgehenden Anfragen einfügt.
+        *   Er beinhaltet ebenfalls globale Response-Interceptor für Logging und potenziell zentrale Fehlerbehandlung (z.B. bei 401-Fehlern).
+        *   Alle Frontend-Services werden schrittweise umgestellt, um diese `apiClient`-Instanz zu importieren und für ihre API-Aufrufe zu verwenden, anstatt `axios` direkt zu importieren.
+    *   **Ergebnis:** Durch die Verwendung des `apiClient` wird sichergestellt, dass alle API-Anfragen konsistent den Authentifizierungs-Header enthalten. Das `401`-Problem beim Abrufen von Benachrichtigungen wurde dadurch behoben.
+    *   **Betroffene Services (schrittweise Umstellung):** `NotificationService.js` (bereits umgestellt), `AuthService.js`, `DatabaseService.js`, `EmailService.js`, `UserSettingsService.js`, `AIService.js`.
+
+2.  **Korrektur der Zeitstempel-Anzeige für Benachrichtigungen:**
+    *   **Problem:** Die Zeitstempel für Benachrichtigungen im Frontend (z.B. "Sync erfolgreich um 15:58") wurden nicht in der lokalen Zeitzone des Benutzers angezeigt, sondern oft in UTC oder einer anderen Zeitzone, was zu Verwirrung führte.
+    *   **Lösung:**
+        *   Eine neue Utility-Funktion `formatToUserFriendlyDateTime(dateInput)` wurde in `mole/app/react-ui/src/utils/dateUtils.js` erstellt.
+        *   Diese Funktion formatiert ein gegebenes Datum (aus dem `created_at`-Feld der Benachrichtigung) in das benutzerfreundliche Format `DD.MM.YYYY, HH:MM:SS Uhr` und berücksichtigt dabei die lokale Zeitzone des Browsers des Benutzers.
+        *   Die Komponente `Navbar.js`, die die Benachrichtigungen anzeigt, verwendet nun diese Funktion zur Formatierung der Zeitstempel.
+    *   **Ergebnis:** Die Zeitstempel der Benachrichtigungen werden jetzt korrekt in der lokalen Zeitzone des Benutzers und im gewünschten Format angezeigt.
+
+```sql
+-- Keine direkten SQL-Datenbankänderungen in dieser Migration.
+-- Die Änderungen betreffen ausschließlich die Frontend-Codebase (JavaScript/React).
+```

@@ -19,6 +19,9 @@ const path = require('path'); // Import path module for sample query handling
 // This can be switched in the future when fully migrated to Sequelize
 const USE_SEQUELIZE = false; // Set to true when ready to use Sequelize implementation
 
+// Define the demo user ID (IMPORTANT: Update this if the demo user ID is different)
+const DEMO_USER_ID = 1; 
+
 // Define the sample database object
 const SAMPLE_DB = {
   id: 'sample', // Unique ID for the sample
@@ -34,7 +37,8 @@ const SAMPLE_DB = {
   isSample: true, // Mark as sample
   created_at: new Date().toISOString(),
   last_connected: null,
-  encrypted_password: null // No encrypted password for sample
+  encrypted_password: null,
+  user_id: null // Sample DB is not tied to a specific user in this way
 };
 
 // Helper function to parse size string (e.g., "22 MB", "1.5 GB") into bytes
@@ -208,87 +212,109 @@ async function _fetchSchemaDetails(connectionConfig) {
 
 const databaseService = {
   /**
-   * Get all database connections
-   * @returns {Promise<Array>} List of database connections
+   * Get all database connections for a specific user
+   * @param {number} userId - The ID of the user
+   * @returns {Promise<Array>} Array of database connections
    */
-  async getAllConnections() {
+  async getAllConnections(userId) {
+    let userConnections;
+    const isDemoUser = (userId === DEMO_USER_ID);
+
     if (USE_SEQUELIZE) {
       // Sequelize implementation
-      return await DatabaseConnection.findAll({
-        order: [['name', 'ASC']]
-      });
+      userConnections = await DatabaseConnection.findAll({ where: { userId } });
+      // Remove any existing SAMPLE_DB from userConnections to avoid duplication before conditional add
+      userConnections = userConnections.filter(conn => conn.id !== SAMPLE_DB.id);
+
+      if (isDemoUser) {
+        // Demo user always sees SAMPLE_DB
+        userConnections = [SAMPLE_DB, ...userConnections];
+      } else {
+        // Non-demo user: show SAMPLE_DB only if they have no other connections
+        const hasRealConnections = userConnections.some(conn => !conn.isSample && conn.id !== SAMPLE_DB.id);
+        if (!hasRealConnections) {
+          userConnections = [SAMPLE_DB, ...userConnections];
+        }
+      }
+      return userConnections;
     } else {
       // Direct SQLite implementation
       const db = await getDbConnection();
-      let connections = await db.all('SELECT * FROM database_connections ORDER BY name');
+      userConnections = await db.all(
+        'SELECT * FROM database_connections WHERE user_id = ?',
+        userId
+      );
       await db.close();
-      
-      // Sanitize password fields and ensure isSample is boolean
-      connections = connections.map(conn => {
-        const result = { ...conn };
-        result.password = undefined; // Remove plain password field
-        // Ensure isSample flag is boolean (SQLite might store as 0/1)
-        result.isSample = !!result.isSample;
-        return result;
-      });
 
-      // If no real connections, add the sample one
-      if (connections.length === 0) {
-        console.log("No real connections found, adding Sample DB.");
-        connections.push(SAMPLE_DB);
+      // Remove any existing SAMPLE_DB from userConnections to avoid duplication
+      userConnections = userConnections.filter(conn => conn.id !== SAMPLE_DB.id);
+
+      if (isDemoUser) {
+        // Demo user always sees SAMPLE_DB
+        userConnections = [SAMPLE_DB, ...userConnections];
+      } else {
+        // Non-demo user: show SAMPLE_DB only if they have no other connections
+        // A connection is real if it's not marked as isSample
+        const hasRealConnections = userConnections.some(conn => !conn.isSample);
+        if (!hasRealConnections) {
+          userConnections = [SAMPLE_DB, ...userConnections];
+        }
       }
-
-      return connections;
+      return userConnections;
     }
   },
   
   /**
-   * Get a database connection by ID
-   * @param {string|number} id - Connection ID
-   * @returns {Promise<Object>} Database connection
+   * Get a database connection by ID for a specific user
+   * @param {number} id - Connection ID
+   * @param {number} userId - The ID of the user
+   * @returns {Promise<Object|undefined>} Database connection or undefined if not found or not owned by user
    */
-  async getConnectionById(id) {
-     // Handle request for the Sample DB specifically
-    if (id === 'sample') {
-        console.log("Fetching Sample DB details.");
-        return SAMPLE_DB; // Return the predefined sample object
+  async getConnectionById(id, userId) {
+    // If the requested ID is 'sample', return the predefined SAMPLE_DB object directly.
+    // The SAMPLE_DB is considered accessible to any user who can see it in their list.
+    if (id === SAMPLE_DB.id) {
+      console.log(`[getConnectionById - SQLite] Requested Sample DB (ID: ${id}), returning SAMPLE_DB object.`);
+      return { ...SAMPLE_DB }; // Return a copy to prevent modification of the original
     }
-    
-    // Proceed with DB lookup for real IDs
+
     if (USE_SEQUELIZE) {
       // Sequelize implementation
-      return await DatabaseConnection.findByPk(id);
+      console.log(`[getConnectionById - Sequelize] Requested DB ID: ${id} for User ID: ${userId}`);
+      return await DatabaseConnection.findOne({ where: { id, userId } });
     } else {
       // Direct SQLite implementation
+      console.log(`[getConnectionById - SQLite] Requested DB ID: ${id} for User ID: ${userId}`);
       const db = await getDbConnection();
+      // Fetch connection only if it belongs to the specified user
       const connection = await db.get(
-        'SELECT * FROM database_connections WHERE id = ?',
-        id
+        'SELECT * FROM database_connections WHERE id = ? AND user_id = ?',
+        [id, userId]
       );
       await db.close();
-      
-      // Sanitize password
       if (connection) {
-        connection.password = undefined;
-        connection.isSample = !!connection.isSample; // Ensure boolean
+        console.log(`[getConnectionById - SQLite] Found connection:`, connection);
+      } else {
+        console.log(`[getConnectionById - SQLite] Connection NOT FOUND for ID: ${id} AND User ID: ${userId}`);
       }
-      
       return connection;
     }
   },
   
   /**
-   * Create a new database connection
-   * @param {Object} connectionData - Connection data
+   * Create a new database connection for a specific user
+   * @param {Object} connectionData - Connection data (includes name, engine, etc.)
+   * @param {number} userId - The ID of the user creating the connection
    * @returns {Promise<Object>} Created database connection
    */
-  async createConnection(connectionData) {
+  async createConnection(connectionData, userId) {
     const now = new Date().toISOString();
     
     if (USE_SEQUELIZE) {
       // Sequelize implementation
       return await DatabaseConnection.create({
         ...connectionData,
+        user_id: userId,
         created_at: now,
         updated_at: now
       });
@@ -299,12 +325,12 @@ const databaseService = {
       // Encrypt sensitive data
       const encrypted_password = connectionData.password ? encrypt(connectionData.password) : null;
       
-      // Insert new connection
+      // Insert new connection, including user_id
       const result = await db.run(
         `INSERT INTO database_connections
          (name, engine, host, port, database, username, password, ssl_enabled, notes, isSample, 
-          created_at, updated_at, encrypted_password)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          created_at, updated_at, encrypted_password, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           connectionData.name,
           connectionData.engine,
@@ -318,11 +344,12 @@ const databaseService = {
           connectionData.isSample ? 1 : 0,
           now,
           now,
-          encrypted_password
+          encrypted_password,
+          userId
         ]
       );
       
-      // Get the newly created connection
+      // Get the newly created connection (should include user_id implicitly)
       const newConnection = await db.get(
         'SELECT * FROM database_connections WHERE id = ?',
         result.lastID
@@ -331,7 +358,7 @@ const databaseService = {
       await db.close();
       
       // Log event
-      await eventLogService.addEntry('CONNECTION_CREATED', `Connection "${newConnection.name}" (ID: ${newConnection.id}) created.`, newConnection.id);
+      await eventLogService.addEntry('CONNECTION_CREATED', `Connection "${newConnection.name}" (ID: ${newConnection.id}) created by user ${userId}.`, newConnection.id);
 
       // Sanitize password
       if (newConnection) {
@@ -343,20 +370,21 @@ const databaseService = {
   },
   
   /**
-   * Update a database connection
+   * Update a database connection for a specific user
    * @param {number} id - Connection ID
    * @param {Object} connectionData - Connection data
+   * @param {number} userId - The ID of the user updating the connection
    * @returns {Promise<Object>} Updated database connection
    */
-  async updateConnection(id, connectionData) {
+  async updateConnection(id, connectionData, userId) {
     const now = new Date().toISOString();
     
     if (USE_SEQUELIZE) {
       // Sequelize implementation
-      const connection = await DatabaseConnection.findByPk(id);
+      const connection = await DatabaseConnection.findOne({ where: { id, userId } }); // Find by ID and UserID
       
       if (!connection) {
-        throw new Error('Database connection not found');
+        throw new Error('Database connection not found or not owned by user'); // More specific error
       }
       
       await connection.update({
@@ -369,15 +397,15 @@ const databaseService = {
       // Direct SQLite implementation
       const db = await getDbConnection();
       
-      // Check if connection exists
+      // Check if connection exists AND belongs to the user
       const connection = await db.get(
-        'SELECT * FROM database_connections WHERE id = ?',
-        id
+        'SELECT * FROM database_connections WHERE id = ? AND user_id = ?',
+        [id, userId]
       );
       
       if (!connection) {
         await db.close();
-        throw new Error('Database connection not found');
+        throw new Error('Database connection not found or not owned by user'); // More specific error
       }
       
       // Encrypt password if provided
@@ -386,8 +414,8 @@ const databaseService = {
         encrypted_password = encrypt(connectionData.password);
       }
       
-      // Update the connection
-      await db.run(
+      // Update the connection, ensuring we only update the one for this user
+      const result = await db.run(
         `UPDATE database_connections SET
          name = ?,
          engine = ?,
@@ -401,7 +429,7 @@ const databaseService = {
          isSample = ?,
          updated_at = ?,
          encrypted_password = ?
-         WHERE id = ?`,
+         WHERE id = ? AND user_id = ?`, // Add user_id to WHERE clause
         [
           connectionData.name || connection.name,
           connectionData.engine || connection.engine,
@@ -415,20 +443,30 @@ const databaseService = {
           connectionData.isSample !== undefined ? (connectionData.isSample ? 1 : 0) : connection.isSample,
           now,
           encrypted_password,
-          id
+          id,
+          userId // Add userId to the parameters
         ]
       );
       
+      // Check if any row was actually updated
+      if (result.changes === 0) {
+         await db.close();
+         // This case should theoretically be caught by the initial SELECT, 
+         // but as a safeguard, if the UPDATE somehow affected 0 rows, 
+         // it means the connection wasn't found for THIS user.
+         throw new Error('Database connection not found or not owned by user');
+      }
+
       // Get the updated connection
       const updatedConnection = await db.get(
-        'SELECT * FROM database_connections WHERE id = ?',
-        id
+        'SELECT * FROM database_connections WHERE id = ? AND user_id = ?', // Fetch updated connection by ID and UserID
+        [id, userId]
       );
       
       await db.close();
       
       // Log event
-      await eventLogService.addEntry('CONNECTION_UPDATED', `Connection "${updatedConnection.name}" updated.`, id);
+      await eventLogService.addEntry('CONNECTION_UPDATED', `Connection "${updatedConnection.name}" (ID: ${id}) updated by user ${userId}.`, id);
 
       // Sanitize password
       if (updatedConnection) {
@@ -440,17 +478,18 @@ const databaseService = {
   },
   
   /**
-   * Delete a database connection
+   * Delete a database connection for a specific user
    * @param {number} id - Connection ID
+   * @param {number} userId - The ID of the user deleting the connection
    * @returns {Promise<boolean>} Success status
    */
-  async deleteConnection(id) {
+  async deleteConnection(id, userId) {
     if (USE_SEQUELIZE) {
       // Sequelize implementation
-      const connection = await DatabaseConnection.findByPk(id);
+      const connection = await DatabaseConnection.findOne({ where: { id, userId } }); // Find by ID and UserID
       
       if (!connection) {
-        throw new Error('Database connection not found');
+        throw new Error('Database connection not found or not owned by user'); // More specific error
       }
       
       await connection.destroy();
@@ -459,43 +498,64 @@ const databaseService = {
       // Direct SQLite implementation
       const db = await getDbConnection();
       
-      // Check if connection exists and get its name for logging
+      // Check if connection exists AND belongs to the user and get its name for logging
       const connection = await db.get(
-        'SELECT id, name FROM database_connections WHERE id = ?',
-        id
+        'SELECT id, name FROM database_connections WHERE id = ? AND user_id = ?',
+        [id, userId]
       );
       
       if (!connection) {
         await db.close();
-        throw new Error('Database connection not found');
+        throw new Error('Database connection not found or not owned by user'); // More specific error
       }
       
-      // Delete the connection
-      await db.run(
-        'DELETE FROM database_connections WHERE id = ?',
-        id
+      // Delete the connection, ensuring we only delete the one for this user
+      const result = await db.run(
+        'DELETE FROM database_connections WHERE id = ? AND user_id = ?', // Add user_id to WHERE clause
+        [id, userId]
       );
       
+      // Check if any row was actually deleted
+      if (result.changes === 0) {
+         await db.close();
+         // Again, should theoretically be caught by initial SELECT,
+         // but as a safeguard if DELETE somehow affected 0 rows.
+         throw new Error('Database connection not found or not owned by user');
+      }
+
       await db.close();
       
-      // Log event with name and ID
-      await eventLogService.addEntry('CONNECTION_DELETED', `Connection "${connection.name}" (ID: ${connection.id}) deleted.`, id);
+      // Log event with name, ID, and UserID
+      await eventLogService.addEntry('CONNECTION_DELETED', `Connection "${connection.name}" (ID: ${id}) deleted by user ${userId}.`, id);
 
       return true;
     }
   },
   
   /**
-   * Test a database connection
-   * @param {Object} connectionData - Connection data
+   * Test a database connection. This function is typically called
+   * BEFORE saving, so it might not have an ID or user_id yet.
+   * It tests based on provided connectionData.
+   * However, if called for an existing connection via its ID,
+   * the connection data should be fetched respecting user ownership.
+   * 
+   * @param {Object} connectionData - Connection data (can be partial, e.g., just host/port/creds)
+   * @param {number} [userId] - Optional User ID if testing an existing connection for a specific user
    * @returns {Promise<Object>} Test result
    */
-  async testConnection(connectionData) {
-    // Handle test for Sample DB
-    if (connectionData.id === 'sample') {
-        return { success: true, message: 'Sample DB connection is always available.' };
+  async testConnection(connectionData, userId) {
+    // If an ID is provided in connectionData, fetch the full details first
+    if (connectionData.id) {
+       // Use the user-aware getter
+       const existingConnection = await databaseService.getConnectionById(connectionData.id, userId);
+       if (!existingConnection) {
+          throw new Error('Cannot test: Connection not found or not owned by user.');
+       }
+       // Merge provided data (like a potentially updated password) with existing
+       connectionData = { ...existingConnection, ...connectionData };
     }
-    // ... Existing test logic in databaseController.js needs to be called or moved here ...
+    // ... rest of testConnection logic remains the same, using connectionData
+    // ... existing test logic in databaseController.js needs to be called or moved here ...
     // For now, retain the error as it points to controller logic
     throw new Error('Test connection logic resides in databaseController.js');
   },
@@ -504,9 +564,10 @@ const databaseService = {
    * Fetches the health status for a specific database connection.
    * Uses the controller logic for actual checks, handles Sample DB here.
    * @param {string|number} connectionId The ID of the database connection.
+   * @param {number} userId The ID of the user requesting the health status.
    * @returns {Promise<Object>} A promise that resolves to the health status object { status, message }.
    */
-  async getDatabaseHealth(connectionId) {
+  async getDatabaseHealth(connectionId, userId) {
     // Handle Sample DB directly
     if (connectionId === 'sample') {
       console.log("[getDatabaseHealth] Reporting OK for Sample DB.");
@@ -521,7 +582,7 @@ const databaseService = {
     // acknowledging this duplicates controller logic.
     console.log(`[getDatabaseHealth] Checking health for real connection: ${connectionId}`);
     try {
-      const connection = await this.getConnectionByIdFull(connectionId);
+      const connection = await this.getConnectionByIdFull(connectionId, userId);
       if (!connection) {
         return { status: 'Error', message: 'Connection not found.' };
       }
@@ -553,9 +614,10 @@ const databaseService = {
    * Fetches schema details for a connection (used internally and by controller).
    * Handles fetching connection details and decryption.
    * @param {string|number} connectionId - The ID of the connection.
+   * @param {number} userId - The ID of the user requesting the schema.
    * @returns {Promise<Object>} Schema details object.
    */
-  async fetchSchemaForConnection(connectionId) {
+  async fetchSchemaForConnection(connectionId, userId) {
     // Handle schema for Sample DB
     if (connectionId === 'sample') {
         console.log("Fetching schema for Sample DB.");
@@ -585,7 +647,7 @@ const databaseService = {
 
     // Proceed with fetching for real connections
     try {
-        const connection = await this.getConnectionByIdFull(connectionId); // Fetch full details
+        const connection = await this.getConnectionByIdFull(connectionId, userId); // Fetch full details
         if (!connection) {
              throw new Error('Database connection not found');
         }
@@ -615,24 +677,34 @@ const databaseService = {
    /**
     * Internal helper to get full connection details including encrypted password.
     * @param {string|number} id - Connection ID
-    * @returns {Promise<Object>} Full database connection object (or null)
+    * @param {number} userId - The ID of the user
+    * @returns {Promise<Object|undefined>} Full database connection object (or undefined) if found and owned by user
     */
-   async getConnectionByIdFull(id) {
+   async getConnectionByIdFull(id, userId) {
        // Handle Sample DB case
        if (id === 'sample') {
-           return SAMPLE_DB;
+           console.log(`[getConnectionByIdFull] Requested Sample DB (ID: ${id}), returning SAMPLE_DB.`);
+           // Sample DB is accessible to all users, no specific user_id check here
+           return SAMPLE_DB; 
        }
+       console.log(`[getConnectionByIdFull] Requested DB ID: ${id} for User ID: ${userId}`);
        // Assuming direct SQLite implementation for simplicity
        const db = await getDbConnection();
        try {
          const connection = await db.get(
-           'SELECT * FROM database_connections WHERE id = ?',
-           id
+           'SELECT * FROM database_connections WHERE id = ? AND user_id = ?',
+           [id, userId]
          );
+         if (connection) {
+             console.log(`[getConnectionByIdFull] Found connection:`, connection);
+         } else {
+             console.log(`[getConnectionByIdFull] Connection NOT FOUND for ID: ${id} AND User ID: ${userId}`);
+         }
          if (connection) {
              connection.isSample = !!connection.isSample;
          }
-         return connection; // Return full object including passwords
+         // Return full object including passwords only if found and owned by user
+         return connection; 
        } finally {
          if (db) await db.close(); // Close connection
        }
@@ -641,9 +713,10 @@ const databaseService = {
   /**
    * Fetches storage size information for a connection.
    * @param {string|number} connectionId - The ID of the connection.
+   * @param {number} userId - The ID of the user requesting the info.
    * @returns {Promise<Object>} Storage info object { success, sizeBytes, sizeFormatted, message? }.
    */
-  async fetchStorageInfoForConnection(connectionId) {
+  async fetchStorageInfoForConnection(connectionId, userId) {
     // Handle Sample DB
     if (connectionId === 'sample') {
         console.log("Fetching storage info for Sample DB.");
@@ -663,7 +736,7 @@ const databaseService = {
     let message = null;
 
     try {
-      const connection = await this.getConnectionByIdFull(connectionId);
+      const connection = await this.getConnectionByIdFull(connectionId, userId);
       if (!connection) {
         throw new Error('Database connection not found');
       }
@@ -747,9 +820,10 @@ const databaseService = {
   /**
    * Fetches transaction statistics for a connection.
    * @param {string|number} connectionId - The ID of the connection.
+   * @param {number} userId - The ID of the user requesting the stats.
    * @returns {Promise<Object>} Stats object { success, activeTransactions, totalCommits, totalRollbacks, message? }.
    */
-  async fetchTransactionStatsForConnection(connectionId) {
+  async fetchTransactionStatsForConnection(connectionId, userId) {
     // Handle Sample DB
     if (connectionId === 'sample') {
         console.log("Fetching transaction stats for Sample DB.");
@@ -764,7 +838,7 @@ const databaseService = {
     let message = null;
 
     try {
-      const connection = await this.getConnectionByIdFull(connectionId);
+      const connection = await this.getConnectionByIdFull(connectionId, userId);
       if (!connection) {
         throw new Error('Database connection not found');
       }
@@ -854,10 +928,11 @@ const databaseService = {
   /**
    * Executes a SQL query against a specified database connection.
    * @param {string|number} connectionId - The ID of the connection (or 'sample').
+   * @param {number} userId - The ID of the user executing the query.
    * @param {string} queryString - The SQL query to execute.
    * @returns {Promise<Object>} An object { success, columns, rows, affectedRows, message, error? }.
    */
-  async executeDbQuery(connectionId, queryString) {
+  async executeDbQuery(connectionId, queryString, userId) {
     if (!queryString) {
       return { success: false, message: 'No query string provided', rows: [], columns: [] };
     }
@@ -900,7 +975,7 @@ const databaseService = {
         };
       }
 
-      connectionDetails = await this.getConnectionByIdFull(connectionId); // Use internal method to get full details
+      connectionDetails = await this.getConnectionByIdFull(connectionId, userId); // Use internal method to get full details
       if (!connectionDetails) {
         return { success: false, message: 'Database connection not found', rows: [], columns: [] };
       }
@@ -972,33 +1047,32 @@ const databaseService = {
   },
 
   /**
-   * Update the last_connected timestamp for a database connection
+   * Update the last connected timestamp for a connection owned by a user
    * @param {number} id - Connection ID
+   * @param {number} userId - The ID of the user who connected
    * @returns {Promise<void>}
    */
-  async updateLastConnected(id) {
+  async updateLastConnected(id, userId) {
     const now = new Date().toISOString();
+    
     if (USE_SEQUELIZE) {
-      // Sequelize implementation (if/when applicable)
-      // const connection = await DatabaseConnection.findByPk(id);
-      // if (connection) {
-      //   await connection.update({ last_connected: now });
-      // }
-      console.warn('[databaseService.updateLastConnected] Sequelize path not fully implemented yet.');
+      const connection = await DatabaseConnection.findOne({ where: { id, userId } });
+      if (connection) {
+        await connection.update({ last_connected: now });
+      }
     } else {
-      // Direct SQLite implementation
       const db = await getDbConnection();
-      try {
-        await db.run(
-          'UPDATE database_connections SET last_connected = ? WHERE id = ?',
-          [now, id]
-        );
-        console.log(`[databaseService.updateLastConnected] Updated last_connected for connection ID ${id}`);
-      } catch (error) {
-        console.error(`[databaseService.updateLastConnected] Error updating last_connected for ID ${id}:`, error);
-        // Optionally re-throw or handle as needed
-      } finally {
-        await db.close();
+      // Update only if the connection belongs to the user
+      const result = await db.run(
+        'UPDATE database_connections SET last_connected = ? WHERE id = ? AND user_id = ?',
+        [now, id, userId]
+      );
+      await db.close();
+       // Optional: check result.changes if you want to know if an update occurred
+      if (result.changes > 0) {
+          console.log(`[databaseService.updateLastConnected] Updated last_connected for connection ID ${id} for user ${userId}`);
+      } else {
+          console.log(`[databaseService.updateLastConnected] No update made for connection ID ${id} for user ${userId} (not found or not owned by user)`);
       }
     }
   }

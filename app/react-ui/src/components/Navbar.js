@@ -14,6 +14,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import { useThemeMode } from '../App';
 import { UserContext } from './UserContext';
 import AuthService, { getApiBaseUrl } from '../services/AuthService';
+import { formatToUserFriendlyDateTime } from '../utils/dateUtils';
 
 const closedDrawerWidth = (theme) => `calc(${theme.spacing(8)} + 1px)`;
 const drawerWidth = 240;
@@ -278,7 +279,7 @@ export default function Navbar() {
             >
               <ListItemText
                 primary={notification.title}
-                secondary={notification.created_at ? new Date(notification.created_at).toLocaleString() : ''}
+                secondary={formatToUserFriendlyDateTime(notification.created_at)}
                 primaryTypographyProps={{ variant: 'body2', fontWeight: notification.read ? 'normal' : 'medium' }}
                 secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
               />

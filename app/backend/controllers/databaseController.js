@@ -93,7 +93,8 @@ migrateLegacyData().catch(err => {
  */
 exports.getAllConnections = async (req, res) => {
   try {
-    const connections = await databaseService.getAllConnections();
+    // Pass userId to service function
+    const connections = await databaseService.getAllConnections(req.userId);
     res.status(200).json(connections);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching database connections', error: error.message });
@@ -107,7 +108,8 @@ exports.getAllConnections = async (req, res) => {
  */
 exports.getConnectionById = async (req, res) => {
   try {
-    const connection = await databaseService.getConnectionById(req.params.id);
+    // Pass userId to service function
+    const connection = await databaseService.getConnectionById(req.params.id, req.userId);
     
     if (!connection) {
       return res.status(404).json({ message: 'Database connection not found' });
@@ -126,7 +128,8 @@ exports.getConnectionById = async (req, res) => {
  */
 exports.createConnection = async (req, res) => {
   try {
-    const newConnection = await databaseService.createConnection(req.body);
+    // Pass userId to service function
+    const newConnection = await databaseService.createConnection(req.body, req.userId);
     
     console.log('[databaseController.createConnection] newConnection created:', newConnection); // NEUES LOG
     console.log('[databaseController.createConnection] req.userId:', req.userId); // NEUES LOG
@@ -165,7 +168,8 @@ exports.createConnection = async (req, res) => {
  */
 exports.updateConnection = async (req, res) => {
   try {
-    const updatedConnection = await databaseService.updateConnection(req.params.id, req.body);
+    // Pass userId to service function
+    const updatedConnection = await databaseService.updateConnection(req.params.id, req.body, req.userId);
     res.status(200).json(updatedConnection);
   } catch (error) {
     if (error.message === 'Database connection not found') {
@@ -182,7 +186,8 @@ exports.updateConnection = async (req, res) => {
  */
 exports.deleteConnection = async (req, res) => {
   try {
-    await databaseService.deleteConnection(req.params.id);
+    // Pass userId to service function
+    await databaseService.deleteConnection(req.params.id, req.userId);
     res.status(200).json({ message: 'Database connection deleted successfully' });
   } catch (error) {
     if (error.message === 'Database connection not found') {
@@ -272,9 +277,10 @@ exports.testConnection = async (req, res) => {
  */
 exports.getDatabaseSchema = async (req, res) => {
   const connectionId = req.params.id;
+  console.log(`[Controller.getDatabaseSchema] Entered. Connection ID: ${connectionId}, req.userId: ${req.userId}`);
   try {
     // Call the service function to handle schema fetching logic
-    const schemaInfo = await databaseService.fetchSchemaForConnection(connectionId);
+    const schemaInfo = await databaseService.fetchSchemaForConnection(connectionId, req.userId);
     
     if (!schemaInfo) { // Should not happen if service handles errors, but safety check
         return res.status(404).json({ success: false, message: 'Connection or schema not found.' });
@@ -311,138 +317,14 @@ exports.getDatabaseSchema = async (req, res) => {
  * @param {Object} res - Express response object
  */
 exports.getDatabaseHealth = async (req, res) => {
-  const connectionId = req.params.id;
-
-  // Handle Sample DB directly
-  if (connectionId === 'sample') {
-    console.log("[Controller:getDatabaseHealth] Reporting OK for Sample DB.");
-    return res.status(200).json({ status: 'OK', message: 'Sample DB is virtual and always available.' });
-  }
-
-  // Proceed with checks for real connections
+  console.log(`[Controller.getDatabaseHealth] Incoming req.params: ${JSON.stringify(req.params)}`); // ADD THIS LINE
+  console.log(`[Controller.getDatabaseHealth] Entered. Connection ID: ${req.params.id}, req.userId: ${req.userId}`);
   try {
-    // Use the service to get full connection details (including password if needed for checks)
-    // Note: Using service.getConnectionByIdFull might be better if password needed
-    const connection = await databaseService.getConnectionById(connectionId); 
-
-    if (!connection) {
-      return res.status(404).json({ message: 'Database connection not found' });
-    }
-
-    // --- Decrypt password --- 
-    let password = null;
-    // Need full details for encrypted_password, refetch using internal service method
-    const fullConnection = await databaseService.getConnectionByIdFull(connectionId);
-    if (!fullConnection) { 
-         // Should not happen if getConnectionById succeeded, but safety check
-         return res.status(404).json({ message: 'Database connection details missing' });
-    }
-    if (fullConnection.encrypted_password) {
-      try {
-        password = decrypt(fullConnection.encrypted_password);
-      } catch (decryptError) {
-        console.error(`Decryption failed for connection ${connectionId}:`, decryptError);
-        // Return OK status but with a warning message about decryption failure
-        return res.status(200).json({ 
-          status: 'Warning', 
-          message: 'Connection found, but failed to decrypt stored password for health check.' 
-        });
-      }
-    } else {
-      password = fullConnection.password; // Use plain password if not encrypted
-    }
-    // ----------------------
-
-    const { engine, host, port, database, username, ssl_enabled } = connection;
-
-    if (!engine || !database) {
-      return res.status(400).json({ 
-        status: 'Error',
-        message: 'Incomplete connection parameters in database.' 
-      });
-    }
-
-    let healthStatus = { status: 'Unknown', message: 'Health check not implemented for this engine.' };
-
-    // Engine-specific connection logic
-    if (engine.toLowerCase() === 'mysql') {
-      let mysqlConnection;
-      try {
-        mysqlConnection = await mysql.createConnection({
-          host: host || 'localhost',
-          port: port || 3306,
-          database,
-          user: username,
-          password: password, // Use decrypted password
-          ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
-          connectTimeout: 5000 // 5 seconds timeout for health check
-        });
-        // Ping the server to confirm connectivity
-        await mysqlConnection.ping(); 
-        healthStatus = { status: 'OK', message: 'Connection successful.' };
-      } catch (error) {
-        console.warn(`MySQL health check failed for ${connectionId}:`, error.message);
-        healthStatus = { status: 'Error', message: `Connection failed: ${error.message}` };
-      } finally {
-        if (mysqlConnection) await mysqlConnection.end();
-      }
-    } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
-      const pool = new Pool({
-        host: host || 'localhost',
-        port: port || 5432,
-        database,
-        user: username,
-        password: password, // Use decrypted password
-        ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
-        connectionTimeoutMillis: 5000, // 5 seconds timeout
-        // Prevent pool from keeping idle connections after check
-        idleTimeoutMillis: 1000, 
-        max: 1 // Use only one connection for the check
-      });
-      let client;
-      try {
-        client = await pool.connect();
-        // Simple query to confirm connectivity
-        await client.query('SELECT 1'); 
-        healthStatus = { status: 'OK', message: 'Connection successful.' };
-      } catch (error) {
-        console.warn(`PostgreSQL health check failed for ${connectionId}:`, error.message);
-        healthStatus = { status: 'Error', message: `Connection failed: ${error.message}` };
-      } finally {
-        if (client) client.release();
-        // Ensure pool drains and closes connections
-        await pool.end(); 
-      }
-    } else if (engine.toLowerCase() === 'sqlite') {
-      try {
-        if (fs.existsSync(database)) {
-          // Basic check: does the file exist?
-          // Could be expanded to try opening the DB if needed.
-          healthStatus = { status: 'OK', message: 'SQLite file exists.' };
-        } else {
-          healthStatus = { status: 'Error', message: 'SQLite file not found.' };
-        }
-      } catch (error) {
-          console.warn(`SQLite health check failed for ${connectionId}:`, error.message);
-          healthStatus = { status: 'Error', message: `File check failed: ${error.message}` };
-      }
-    } else {
-       healthStatus = { status: 'Unknown', message: `Unsupported engine: ${engine}` };
-    }
-    
-    // Return 200 OK with the status payload
-    if (healthStatus.status === 'OK' && connectionId !== 'sample') {
-      try {
-        await databaseService.updateLastConnected(connectionId);
-      } catch (updateError) {
-        console.error(`[databaseController.getDatabaseHealth] Failed to update last_connected for ${connectionId}:`, updateError);
-        // Non-critical error, so we don't fail the health check response itself.
-      }
-    }
+    // Pass userId to service function
+    const healthStatus = await databaseService.getDatabaseHealth(req.params.id, req.userId);
     res.status(200).json(healthStatus);
-
   } catch (error) {
-    console.error(`Unexpected error during health check for ${connectionId}:`, error);
+    console.error(`Unexpected error during health check for ${req.params.id}:`, error);
     res.status(500).json({ 
       status: 'Error', 
       message: 'Internal server error during health check.' 
@@ -459,8 +341,9 @@ exports.executeQuery = async (req, res) => {
   try {
     const connectionId = req.params.id;
     const { query } = req.body;
+    console.log(`[Controller.executeQuery] Entered. Connection ID: ${connectionId}, Query: ${query}, req.userId: ${req.userId}`);
 
-    const result = await databaseService.executeDbQuery(connectionId, query);
+    const result = await databaseService.executeDbQuery(connectionId, query, req.userId); // Pass userId here
 
     if (result.success) {
       if (connectionId !== 'sample') {
@@ -523,9 +406,9 @@ exports.getTableData = async (req, res) => {
 
   try {
     console.log(`[getTableData] Fetching connection details for ID: ${connectionId}`); // DEBUG
-    const connection = await databaseService.getConnectionById(connectionId);
+    const connection = await databaseService.getConnectionById(connectionId, req.userId);
     if (!connection) {
-      console.error(`[getTableData] Connection not found for ID: ${connectionId}`); // DEBUG
+      console.error(`[getTableData] Connection not found for ID: ${connectionId} and user ID: ${req.userId}`); // DEBUG
       return res.status(404).json({ success: false, message: 'Database connection not found' });
     }
     // Log retrieved connection details (excluding password for security)
@@ -1218,8 +1101,9 @@ exports.createDatabaseInstance = async (req, res) => {
  */
 exports.getDatabaseStorageInfo = async (req, res) => {
   const connectionId = req.params.id;
+  console.log(`[Controller.getDatabaseStorageInfo] Entered. Connection ID: ${connectionId}, req.userId: ${req.userId}`);
   try {
-    const storageInfo = await databaseService.fetchStorageInfoForConnection(connectionId);
+    const storageInfo = await databaseService.fetchStorageInfoForConnection(connectionId, req.userId); // Pass userId here
     
     if (!storageInfo.success) {
       // Use 404 if connection not found, 500 otherwise
@@ -1245,8 +1129,9 @@ exports.getDatabaseStorageInfo = async (req, res) => {
  */
 exports.getDatabaseTransactionStats = async (req, res) => {
   const connectionId = req.params.id;
+  console.log(`[Controller.getDatabaseTransactionStats] Entered. Connection ID: ${connectionId}, req.userId: ${req.userId}`);
   try {
-    const stats = await databaseService.fetchTransactionStatsForConnection(connectionId);
+    const stats = await databaseService.fetchTransactionStatsForConnection(connectionId, req.userId); // Pass userId here
     
     if (!stats.success) {
       const statusCode = stats.message.includes('not found') ? 404 : 500;
@@ -1630,6 +1515,112 @@ exports.editColumnInTable = async (req, res) => {
         client.release();
     }
     res.status(500).json({ success: false, message: 'Internal server error editing column.', error: error.message });
+  }
+};
+
+/**
+ * Get schema information (tables, views, columns) for a database connection
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.fetchSchema = async (req, res) => {
+  try {
+    // Pass userId to service function
+    const schemaDetails = await databaseService.fetchSchemaForConnection(req.params.connectionId, req.userId);
+    res.status(200).json(schemaDetails);
+  } catch (error) {
+    console.error(`Unexpected error in fetchSchema controller for ${req.params.connectionId}:`, error);
+    res.status(500).json({ success: false, message: 'Internal server error fetching schema.', error: error.message });
+  }
+};
+
+/**
+ * Get storage size information for a specific database connection
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.fetchStorageInfo = async (req, res) => {
+  try {
+    // Pass userId to service function
+    const storageInfo = await databaseService.fetchStorageInfoForConnection(req.params.connectionId, req.userId);
+    res.status(200).json(storageInfo);
+  } catch (error) {
+    console.error(`Unexpected error in fetchStorageInfo controller for ${req.params.connectionId}:`, error);
+    res.status(500).json({ success: false, message: 'Internal server error fetching storage info.', error: error.message });
+  }
+};
+
+/**
+ * Get transaction statistics for a specific database connection
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.fetchTransactionStats = async (req, res) => {
+  try {
+    // Pass userId to service function
+    const stats = await databaseService.fetchTransactionStatsForConnection(req.params.connectionId, req.userId);
+    res.status(200).json(stats);
+  } catch (error) {
+    console.error(`Unexpected error in fetchTransactionStats controller for ${req.params.connectionId}:`, error);
+    res.status(500).json({ success: false, message: 'Internal server error fetching transaction stats.', error: error.message });
+  }
+};
+
+/**
+ * Execute a SQL query on a database
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.executeSql = async (req, res) => {
+  const { query } = req.body;
+  const connectionId = req.params.connectionId;
+  
+  if (!query) {
+    return res.status(400).json({ success: false, message: 'Query is required.' });
+  }
+
+  try {
+    // Pass userId to service function
+    const result = await databaseService.executeDbQuery(connectionId, query, req.userId);
+    
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      // Determine status code based on the error message or type if available
+      let statusCode = 500;
+      if (result.message && result.message.toLowerCase().includes('not found')) {
+        statusCode = 404;
+      } else if (result.message && result.message.toLowerCase().includes('no query')) {
+        statusCode = 400;
+      }
+      // Add more specific error handling if needed (e.g., for syntax errors from DB)
+      res.status(statusCode).json(result);
+    }
+  } catch (error) {
+    // This catch block is for unexpected errors in the controller itself
+    console.error('Unexpected error in executeSql controller:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error during query execution.',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update the last connected timestamp for a specific database connection
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.updateLastConnected = async (req, res) => {
+  console.log(`[Controller.updateLastConnected] Entered. Connection ID: ${req.params.id}, req.userId: ${req.userId}`);
+  try {
+    // Pass userId to service function
+    await databaseService.updateLastConnected(req.params.id, req.userId);
+    res.status(200).json({ success: true, message: 'Last connected timestamp updated.' });
+  } catch (error) {
+    console.error(`Unexpected error in updateLastConnected controller for ${req.params.id}:`, error);
+    res.status(500).json({ success: false, message: 'Internal server error updating last connected timestamp.', error: error.message });
   }
 };
 

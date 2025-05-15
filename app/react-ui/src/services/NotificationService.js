@@ -1,51 +1,47 @@
-import axios from 'axios';
-import AuthService from './AuthService';
+import apiClient from './api'; // Import the new apiClient
+// import AuthService from './AuthService'; // No longer needed for getToken here
 
-const getApiBaseUrl = () => {
-  const hostname = window.location.hostname;
-  // Assuming notification endpoints will be under /api/notifications
-  return `http://${hostname}:3001/api`; 
-};
-
-const NOTIFICATIONS_API_URL = `${getApiBaseUrl()}/notifications`;
+const NOTIFICATIONS_API_URL_SUFFIX = '/notifications'; // Suffix for the notification endpoints
 
 const NotificationService = {
   async getNotifications() {
-    const token = AuthService.getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    // const token = AuthService.getToken(); // Removed
+    // const headers = token ? { Authorization: `Bearer ${token}` } : {}; // Removed
     try {
       // GET /api/notifications
-      const response = await axios.get(NOTIFICATIONS_API_URL, { headers });
+      // Headers are now handled by the global Axios interceptor in AuthService
+      const response = await apiClient.get(NOTIFICATIONS_API_URL_SUFFIX /*, { headers } */); // headers object removed
       return response.data.notifications || []; // Assuming backend returns { notifications: [...] }
     } catch (error) {
       console.error('Failed to load notifications:', error);
-      throw error.response?.data || { message: 'Failed to load notifications' };
+      // Error object structure might differ slightly if it comes from apiClient vs raw axios
+      throw error.response?.data || error.message || { message: 'Failed to load notifications' };
     }
   },
 
   async markAsRead(notificationId) {
-    const token = AuthService.getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    // const token = AuthService.getToken(); // Removed
+    // const headers = token ? { Authorization: `Bearer ${token}` } : {}; // Removed
     try {
       // POST /api/notifications/:notificationId/read
-      const response = await axios.post(`${NOTIFICATIONS_API_URL}/${notificationId}/read`, {}, { headers });
+      const response = await apiClient.post(`${NOTIFICATIONS_API_URL_SUFFIX}/${notificationId}/read`, {} /*, { headers } */); // headers object removed
       return response.data; // Assuming backend returns { success: true, notification: updatedNotification }
     } catch (error) {
       console.error(`Failed to mark notification ${notificationId} as read:`, error);
-      throw error.response?.data || { message: 'Failed to mark notification as read' };
+      throw error.response?.data || error.message || { message: 'Failed to mark notification as read' };
     }
   },
 
   async markAllAsRead() {
-    const token = AuthService.getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    // const token = AuthService.getToken(); // Removed
+    // const headers = token ? { Authorization: `Bearer ${token}` } : {}; // Removed
     try {
       // POST /api/notifications/mark-all-as-read
-      const response = await axios.post(`${NOTIFICATIONS_API_URL}/mark-all-as-read`, {}, { headers });
+      const response = await apiClient.post(`${NOTIFICATIONS_API_URL_SUFFIX}/mark-all-as-read`, {} /*, { headers } */); // headers object removed
       return response.data; // Assuming backend returns { success: true, updatedCount: 0 }
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
-      throw error.response?.data || { message: 'Failed to mark all notifications as read' };
+      throw error.response?.data || error.message || { message: 'Failed to mark all notifications as read' };
     }
   }
 };

@@ -6,26 +6,17 @@
 const express = require('express');
 const router = express.Router();
 const syncController = require('../controllers/syncController');
-// Optional: Add authentication middleware if needed
-// const authMiddleware = require('../middleware/authMiddleware');
-// router.use(authMiddleware); // Apply middleware to all sync routes
+const authMiddleware = require('../middleware/authMiddleware');
 
-// Get sync settings for a specific source database connection
-router.get('/:databaseId/settings', syncController.getSyncSettings);
+// Route for Python service to update job status (NO AUTH MIDDLEWARE - called by another backend service)
+router.post('/job-status-update', syncController.handleJobStatusUpdate);
 
-// Update sync settings for a specific source database connection
-router.put('/:databaseId/settings', syncController.updateSyncSettings);
-
-// Trigger a manual sync for a specific source database connection
-router.post('/:databaseId/trigger', syncController.triggerSync);
-
-// Get all configured sync tasks for overview
-router.get('/tasks', syncController.getAllSyncTasks);
-
-// Delete a specific sync task by its ID
-router.delete('/tasks/:taskId', syncController.deleteSyncTask);
-
-// Update a specific sync task by its ID (e.g., enable/disable, change schedule)
-router.put('/tasks/:taskId', syncController.updateSyncTask);
+// User-facing sync routes - all protected by authMiddleware
+router.get('/:databaseId/settings', authMiddleware, syncController.getSyncSettings);
+router.put('/:databaseId/settings', authMiddleware, syncController.updateSyncSettings);
+router.post('/:databaseId/trigger', authMiddleware, syncController.triggerSync);
+router.get('/tasks', authMiddleware, syncController.getAllSyncTasks);
+router.delete('/tasks/:taskId', authMiddleware, syncController.deleteSyncTask);
+router.put('/tasks/:taskId', authMiddleware, syncController.updateSyncTask);
 
 module.exports = router; 
