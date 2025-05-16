@@ -343,12 +343,12 @@ In dieser Migration wurden umfassende Verbesserungen am SQL Editor vorgenommen, 
 
 1. **Simple Mode Erweiterungen:**
    - Implementierung einer GUI zum Bearbeiten von Tabellendaten mit Unterstützung für:
-     - Hinzufügen neuer Zeilen über ein dynamisches Formular
-     - Bearbeiten vorhandener Zeilen durch Selektion in der Datenvorschau
-     - Löschen von Zeilen mit Bestätigungsdialog
+     - Hinzufügen neuer Zeilen über ein dynamisches Formular (funktionsfähig)
+     - Bearbeiten vorhandener Zeilen durch Selektion in der Datenvorschau (jetzt voll funktionsfähig)
+     - Löschen von Zeilen mit Bestätigungsdialog (jetzt voll funktionsfähig)
    - Hinzufügung eines Löschen-Buttons für Tabellen neben dem Erstellen-Button
    - Verbesserte Selektion und Hervorhebung von Tabellenzeilen
-   - Vorbereitete Methoden im `DatabaseService` für Zeilen-CRUD-Operationen
+   - Implementierte Methoden im `DatabaseService` und Backend-Controller für vollständige Zeilen-CRUD-Operationen (Erstellen, Lesen, Aktualisieren, Löschen).
 
 2. **Expert Mode Verbesserungen:**
    - Integration des Ace Editors für erweiterte SQL-Bearbeitungsfunktionen:

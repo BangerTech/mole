@@ -1,7 +1,6 @@
-import axios from 'axios';
-import { getApiBaseUrl } from './AuthService';
+import apiClient from './api'; // Import the centralized apiClient
 
-const USER_API_URL = `${getApiBaseUrl()}/users`;
+const USERS_ENDPOINT_SUFFIX = '/users'; // Suffix for the users endpoint
 
 class UserService {
   /**
@@ -9,12 +8,12 @@ class UserService {
    * @returns {Promise} Promise mit der Liste aller Benutzer
    */
   async getAllUsers() {
-    return axios.get(USER_API_URL)
+    return apiClient.get(USERS_ENDPOINT_SUFFIX)
       .then(response => {
         return response.data.users;
       })
       .catch(error => {
-        console.error('Error fetching users:', error);
+        console.error('Error fetching users:', error.response?.data || error.message);
         throw error.response?.data || { message: 'Failed to fetch users' };
       });
   }
@@ -25,12 +24,12 @@ class UserService {
    * @returns {Promise} Promise mit dem Benutzer
    */
   async getUserById(id) {
-    return axios.get(`${USER_API_URL}/${id}`)
+    return apiClient.get(`${USERS_ENDPOINT_SUFFIX}/${id}`)
       .then(response => {
         return response.data.user;
       })
       .catch(error => {
-        console.error(`Error fetching user ${id}:`, error);
+        console.error(`Error fetching user ${id}:`, error.response?.data || error.message);
         throw error.response?.data || { message: 'Failed to fetch user' };
       });
   }
@@ -41,12 +40,12 @@ class UserService {
    * @returns {Promise} Promise mit dem erstellten Benutzer
    */
   async createUser(userData) {
-    return axios.post(USER_API_URL, userData)
+    return apiClient.post(USERS_ENDPOINT_SUFFIX, userData)
       .then(response => {
         return response.data;
       })
       .catch(error => {
-        console.error('Error creating user:', error);
+        console.error('Error creating user:', error.response?.data || error.message);
         throw error.response?.data || { message: 'Failed to create user' };
       });
   }
@@ -58,12 +57,12 @@ class UserService {
    * @returns {Promise} Promise mit dem aktualisierten Benutzer
    */
   async updateUser(id, userData) {
-    return axios.put(`${USER_API_URL}/${id}`, userData)
+    return apiClient.put(`${USERS_ENDPOINT_SUFFIX}/${id}`, userData)
       .then(response => {
         return response.data;
       })
       .catch(error => {
-        console.error(`Error updating user ${id}:`, error);
+        console.error(`Error updating user ${id}:`, error.response?.data || error.message);
         throw error.response?.data || { message: 'Failed to update user' };
       });
   }
@@ -74,12 +73,12 @@ class UserService {
    * @returns {Promise} Promise mit dem Löschstatus
    */
   async deleteUser(id) {
-    return axios.delete(`${USER_API_URL}/${id}`)
+    return apiClient.delete(`${USERS_ENDPOINT_SUFFIX}/${id}`)
       .then(response => {
         return response.data;
       })
       .catch(error => {
-        console.error(`Error deleting user ${id}:`, error);
+        console.error(`Error deleting user ${id}:`, error.response?.data || error.message);
         throw error.response?.data || { message: 'Failed to delete user' };
       });
   }

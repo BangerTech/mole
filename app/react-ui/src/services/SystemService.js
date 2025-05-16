@@ -1,13 +1,7 @@
-import axios from 'axios';
+import apiClient from './api'; // Import the centralized apiClient
 
-// Base URL for system API endpoints - Point back to Node.js backend
-const getSystemApiBaseUrl = () => {
-  const hostname = window.location.hostname;
-  // Node.js backend runs on 3001
-  return `http://${hostname}:3001/api/system`; 
-};
-
-const API_URL = getSystemApiBaseUrl();
+// API Endpoint Suffix (relative to apiClient.defaults.baseURL)
+const SYSTEM_ENDPOINT_SUFFIX = '/system';
 
 const SystemService = {
   /**
@@ -16,12 +10,13 @@ const SystemService = {
    */
   async getSystemInfo() {
     try {
-      // Call Node.js endpoint
-      const response = await axios.get(`${API_URL}/info`);
+      // Headers are handled by the apiClient interceptor
+      const response = await apiClient.get(`${SYSTEM_ENDPOINT_SUFFIX}/info`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching system info via Node backend:', error);
-      return { cpuUsage: 0, memoryUsage: 0, diskUsage: 0, uptime: 'N/A' }; 
+      console.error('Error fetching system info via Node backend:', error.response?.data || error.message);
+      // Fallback to default values on error to prevent UI crashes
+      return { cpuUsage: 0, memoryUsage: 0, diskUsage: 0, uptime: 'N/A', success: false, message: error.response?.data?.message || error.message }; 
     }
   },
 
@@ -33,14 +28,14 @@ const SystemService = {
    */
   async getPerformanceHistory(metric, limit = 60) {
     try {
-      // Call Node.js endpoint
-      const response = await axios.get(`${API_URL}/performance-history`, { 
+      // Headers are handled by the apiClient interceptor
+      const response = await apiClient.get(`${SYSTEM_ENDPOINT_SUFFIX}/performance-history`, { 
         params: { metric, limit },
       });
       return response.data;
     } catch (error) {
-      console.error(`Error fetching ${metric} history via Node backend:`, error);
-      return { success: false, history: [], message: error.message }; 
+      console.error(`Error fetching ${metric} history via Node backend:`, error.response?.data || error.message);
+      return { success: false, history: [], message: error.response?.data?.message || error.message }; 
     }
   },
 };

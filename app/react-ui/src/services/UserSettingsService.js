@@ -1,31 +1,27 @@
-import axios from 'axios';
-import AuthService from './AuthService';
+import apiClient from './api'; // Import the centralized apiClient
 
-const getApiBaseUrl = () => {
-  const hostname = window.location.hostname;
-  return `http://${hostname}:3001/api/user/settings`;
-};
-
-const API_URL = getApiBaseUrl();
+// API Endpoint Suffix (relative to apiClient.defaults.baseURL)
+// Assuming /api is the base, then /user/settings is the specific path
+const USER_SETTINGS_ENDPOINT_SUFFIX = '/user/settings'; 
 
 const UserSettingsService = {
   async getSettings() {
-    const token = AuthService.getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    // Headers are now handled by the global Axios interceptor in apiClient
     try {
-      const response = await axios.get(API_URL, { headers });
+      const response = await apiClient.get(USER_SETTINGS_ENDPOINT_SUFFIX);
       return response.data;
     } catch (error) {
+      console.error('Failed to load user settings:', error.response?.data || error.message);
       throw error.response?.data || { message: 'Failed to load user settings' };
     }
   },
   async saveSettings(settings) {
-    const token = AuthService.getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    // Headers are now handled by the global Axios interceptor in apiClient
     try {
-      const response = await axios.post(API_URL, settings, { headers });
+      const response = await apiClient.post(USER_SETTINGS_ENDPOINT_SUFFIX, settings);
       return response.data;
     } catch (error) {
+      console.error('Failed to save user settings:', error.response?.data || error.message);
       throw error.response?.data || { message: 'Failed to save user settings' };
     }
   }

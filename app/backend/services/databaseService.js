@@ -82,11 +82,33 @@ async function _fetchSchemaDetails(connectionConfig) {
             });
             try {
                 const [tablesResult] = await mysqlConnection.query('SELECT table_name AS name, table_type AS type, table_rows AS row_count, ROUND((data_length + index_length) / 1024) AS size_kb FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name', [database]);
-                const [columnsResult] = await mysqlConnection.query('SELECT table_name, column_name AS name, data_type AS type, is_nullable AS nullable, column_default AS default_value, column_key AS key, extra FROM information_schema.columns WHERE table_schema = ? ORDER BY table_name, ordinal_position', [database]);
-                
-                columnsResult.forEach(column => {
-                    if (!tableColumns[column.table_name]) tableColumns[column.table_name] = [];
-                    tableColumns[column.table_name].push({ name: column.name, type: column.type, nullable: column.nullable === 'YES', default: column.default_value, key: column.key, extra: column.extra });
+                console.log(`[DBService_FetchSchemaMySQL] Raw tablesResult for schema '${database}':`, JSON.stringify(tablesResult.map(t => t.name)));
+
+                const [columnsResult] = await mysqlConnection.query('SELECT table_name, column_name AS name, data_type AS type, is_nullable AS nullable, column_default AS default_value, column_key AS `key`, extra AS `extra` FROM information_schema.columns WHERE table_schema = ? ORDER BY table_name, ordinal_position', [database]);
+                console.log(`[DBService_FetchSchemaMySQL] Raw columnsResult for schema '${database}': (length: ${columnsResult.length}) First 5:`, JSON.stringify(columnsResult.slice(0, 5)));
+                // Log columns specifically for the table in question if it was created
+                const problemTableName = connectionConfig.lastCreatedTableName; // We need to pass this if available
+                if (problemTableName) {
+                    const specificTableColumns = columnsResult.filter(c => c.table_name === problemTableName);
+                    console.log(`[DBService_FetchSchemaMySQL] Columns found for table '${problemTableName}':`, JSON.stringify(specificTableColumns));
+                }
+
+                // Correctly build tableColumns using lowercase table names from tablesResult
+                tablesResult.forEach(tableFromMeta => {
+                    const currentTableNameLower = tableFromMeta.name; // This is already lowercase due to 'AS name'
+                    tableColumns[currentTableNameLower] = [];
+                    columnsResult
+                        .filter(col => col.TABLE_NAME && (col.TABLE_NAME === currentTableNameLower || col.TABLE_NAME.toLowerCase() === currentTableNameLower)) // Use col.TABLE_NAME and check for its existence
+                        .forEach(column => {
+                            tableColumns[currentTableNameLower].push({
+                                name: column.name,
+                                type: column.type,
+                                nullable: column.nullable === 'YES',
+                                default: column.default_value,
+                                key: column.key,
+                                extra: column.extra
+                            });
+                        });
                 });
 
                 let totalSizeRaw = 0;
@@ -147,12 +169,46 @@ async function _fetchSchemaDetails(connectionConfig) {
                 });
                 totalSizeFormatted = formatBytes(totalSizeRaw);
 
-                const columnsQuery = `SELECT c.table_name, c.column_name AS name, c.data_type AS type, c.is_nullable AS nullable, c.column_default AS default_value, CASE WHEN pk.column_name IS NOT NULL THEN 'PRI' WHEN uk.column_name IS NOT NULL THEN 'UNI' WHEN fk.column_name IS NOT NULL THEN 'FOR' ELSE '' END AS key FROM information_schema.columns c LEFT JOIN (SELECT kcu.column_name, kcu.table_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = 'public') pk ON pk.column_name = c.column_name AND pk.table_name = c.table_name LEFT JOIN (SELECT kcu.column_name, kcu.table_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name WHERE tc.constraint_type = 'UNIQUE' AND tc.table_schema = 'public') uk ON uk.column_name = c.column_name AND uk.table_name = c.table_name LEFT JOIN (SELECT kcu.column_name, kcu.table_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public') fk ON fk.column_name = c.column_name AND fk.table_name = c.table_name WHERE c.table_schema = 'public' ORDER BY c.table_name, c.ordinal_position`;
-                const columnsResult = await client.query(columnsQuery);
+                const columnsQuery = `
+                  SELECT 
+                      c.table_schema,
+                      c.table_name,
+                      c.column_name AS name, 
+                      c.data_type AS type, 
+                      c.is_nullable AS nullable, 
+                      c.column_default AS default_value,
+                      EXISTS (
+                          SELECT 1
+                          FROM pg_constraint cons
+                          JOIN pg_class rel ON rel.oid = cons.conrelid
+                          JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+                          JOIN pg_attribute attr ON attr.attrelid = cons.conrelid AND attr.attnum = ANY(cons.conkey)
+                          WHERE nsp.nspname = c.table_schema 
+                          AND rel.relname = c.table_name 
+                          AND cons.contype = 'p' 
+                          AND attr.attname = c.column_name
+                      ) AS is_primary_key
+                  FROM information_schema.columns c
+                  WHERE c.table_schema = 'public' -- Or make this dynamic if tables can be in other schemas
+                  ORDER BY c.table_name, c.ordinal_position;`;
                 
+                const columnsResult = await client.query(columnsQuery);
+                console.log(`[DBService_FetchSchemaPG] Raw columnsResult for schema 'public': (length: ${columnsResult.rows.length}) First 5:`, JSON.stringify(columnsResult.rows.slice(0,5)));
+
                 columnsResult.rows.forEach(column => {
                     if (!tableColumns[column.table_name]) tableColumns[column.table_name] = [];
-                    tableColumns[column.table_name].push({ name: column.name, type: column.type, nullable: column.nullable === 'YES', default: column.default_value, key: column.key, extra: '' });
+                    // Debugging the is_primary_key value
+                    if (column.table_name === 'testing1' && column.name === 'id') {
+                        console.log(`[DBService_FetchSchemaPG_Debug] For testing1.id - column.is_primary_key: ${column.is_primary_key}, type: ${typeof column.is_primary_key}`);
+                    }
+                    tableColumns[column.table_name].push({
+                        name: column.name,
+                        type: column.type,
+                        nullable: column.nullable === 'YES',
+                        default: column.default_value,
+                        key: column.is_primary_key ? 'PRI' : '', // Set key to 'PRI' if is_primary_key is true
+                        extra: '' // PostgreSQL doesn't have a direct equivalent of MySQL's 'extra' like auto_increment here
+                    });
                 });
 
                 tables = tablesResult.rows.map(table => {
@@ -1073,6 +1129,190 @@ const databaseService = {
           console.log(`[databaseService.updateLastConnected] Updated last_connected for connection ID ${id} for user ${userId}`);
       } else {
           console.log(`[databaseService.updateLastConnected] No update made for connection ID ${id} for user ${userId} (not found or not owned by user)`);
+      }
+    }
+  },
+
+  async deleteRowFromTable(connectionId, tableName, primaryKeyCriteria, userId) {
+    if (Object.keys(primaryKeyCriteria).length === 0) {
+      return { success: false, message: 'Primary key criteria are required.' };
+    }
+
+    const connection = await this.getConnectionByIdFull(connectionId, userId);
+    if (!connection) {
+      return { success: false, message: 'Database connection not found or not authorized.' };
+    }
+    if (connection.isSample) {
+      return { success: false, message: 'Cannot delete rows from a sample database.' };
+    }
+
+    let decryptedPassword = '';
+    try {
+      decryptedPassword = connection.encrypted_password ? decrypt(connection.encrypted_password) : connection.password;
+    } catch (e) {
+      return { success: false, message: 'Password decryption failed for database connection.' };
+    }
+
+    const { engine, host, port, database, username, ssl_enabled } = connection;
+    let client;
+    let deleteSql = '';
+    const whereClauses = [];
+    const values = [];
+
+    try {
+      if (engine.toLowerCase() === 'mysql') {
+        Object.keys(primaryKeyCriteria).forEach(key => {
+          whereClauses.push(`\`${key}\` = ?`);
+          values.push(primaryKeyCriteria[key]);
+        });
+        deleteSql = `DELETE FROM \`${tableName}\` WHERE ${whereClauses.join(' AND ')}`;
+        client = await mysql.createConnection({
+          host: host || 'localhost', port: port || 3306, database, user: username,
+          password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectTimeout: 10000
+        });
+      } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+        let i = 1;
+        Object.keys(primaryKeyCriteria).forEach(key => {
+          whereClauses.push(`\"${key}\" = $${i++}`);
+          values.push(primaryKeyCriteria[key]);
+        });
+        deleteSql = `DELETE FROM public.\"${tableName}\" WHERE ${whereClauses.join(' AND ')}`;
+        const pool = new Pool({
+          host: host || 'localhost', port: port || 5432, database, user: username,
+          password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectionTimeoutMillis: 10000
+        });
+        client = await pool.connect();
+      } else {
+        return { success: false, message: `Row deletion not supported for engine: ${engine}` };
+      }
+
+      console.log(`Executing Delete Row (${engine}): ${deleteSql} with values:`, values);
+      let result;
+      if (engine.toLowerCase() === 'mysql') {
+        [result] = await client.execute(deleteSql, values);
+      } else {
+        result = await client.query(deleteSql, values);
+      }
+
+      const affectedRows = result.affectedRows || result.rowCount || 0;
+      if (affectedRows > 0) {
+        await eventLogService.addEntry(
+          'ROW_DELETED', 
+          `Row deleted from table "${tableName}" in DB "${connection.name}" (ID: ${connectionId}) by user ${userId}. Criteria: ${JSON.stringify(primaryKeyCriteria)}`,
+          connectionId,
+          userId
+        );
+        return { success: true, message: `Row deleted successfully from "${tableName}".`, affectedRows };
+      } else {
+        return { success: false, message: `No row found matching criteria in "${tableName}" or no row was deleted.`, affectedRows: 0 };
+      }
+    } catch (error) {
+      console.error(`Error executing DELETE query for table "${tableName}" in DB ${connectionId}:`, error);
+      return { success: false, message: `Failed to delete row: ${error.message}`, error: error.message };
+    } finally {
+      if (client) {
+        if (engine.toLowerCase() === 'mysql') await client.end();
+        else if (client.release) client.release();
+      }
+    }
+  },
+
+  async updateRowInTable(connectionId, tableName, primaryKeyCriteria, newRowData, userId) {
+    if (Object.keys(primaryKeyCriteria).length === 0) {
+      return { success: false, message: 'Primary key criteria are required.' };
+    }
+    if (Object.keys(newRowData).length === 0) {
+      return { success: false, message: 'No data provided for update.' };
+    }
+
+    const connection = await this.getConnectionByIdFull(connectionId, userId);
+    if (!connection) {
+      return { success: false, message: 'Database connection not found or not authorized.' };
+    }
+    if (connection.isSample) {
+      return { success: false, message: 'Cannot update rows in a sample database.' };
+    }
+
+    let decryptedPassword = '';
+    try {
+      decryptedPassword = connection.encrypted_password ? decrypt(connection.encrypted_password) : connection.password;
+    } catch (e) {
+      return { success: false, message: 'Password decryption failed for database connection.' };
+    }
+
+    const { engine, host, port, database, username, ssl_enabled } = connection;
+    let client;
+    let updateSql = '';
+    const setClauses = [];
+    const whereClauses = [];
+    const values = [];
+    let valueCounter = 1; // For PostgreSQL $1, $2 placeholders
+
+    try {
+      if (engine.toLowerCase() === 'mysql') {
+        Object.keys(newRowData).forEach(key => {
+          setClauses.push(`\`${key}\` = ?`);
+          values.push(newRowData[key]);
+        });
+        Object.keys(primaryKeyCriteria).forEach(key => {
+          whereClauses.push(`\`${key}\` = ?`);
+          values.push(primaryKeyCriteria[key]);
+        });
+        updateSql = `UPDATE \`${tableName}\` SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')}`;
+        client = await mysql.createConnection({
+          host: host || 'localhost', port: port || 3306, database, user: username,
+          password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectTimeout: 10000
+        });
+      } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
+        Object.keys(newRowData).forEach(key => {
+          setClauses.push(`\"${key}\" = $${valueCounter++}`);
+          values.push(newRowData[key]);
+        });
+        Object.keys(primaryKeyCriteria).forEach(key => {
+          whereClauses.push(`\"${key}\" = $${valueCounter++}`);
+          values.push(primaryKeyCriteria[key]);
+        });
+        updateSql = `UPDATE public.\"${tableName}\" SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')}`;
+        const pool = new Pool({
+          host: host || 'localhost', port: port || 5432, database, user: username,
+          password: decryptedPassword, ssl: ssl_enabled ? { rejectUnauthorized: false } : undefined,
+          connectionTimeoutMillis: 10000
+        });
+        client = await pool.connect();
+      } else {
+        return { success: false, message: `Row update not supported for engine: ${engine}` };
+      }
+
+      console.log(`Executing Update Row (${engine}): ${updateSql} with values:`, values);
+      let result;
+      if (engine.toLowerCase() === 'mysql') {
+        [result] = await client.execute(updateSql, values);
+      } else {
+        result = await client.query(updateSql, values);
+      }
+
+      const affectedRows = result.affectedRows || result.rowCount || 0;
+      if (affectedRows > 0) {
+        await eventLogService.addEntry(
+          'ROW_UPDATED', 
+          `Row updated in table "${tableName}" in DB "${connection.name}" (ID: ${connectionId}) by user ${userId}. PK: ${JSON.stringify(primaryKeyCriteria)}`,
+          connectionId,
+          userId
+        );
+        return { success: true, message: `Row updated successfully in "${tableName}".`, affectedRows };
+      } else {
+        return { success: false, message: `No row found matching criteria in "${tableName}" or data was unchanged.`, affectedRows: 0 };
+      }
+    } catch (error) {
+      console.error(`Error executing UPDATE query for table "${tableName}" in DB ${connectionId}:`, error);
+      return { success: false, message: `Failed to update row: ${error.message}`, error: error.message };
+    } finally {
+      if (client) {
+        if (engine.toLowerCase() === 'mysql') await client.end();
+        else if (client.release) client.release();
       }
     }
   }

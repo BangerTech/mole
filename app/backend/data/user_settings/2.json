@@ -3,7 +3,7 @@
     "inApp": true,
     "email": false,
     "events": {
-      "dbConnectionIssues": true,
+      "dbConnectionIssues": false,
       "syncCompleted": true,
       "newDbConnections": true,
       "systemUpdates": true

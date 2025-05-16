@@ -40,6 +40,12 @@ router.post('/:id/tables', databaseController.createTable);
 // Insert a new row into a table
 router.post('/:id/tables/:tableName/rows', databaseController.insertTableRow);
 
+// Route to delete a specific row in a table
+router.delete('/:id/tables/:tableName/row', databaseController.deleteTableRow);
+
+// Route to update a specific row in a table
+router.put('/:id/tables/:tableName/row', databaseController.updateTableRow);
+
 // Add a new column to a table
 router.post('/:id/tables/:tableName/columns', databaseController.addColumnToTable);
 

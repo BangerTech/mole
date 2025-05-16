@@ -3,18 +3,9 @@
  * Handles AI assistant settings and queries
  */
 
-import axios from 'axios';
+import apiClient from './api'; // Import the centralized apiClient
 
-// Dynamically generate API URL based on current hostname
-const getBaseUrl = () => {
-  const hostname = window.location.hostname;
-  // If running in development mode (localhost)
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:3001/api/ai';
-  }
-  // For production docker environment, use the same hostname with backend port
-  return `http://${hostname}:3001/api/ai`;
-};
+const AI_ENDPOINT_SUFFIX = '/ai';
 
 const AIService = {
   /**
@@ -23,11 +14,11 @@ const AIService = {
    */
   getSettings: async () => {
     try {
-      const response = await axios.get(`${getBaseUrl()}/settings`);
+      const response = await apiClient.get(`${AI_ENDPOINT_SUFFIX}/settings`);
       return response.data;
     } catch (error) {
-      console.error('Error getting AI settings:', error);
-      throw error;
+      console.error('Error getting AI settings:', error.response?.data || error.message);
+      throw error.response?.data || error.message || error;
     }
   },
 
@@ -38,11 +29,11 @@ const AIService = {
    */
   updateSettings: async (settings) => {
     try {
-      const response = await axios.post(`${getBaseUrl()}/settings`, settings);
+      const response = await apiClient.post(`${AI_ENDPOINT_SUFFIX}/settings`, settings);
       return response.data;
     } catch (error) {
-      console.error('Error updating AI settings:', error);
-      throw error;
+      console.error('Error updating AI settings:', error.response?.data || error.message);
+      throw error.response?.data || error.message || error;
     }
   },
 
@@ -52,11 +43,11 @@ const AIService = {
    */
   getProviders: async () => {
     try {
-      const response = await axios.get(`${getBaseUrl()}/providers`);
+      const response = await apiClient.get(`${AI_ENDPOINT_SUFFIX}/providers`);
       return response.data;
     } catch (error) {
-      console.error('Error getting AI providers:', error);
-      throw error;
+      console.error('Error getting AI providers:', error.response?.data || error.message);
+      throw error.response?.data || error.message || error;
     }
   },
 
@@ -64,15 +55,20 @@ const AIService = {
    * Test AI provider connection
    * @param {string} provider - Provider name
    * @param {string} apiKey - API key
+   * @param {string} [model] - Optional model name
    * @returns {Promise<Object>} Test result
    */
-  testProvider: async (provider, apiKey) => {
+  testProvider: async (provider, apiKey, model = null) => {
     try {
-      const response = await axios.post(`${getBaseUrl()}/test`, { provider, apiKey });
+      const payload = { provider, apiKey };
+      if (model) {
+        payload.model = model;
+      }
+      const response = await apiClient.post(`${AI_ENDPOINT_SUFFIX}/test`, payload);
       return response.data;
     } catch (error) {
-      console.error(`Error testing ${provider} connection:`, error);
-      throw error;
+      console.error(`Error testing ${provider} connection:`, error.response?.data || error.message);
+      throw error.response?.data || error.message || error;
     }
   },
 
@@ -95,11 +91,11 @@ const AIService = {
         data.provider = provider;
       }
       
-      const response = await axios.post(`${getBaseUrl()}/query`, data);
+      const response = await apiClient.post(`${AI_ENDPOINT_SUFFIX}/query`, data);
       return response.data;
     } catch (error) {
-      console.error('Error querying AI:', error);
-      throw error;
+      console.error('Error querying AI:', error.response?.data || error.message);
+      throw error.response?.data || error.message || error;
     }
   }
 };

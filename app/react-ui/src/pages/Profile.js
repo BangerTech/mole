@@ -54,7 +54,8 @@ import {
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import EmailService from '../services/EmailService';
 import DatabaseService from '../services/DatabaseService';
-import AuthService, { getApiBaseUrl } from '../services/AuthService';
+import AuthService from '../services/AuthService';
+import { getApiBaseUrl } from '../services/api';
 import { UserContext } from '../components/UserContext';
 
 // Define default preferences structure locally for fallbacks if needed, mirroring UserContext

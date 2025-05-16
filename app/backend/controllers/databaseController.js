@@ -290,7 +290,7 @@ exports.getDatabaseSchema = async (req, res) => {
     if (schemaInfo.success) {
         if (connectionId !== 'sample') {
             try {
-                await databaseService.updateLastConnected(connectionId);
+                await databaseService.updateLastConnected(connectionId, req.userId); // Pass req.userId
             } catch (updateError) {
                 console.error(`[databaseController.getDatabaseSchema] Failed to update last_connected for ${connectionId}:`, updateError);
             }
@@ -348,7 +348,7 @@ exports.executeQuery = async (req, res) => {
     if (result.success) {
       if (connectionId !== 'sample') {
         try {
-          await databaseService.updateLastConnected(connectionId);
+          await databaseService.updateLastConnected(connectionId, req.userId); // Pass req.userId
         } catch (updateError) {
           console.error(`[databaseController.executeQuery] Failed to update last_connected for ${connectionId}:`, updateError);
         }
@@ -433,12 +433,15 @@ exports.getTableData = async (req, res) => {
     // Use decodeURIComponent on tableName from params, as it might be encoded by the service
     const decodedTableName = decodeURIComponent(tableName);
     // Sanitize table name - more robust quoting needed based on engine
-    let safeTableName = decodedTableName.replace(/`/g, '``').replace(/\"/g, "\"\"").replace(/\'/g, "''"); // Basic defense, needs improvement
+    let safeTableName = decodedTableName; // Start with decoded name
     if (engine.toLowerCase() === 'mysql') {
-        safeTableName = `\\\`${decodedTableName.replace(/`/g, '``')}\\\``;
+        // Escape backticks within the name, then surround with backticks
+        safeTableName = `\`${decodedTableName.replace(/`/g, '``')}\``;
     } else if (engine.toLowerCase() === 'postgresql' || engine.toLowerCase() === 'postgres') {
-         safeTableName = `\\\"${decodedTableName.replace(/\"/g, "\"\"")}\\\"`;
+        // Escape double quotes within the name, then surround with double quotes
+         safeTableName = `\"${decodedTableName.replace(/\"/g, "\"\"")}\"`;
     }
+    // For other engines, safeTableName remains decodedTableName or needs specific quoting.
     console.log(`[getTableData] Using safe table name: ${safeTableName}`); // DEBUG
 
     if (engine.toLowerCase() === 'mysql') {
@@ -471,12 +474,14 @@ exports.getTableData = async (req, res) => {
             columns = Object.keys(rows[0]);
         } else {
              // If no rows, try getting columns from schema (less efficient)
-             const [colsInfo] = await client.query(`DESCRIBE \`${safeTableName}\``);
+             const [colsInfo] = await client.query(`DESCRIBE ${safeTableName}`); // Use safeTableName here as it is already quoted
              columns = colsInfo.map(c => c.Field);
         }
 
         // Count Query
-        const countQuery = `SELECT COUNT(*) as count FROM \`${safeTableName}\``;
+        // Ensure clean quoting for the count query to avoid double-quoting issues.
+        const simpleTableNameForCount = decodedTableName.replace(/`/g, '``'); // Escape internal backticks if any
+        const countQuery = `SELECT COUNT(*) as count FROM \`${simpleTableNameForCount}\``; // Wrap with single backticks
         console.log('[getTableData] MySQL Count Query:', countQuery);
         const [countResult] = await client.query(countQuery);
         totalRowCount = countResult[0].count;
@@ -630,7 +635,7 @@ exports.createTable = async (req, res) => {
   let mainClient; // Renamed to avoid conflict, will hold MySQL connection or PG Pool client
 
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    const connection = await databaseService.getConnectionById(connectionId, req.userId); // Pass req.userId
     if (!connection) {
       return res.status(404).json({ success: false, message: 'Database connection not found' });
     }
@@ -730,7 +735,7 @@ exports.deleteTable = async (req, res) => {
   let client; // For MySQL connection or PG Pool client
 
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    const connection = await databaseService.getConnectionById(connectionId, req.userId); // Pass req.userId
     if (!connection) {
       return res.status(404).json({ success: false, message: 'Database connection not found' });
     }
@@ -1056,8 +1061,8 @@ exports.createDatabaseInstance = async (req, res) => {
           const connectionToSave = {
               name: connectionName, 
               engine: userEngineChoice, 
-              host: connectionHost, // Use determined service name
-              port: connectionPort, // Use determined default port
+              host: connectionHost, 
+              port: connectionPort, 
               database: dbNameToCreate, 
               username: connectionUser, 
               password: connectionPassword, 
@@ -1065,8 +1070,11 @@ exports.createDatabaseInstance = async (req, res) => {
               notes: userNotes || '',
               isSample: false
           };
-          const savedConnection = await databaseService.createConnection(connectionToSave);
-          console.log('[createDatabaseInstance] Saved connection entry:', savedConnection);
+          // Pass req.userId as the second argument to associate the connection with the user
+          const savedConnection = await databaseService.createConnection(connectionToSave, req.userId);
+          console.log(`[createDatabaseInstance] Connection entry saved for user ${req.userId}:`, savedConnection);
+          // Event logging is now handled within databaseService.createConnection, so no need to call it here.
+          
           // Return success with the original creation message and the new connection details
           return res.status(201).json({ success: true, message: creationMessage, connection: savedConnection });
       } catch (saveError) {
@@ -1168,7 +1176,7 @@ exports.insertTableRow = async (req, res) => {
 
   let client;
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    const connection = await databaseService.getConnectionById(connectionId, req.userId); // Pass req.userId
     if (!connection) {
       return res.status(404).json({ success: false, message: 'Database connection not found' });
     }
@@ -1262,7 +1270,7 @@ exports.addColumnToTable = async (req, res) => {
 
   let client;
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    const connection = await databaseService.getConnectionById(connectionId, req.userId); // Pass req.userId
     if (!connection) {
       return res.status(404).json({ success: false, message: 'Database connection not found' });
     }
@@ -1353,7 +1361,7 @@ exports.deleteColumnFromTable = async (req, res) => {
 
   let client;
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    const connection = await databaseService.getConnectionById(connectionId, req.userId); // Pass req.userId
     if (!connection) {
       return res.status(404).json({ success: false, message: 'Database connection not found' });
     }
@@ -1433,7 +1441,7 @@ exports.editColumnInTable = async (req, res) => {
 
   let client;
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    const connection = await databaseService.getConnectionById(connectionId, req.userId); // Pass req.userId
     if (!connection) {
       return res.status(404).json({ success: false, message: 'Database connection not found' });
     }
@@ -1621,6 +1629,90 @@ exports.updateLastConnected = async (req, res) => {
   } catch (error) {
     console.error(`Unexpected error in updateLastConnected controller for ${req.params.id}:`, error);
     res.status(500).json({ success: false, message: 'Internal server error updating last connected timestamp.', error: error.message });
+  }
+};
+
+/**
+ * Delete a specific row from a table
+ * @param {Object} req - Express request object (params: id, tableName; query: primary key criteria)
+ * @param {Object} res - Express response object
+ */
+exports.deleteTableRow = async (req, res) => {
+  const { id: connectionId, tableName } = req.params;
+  const primaryKeyCriteria = req.query; // PK criteria from query parameters
+
+  if (Object.keys(primaryKeyCriteria).length === 0) {
+    return res.status(400).json({ success: false, message: 'Primary key criteria are required to identify the row to delete.' });
+  }
+
+  if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
+    return res.status(400).json({ success: false, message: 'Invalid table name.' });
+  }
+
+  try {
+    const result = await databaseService.deleteRowFromTable(connectionId, tableName, primaryKeyCriteria, req.userId);
+    if (result.success) {
+      res.status(200).json(result); // { success: true, message: '...', affectedRows: X }
+    } else {
+      // Determine status code based on the error message or type if available
+      let statusCode = 500;
+      if (result.message && result.message.toLowerCase().includes('not found')) {
+        statusCode = 404;
+      } else if (result.message && result.message.toLowerCase().includes('no rows affected')) {
+        statusCode = 404; // Or 400 if it implies bad criteria
+      }
+      res.status(statusCode).json(result);
+    }
+  } catch (error) {
+    console.error(`Error in deleteTableRow controller for table ${tableName} in DB ${connectionId}:`, error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error deleting row.',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update a specific row in a table
+ * @param {Object} req - Express request object (params: id, tableName; query: primary key criteria; body: new row data)
+ * @param {Object} res - Express response object
+ */
+exports.updateTableRow = async (req, res) => {
+  const { id: connectionId, tableName } = req.params;
+  const primaryKeyCriteria = req.query; // PK criteria from query parameters
+  const newRowData = req.body; // New data for the row from request body
+
+  if (Object.keys(primaryKeyCriteria).length === 0) {
+    return res.status(400).json({ success: false, message: 'Primary key criteria are required to identify the row to update.' });
+  }
+  if (!newRowData || Object.keys(newRowData).length === 0) {
+    return res.status(400).json({ success: false, message: 'New row data is required for update.' });
+  }
+  if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
+    return res.status(400).json({ success: false, message: 'Invalid table name.' });
+  }
+
+  try {
+    const result = await databaseService.updateRowInTable(connectionId, tableName, primaryKeyCriteria, newRowData, req.userId);
+    if (result.success) {
+      res.status(200).json(result); // { success: true, message: '...', affectedRows: X }
+    } else {
+      let statusCode = 500;
+      if (result.message && result.message.toLowerCase().includes('not found')) {
+        statusCode = 404;
+      } else if (result.message && result.message.toLowerCase().includes('no row found matching criteria')) {
+        statusCode = 404;
+      }
+      res.status(statusCode).json(result);
+    }
+  } catch (error) {
+    console.error(`Error in updateTableRow controller for table ${tableName} in DB ${connectionId}:`, error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error updating row.',
+      error: error.message
+    });
   }
 };
 

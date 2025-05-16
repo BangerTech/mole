@@ -399,14 +399,17 @@ export default function QueryEditor() {
       setTableStructure(database.tableColumns[tableName]);
     } else if (database && database.id && !database.isSample) {
       // Structure wasn't pre-loaded, fetch schema again (might be redundant but safe)
-      console.log(`Structure for ${tableName} not pre-loaded, fetching schema again.`);
+      console.log(`[handleTableClick] Structure for ${tableName} not pre-loaded, fetching schema again for DB ${database.id}.`);
       try {
          setSimpleModeLoading(true); // Show loading for structure too if fetched separately
          const schemaInfo = await DatabaseService.getDatabaseSchema(database.id);
+         console.log(`[handleTableClick] Fetched schemaInfo for ${tableName}:`, JSON.stringify(schemaInfo));
          if (schemaInfo.success && schemaInfo.tableColumns && schemaInfo.tableColumns[tableName]) {
+            console.log(`[handleTableClick] Found columns for ${tableName} in schemaInfo:`, JSON.stringify(schemaInfo.tableColumns[tableName]));
             setTableStructure(schemaInfo.tableColumns[tableName]);
          } else {
-             console.warn(`Could not fetch structure for ${tableName} in second attempt.`);
+             console.warn(`[handleTableClick] Could not find columns for ${tableName} in fetched schemaInfo. Success: ${schemaInfo.success}`);
+             setTableStructure([]); // Clear if not found after fetch
          }
       } catch (err) {
          console.error(`Error fetching schema for structure of ${tableName}:`, err);
@@ -679,12 +682,37 @@ export default function QueryEditor() {
         console.log('[QueryEditor] Attempting to insert:', rowFormData, 'into table:', selectedTable, 'for DB ID:', database.id);
         result = await DatabaseService.insertRow(database.id, selectedTable, rowFormData);
       } else { // editMode === 'edit'
-        // IMPORTANT: Needs primary key identification logic here!
-        console.log('[QueryEditor] Attempting to update:', selectedRowData, 'with', rowFormData);
-        // For now, updateRow is still a placeholder in DatabaseService
-        // result = await DatabaseService.updateRow(database.id, selectedTable, selectedRowData /* Needs PK here */, rowFormData);
-        result = { success: false, message: 'Update function not yet implemented. Needs Primary Key logic.' }; // Placeholder
-        setSnackbar({ open: true, message: result.message, severity: 'warning' });
+        if (!selectedRowData || !tableStructure) {
+          setSnackbar({ open: true, message: 'Original row data or table structure is missing for edit.', severity: 'error' });
+          setLoading(false);
+          return;
+        }
+
+        // Identify primary key(s) and their values from the original selectedRowData
+        const primaryKeyCriteria = {};
+        let pkFound = false;
+        for (const column of tableStructure) {
+          if (column.key === 'PRI' || (typeof column.key === 'string' && column.key.toUpperCase().includes('PRIMARY'))) {
+            if (selectedRowData.hasOwnProperty(column.name)) {
+              primaryKeyCriteria[column.name] = selectedRowData[column.name];
+              pkFound = true;
+            } else {
+              console.error(`Primary key column "${column.name}" not found in original selected row data.`, selectedRowData);
+              throw new Error(`Primary key column "${column.name}" missing in original row data.`);
+            }
+          }
+        }
+
+        if (!pkFound || Object.keys(primaryKeyCriteria).length === 0) {
+          console.error("No primary key identified or PK values missing for edit.", tableStructure, selectedRowData);
+          throw new Error('No primary key values identified for the row to be updated.');
+        }
+        
+        console.log('[QueryEditor] Attempting to update row in table:', selectedTable, 'for DB ID:', database.id);
+        console.log('[QueryEditor] PK Criteria:', primaryKeyCriteria);
+        console.log('[QueryEditor] New Data:', rowFormData);
+
+        result = await DatabaseService.updateRow(database.id, selectedTable, primaryKeyCriteria, rowFormData);
       }
 
       if (result && result.success) {
@@ -712,35 +740,67 @@ export default function QueryEditor() {
   };
 
   const handleConfirmDeleteRow = async () => {
-    if (!database || !database.id || !selectedTable || !selectedRowData) return;
+    if (!database || !database.id || !selectedTable || !selectedRowData || !tableStructure) {
+      setSnackbar({ open: true, message: 'Cannot delete row: missing context or table structure.', severity: 'warning' });
+      return;
+    }
     setLoading(true);
     setError(null);
 
     try {
-      // IMPORTANT: Needs primary key identification logic here!
-      // Assuming selectedRowData contains the original row including PK
-      console.log('Attempting to delete:', selectedRowData);
-      const primaryKeyData = selectedRowData; // Placeholder - Needs actual PK extraction
-      // const result = await DatabaseService.deleteRow(database.id, selectedTable, primaryKeyData);
-      const result = { success: false, message: 'Delete function not yet implemented.' }; // Placeholder
-      setSnackbar({ open: true, message: 'Delete function not yet implemented. Needs Primary Key logic.', severity: 'warning' });
+      // Identify primary key(s) and their values
+      const primaryKeyCriteria = {};
+      let pkFound = false;
+      for (const column of tableStructure) {
+        // Assuming 'key' property indicates primary key (e.g., 'PRI' for MySQL, or a similar indicator)
+        // This might need adjustment based on how your schema info actually flags PKs for different DBs
+        if (column.key === 'PRI' || (typeof column.key === 'string' && column.key.toUpperCase().includes('PRIMARY'))) {
+          if (selectedRowData.hasOwnProperty(column.name)) {
+            primaryKeyCriteria[column.name] = selectedRowData[column.name];
+            pkFound = true;
+          } else {
+            console.error(`Primary key column "${column.name}" not found in selected row data.`, selectedRowData);
+            throw new Error(`Primary key column "${column.name}" missing in selected row.`);
+          }
+        }
+      }
 
-      // if (result.success) {
-      //   setSnackbar({ open: true, message: 'Row deleted successfully!', severity: 'success' });
-      //   handleCloseDeleteDialog();
-      //   await refreshSimpleModeDataPreview(); // Refresh data preview
-      //   setSelectedRowIndex(null); // Deselect row
-      //   setSelectedRowData(null);
-      // } else {
-      //   setError(result.message || 'Failed to delete row.');
-      //   setSnackbar({ open: true, message: result.message || 'Failed to delete row.', severity: 'error' });
-      // }
+      if (!pkFound) {
+        // Fallback or error if no PK is identified from tableStructure.
+        // For tables without explicit PKs, deletion by all column values might be an option,
+        // but that's more complex and risky. For now, require a PK from schema.
+        console.error("No primary key identified for the table from its structure.", tableStructure);
+        throw new Error('No primary key identified for this table. Row deletion requires a primary key.');
+      }
+      
+      if (Object.keys(primaryKeyCriteria).length === 0) {
+        throw new Error('Could not determine primary key values for the selected row.');
+      }
+
+      console.log('Attempting to delete row from table:', selectedTable, 'in DB:', database.id, 'with PK criteria:', primaryKeyCriteria);
+      
+      const result = await DatabaseService.deleteRow(database.id, selectedTable, primaryKeyCriteria);
+
+      if (result.success) {
+        setSnackbar({ open: true, message: result.message || 'Row deleted successfully!', severity: 'success' });
+        handleCloseDeleteDialog();
+        await refreshSimpleModeDataPreview(); // Refresh data preview
+        setSelectedRowIndex(null); // Deselect row
+        setSelectedRowData(null);
+      } else {
+        setError(result.message || 'Failed to delete row.');
+        setSnackbar({ open: true, message: result.message || 'Failed to delete row.', severity: 'error' });
+      }
     } catch (err) {
-      setError(err.message || 'An unexpected error occurred.');
+      console.error('Error in handleConfirmDeleteRow:', err);
+      setError(err.message || 'An unexpected error occurred while deleting the row.');
       setSnackbar({ open: true, message: err.message || 'An unexpected error occurred.', severity: 'error' });
     } finally {
       setLoading(false);
-      handleCloseDeleteDialog(); // Close dialog even on error
+      // Ensure dialog is closed if it wasn't closed on success
+      if (isDeleteDialogOpen) { // Check if dialog is still open
+          handleCloseDeleteDialog();
+      }
     }
   };
 

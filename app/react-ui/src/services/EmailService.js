@@ -1,14 +1,6 @@
-import axios from 'axios';
+import apiClient from './api'; // Import the centralized apiClient
 
-// Dynamically determine the API base URL based on the current hostname
-// This ensures the app works on any IP address or domain name
-const getApiBaseUrl = () => {
-  const hostname = window.location.hostname;
-  return `http://${hostname}:3001/api/email`;
-};
-
-// API Base URL - dynamically determined
-const API_URL = getApiBaseUrl();
+const EMAIL_ENDPOINT_SUFFIX = '/email';
 
 /**
  * Service für die Verwaltung von E-Mail-Funktionalitäten
@@ -20,10 +12,10 @@ class EmailService {
    * @returns {Promise} Promise mit der Antwort des Servers
    */
   saveSmtpSettings(settings) {
-    return axios.post(`${API_URL}/smtp/save`, settings)
+    return apiClient.post(`${EMAIL_ENDPOINT_SUFFIX}/smtp/save`, settings)
       .then(response => response.data)
       .catch(error => {
-        console.error('Error saving SMTP settings:', error);
+        console.error('Error saving SMTP settings:', error.response?.data || error.message);
         throw error.response?.data || { success: false, message: 'Failed to save SMTP settings' };
       });
   }
@@ -33,11 +25,10 @@ class EmailService {
    * @returns {Promise} Promise mit den SMTP-Einstellungen
    */
   getSmtpSettings() {
-    return axios.get(`${API_URL}/smtp/get`)
+    return apiClient.get(`${EMAIL_ENDPOINT_SUFFIX}/smtp/get`)
       .then(response => response.data)
       .catch(error => {
-        console.error('Error loading SMTP settings:', error);
-        // Fallback to default settings if failed to load
+        console.error('Error loading SMTP settings:', error.response?.data || error.message);
         return {
           host: '',
           port: '587',
@@ -56,10 +47,10 @@ class EmailService {
    * @returns {Promise} Promise mit dem Ergebnis des Tests
    */
   testSmtpConnection(settings) {
-    return axios.post(`${API_URL}/smtp/test`, settings)
+    return apiClient.post(`${EMAIL_ENDPOINT_SUFFIX}/smtp/test`, settings)
       .then(response => response.data)
       .catch(error => {
-        console.error('Error testing SMTP connection:', error);
+        console.error('Error testing SMTP connection:', error.response?.data || error.message);
         throw error.response?.data || { 
           success: false, 
           message: error.message || 'Failed to connect to SMTP server' 
@@ -73,10 +64,10 @@ class EmailService {
    * @returns {Promise} Promise mit dem Ergebnis des Versands
    */
   sendEmail(emailData) {
-    return axios.post(`${API_URL}/send`, emailData)
+    return apiClient.post(`${EMAIL_ENDPOINT_SUFFIX}/send`, emailData)
       .then(response => response.data)
       .catch(error => {
-        console.error('Error sending email:', error);
+        console.error('Error sending email:', error.response?.data || error.message);
         throw error.response?.data || { 
           success: false, 
           message: error.message || 'Failed to send email' 
@@ -90,10 +81,10 @@ class EmailService {
    * @returns {Promise} Promise mit dem Ergebnis des Versands
    */
   sendTestEmail(toEmail) {
-    return axios.post(`${API_URL}/send-test`, { to: toEmail })
+    return apiClient.post(`${EMAIL_ENDPOINT_SUFFIX}/send-test`, { to: toEmail })
       .then(response => response.data)
       .catch(error => {
-        console.error('Error sending test email:', error);
+        console.error('Error sending test email:', error.response?.data || error.message);
         throw error.response?.data || { 
           success: false, 
           message: error.message || 'Failed to send test email' 

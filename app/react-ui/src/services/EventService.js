@@ -1,13 +1,6 @@
-import axios from 'axios';
+import apiClient from './api'; // Import the centralized apiClient
 
-// Base URL for system API endpoints
-const getApiBaseUrl = () => {
-  const hostname = window.location.hostname;
-  // Assuming backend runs on port 3001
-  return `http://${hostname}:3001/api`; 
-};
-
-const API_URL = getApiBaseUrl();
+const EVENTS_ENDPOINT_SUFFIX = '/events'; // Suffix for the events endpoint
 
 const EventService = {
   /**
@@ -17,14 +10,15 @@ const EventService = {
    */
   async getRecentEvents(limit = 15) {
     try {
-      const response = await axios.get(`${API_URL}/events`, {
+      // Headers are handled by the apiClient interceptor
+      const response = await apiClient.get(EVENTS_ENDPOINT_SUFFIX, {
         params: { limit },
       });
-      // Return the events array, or an empty array if the request failed or returned no events
       return response.data?.events || []; 
     } catch (error) {
-      console.error('Error fetching recent events:', error);
-      return []; // Return empty array on error
+      console.error('Error fetching recent events:', error.response?.data || error.message);
+      // Consistently throw the error or a more structured error object
+      throw error.response?.data || error.message || error; 
     }
   },
 };

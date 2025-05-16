@@ -13,7 +13,8 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import PersonIcon from '@mui/icons-material/Person';
 import { useThemeMode } from '../App';
 import { UserContext } from './UserContext';
-import AuthService, { getApiBaseUrl } from '../services/AuthService';
+import AuthService from '../services/AuthService';
+import { getApiBaseUrl } from '../services/api';
 import { formatToUserFriendlyDateTime } from '../utils/dateUtils';
 
 const closedDrawerWidth = (theme) => `calc(${theme.spacing(8)} + 1px)`;
