@@ -630,9 +630,10 @@ exports.createTable = async (req, res) => {
   let mainClient; // Renamed to avoid conflict, will hold MySQL connection or PG Pool client
 
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    // Pass req.userId to the service function
+    const connection = await databaseService.getConnectionById(connectionId, req.userId);
     if (!connection) {
-      return res.status(404).json({ success: false, message: 'Database connection not found' });
+      return res.status(404).json({ success: false, message: 'Database connection not found or not authorized for this user' });
     }
 
     const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
@@ -730,9 +731,10 @@ exports.deleteTable = async (req, res) => {
   let client; // For MySQL connection or PG Pool client
 
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    // Pass req.userId to the service function
+    const connection = await databaseService.getConnectionById(connectionId, req.userId);
     if (!connection) {
-      return res.status(404).json({ success: false, message: 'Database connection not found' });
+      return res.status(404).json({ success: false, message: 'Database connection not found or not authorized for this user' });
     }
 
     const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
@@ -1169,9 +1171,10 @@ exports.insertTableRow = async (req, res) => {
 
   let client;
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    // Pass req.userId to the service function
+    const connection = await databaseService.getConnectionById(connectionId, req.userId);
     if (!connection) {
-      return res.status(404).json({ success: false, message: 'Database connection not found' });
+      return res.status(404).json({ success: false, message: 'Database connection not found or not authorized for this user' });
     }
 
     const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
@@ -1263,9 +1266,10 @@ exports.addColumnToTable = async (req, res) => {
 
   let client;
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    // Pass req.userId to the service function
+    const connection = await databaseService.getConnectionById(connectionId, req.userId);
     if (!connection) {
-      return res.status(404).json({ success: false, message: 'Database connection not found' });
+      return res.status(404).json({ success: false, message: 'Database connection not found or not authorized for this user' });
     }
 
     const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
@@ -1354,9 +1358,10 @@ exports.deleteColumnFromTable = async (req, res) => {
 
   let client;
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    // Pass req.userId to the service function
+    const connection = await databaseService.getConnectionById(connectionId, req.userId);
     if (!connection) {
-      return res.status(404).json({ success: false, message: 'Database connection not found' });
+      return res.status(404).json({ success: false, message: 'Database connection not found or not authorized for this user' });
     }
 
     const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;
@@ -1434,9 +1439,10 @@ exports.editColumnInTable = async (req, res) => {
 
   let client;
   try {
-    const connection = await databaseService.getConnectionById(connectionId);
+    // Pass req.userId to the service function
+    const connection = await databaseService.getConnectionById(connectionId, req.userId);
     if (!connection) {
-      return res.status(404).json({ success: false, message: 'Database connection not found' });
+      return res.status(404).json({ success: false, message: 'Database connection not found or not authorized for this user' });
     }
 
     const { engine, host, port, database, username, encrypted_password, ssl_enabled } = connection;

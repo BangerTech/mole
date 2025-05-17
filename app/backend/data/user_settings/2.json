@@ -1,0 +1,51 @@
+{
+  "notifications": {
+    "inApp": true,
+    "email": false,
+    "events": {
+      "dbConnectionIssues": true,
+      "syncCompleted": true,
+      "newDbConnections": true,
+      "systemUpdates": true
+    }
+  },
+  "ai": {
+    "defaultProvider": "sqlpal",
+    "provider": "sqlpal",
+    "providers": {
+      "openai": {
+        "apiKey": "",
+        "model": "gpt-3.5-turbo"
+      },
+      "perplexity": {
+        "apiKey": "",
+        "model": "sonar-pro"
+      },
+      "huggingface": {
+        "apiKey": "",
+        "model": "mistralai/Mistral-7B-Instruct-v0.2"
+      },
+      "llama": {
+        "modelPath": "/models/llama-2-7b"
+      },
+      "sqlpal": {
+        "modelPath": "/app/models/sqlpal"
+      }
+    }
+  },
+  "smtp": {
+    "host": "",
+    "port": "587",
+    "username": "",
+    "password": "",
+    "encryption": "tls",
+    "fromEmail": "",
+    "fromName": "Mole Database Manager"
+  },
+  "security": {
+    "autoLogout": false,
+    "logoutTimeout": 30
+  },
+  "darkMode": true,
+  "showSampleDatabases": true
+}

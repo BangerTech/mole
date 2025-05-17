@@ -456,3 +456,24 @@ FileNotFoundError: DB not found: /app/backend/data/mole.db
 2025-05-17 16:39:59,907 [INFO] APScheduler started by main application module.
 2025-05-17 16:40:59,901 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:40:59 UTC)" (scheduled at 2025-05-17 16:40:59.895454+00:00)
 2025-05-17 16:41:00,005 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:41:59 UTC)" executed successfully
+2025-05-17 16:41:59,896 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:42:59 UTC)" (scheduled at 2025-05-17 16:41:59.895454+00:00)
+2025-05-17 16:41:59,998 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:42:59 UTC)" executed successfully
+2025-05-17 16:42:59,896 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:43:59 UTC)" (scheduled at 2025-05-17 16:42:59.895454+00:00)
+2025-05-17 16:42:59,997 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:43:59 UTC)" executed successfully
+2025-05-17 16:43:52,185 [INFO] Scheduler has been shut down
+2025-05-17 16:43:52,386 [INFO] Scheduler has been shut down
+2025-05-17 16:44:37,470 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:44:37,470 [INFO] Scheduled metrics collection.
+2025-05-17 16:44:37,470 [INFO] DatabaseSync instance initializing...
+2025-05-17 16:44:37,471 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 16:44:37,472 [INFO] Fetched 0 scheduled tasks from DB.
+2025-05-17 16:44:37,473 [INFO] No initial tasks to schedule from DB.
+2025-05-17 16:44:37,473 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:44:37,473 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 16:44:37,473 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 16:44:37,479 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 16:44:37,480 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 16:44:37,480 [INFO] Scheduler started
+2025-05-17 16:44:37,481 [INFO] APScheduler started by main application module.
+2025-05-17 16:45:37,480 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:45:37 UTC)" (scheduled at 2025-05-17 16:45:37.469850+00:00)
+2025-05-17 16:45:37,584 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:46:37 UTC)" executed successfully
