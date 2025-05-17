@@ -1065,7 +1065,8 @@ exports.createDatabaseInstance = async (req, res) => {
               notes: userNotes || '',
               isSample: false
           };
-          const savedConnection = await databaseService.createConnection(connectionToSave);
+          // Pass req.userId to the service call
+          const savedConnection = await databaseService.createConnection(connectionToSave, req.userId);
           console.log('[createDatabaseInstance] Saved connection entry:', savedConnection);
           // Return success with the original creation message and the new connection details
           return res.status(201).json({ success: true, message: creationMessage, connection: savedConnection });
