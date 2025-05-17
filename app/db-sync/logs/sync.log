@@ -1,0 +1,428 @@
+2025-05-17 14:29:27,671 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 14:29:27,672 [INFO] Scheduled metrics collection.
+2025-05-17 14:29:27,672 [INFO] DatabaseSync instance initializing...
+2025-05-17 14:29:27,672 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 14:29:27,682 [INFO] Fetched 1 scheduled tasks from DB.
+2025-05-17 14:29:27,708 [INFO] Job dbtask_1 (Sync for Connection 7) does not exist. Adding new job for schedule: hourly
+2025-05-17 14:29:27,709 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 14:29:27,709 [INFO] Job dbtask_1 (Sync for Connection 7) submitted to scheduler with trigger: interval[1:00:00]. Next run time will be determined by scheduler.
+2025-05-17 14:29:27,710 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 14:29:27,710 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 14:29:27,711 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 14:29:27,716 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 14:29:27,717 [INFO] Added job "DatabaseSync._schedule_tasks.<locals>.<lambda>" to job store "default"
+2025-05-17 14:29:27,717 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 14:29:27,717 [INFO] Scheduler started
+2025-05-17 14:29:27,718 [INFO] APScheduler started by main application module.
+2025-05-17 14:30:27,675 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:30:27 UTC)" (scheduled at 2025-05-17 14:30:27.671462+00:00)
+2025-05-17 14:30:27,780 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:31:27 UTC)" executed successfully
+2025-05-17 14:31:27,676 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:32:27 UTC)" (scheduled at 2025-05-17 14:31:27.671462+00:00)
+2025-05-17 14:31:27,779 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:32:27 UTC)" executed successfully
+2025-05-17 14:32:27,674 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:33:27 UTC)" (scheduled at 2025-05-17 14:32:27.671462+00:00)
+2025-05-17 14:32:27,776 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:33:27 UTC)" executed successfully
+2025-05-17 14:33:27,672 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:34:27 UTC)" (scheduled at 2025-05-17 14:33:27.671462+00:00)
+2025-05-17 14:33:27,774 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:34:27 UTC)" executed successfully
+2025-05-17 14:34:27,672 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:35:27 UTC)" (scheduled at 2025-05-17 14:34:27.671462+00:00)
+2025-05-17 14:34:27,711 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 14:34:27 UTC)" (scheduled at 2025-05-17 14:34:27.709997+00:00)
+2025-05-17 14:34:27,712 [INFO] Reloading sync jobs from database.
+2025-05-17 14:34:27,717 [INFO] Fetched 1 scheduled tasks from DB.
+2025-05-17 14:34:27,719 [INFO] Job dbtask_1 (Sync for Connection 7) exists. Overwrite=True. Checking for trigger changes.
+2025-05-17 14:34:27,719 [INFO] Job dbtask_1 trigger is effectively unchanged (interval[1:00:00]). No reschedule needed. Payload changes handled by wrapper at runtime. Next run: 2025-05-17 15:29:27.708455+00:00
+2025-05-17 14:34:27,720 [INFO] Sync jobs reload complete.
+2025-05-17 14:34:27,720 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 14:39:27 UTC)" executed successfully
+2025-05-17 14:34:27,775 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:35:27 UTC)" executed successfully
+2025-05-17 14:35:27,673 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:36:27 UTC)" (scheduled at 2025-05-17 14:35:27.671462+00:00)
+2025-05-17 14:35:27,775 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:36:27 UTC)" executed successfully
+2025-05-17 14:36:27,673 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:37:27 UTC)" (scheduled at 2025-05-17 14:36:27.671462+00:00)
+2025-05-17 14:36:27,779 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:37:27 UTC)" executed successfully
+2025-05-17 14:37:27,673 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:38:27 UTC)" (scheduled at 2025-05-17 14:37:27.671462+00:00)
+2025-05-17 14:37:27,776 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:38:27 UTC)" executed successfully
+2025-05-17 14:38:27,672 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:39:27 UTC)" (scheduled at 2025-05-17 14:38:27.671462+00:00)
+2025-05-17 14:38:27,774 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:39:27 UTC)" executed successfully
+2025-05-17 14:39:27,672 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:40:27 UTC)" (scheduled at 2025-05-17 14:39:27.671462+00:00)
+2025-05-17 14:39:27,710 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 14:44:27 UTC)" (scheduled at 2025-05-17 14:39:27.709997+00:00)
+2025-05-17 14:39:27,711 [INFO] Reloading sync jobs from database.
+2025-05-17 14:39:27,714 [INFO] Fetched 1 scheduled tasks from DB.
+2025-05-17 14:39:27,714 [INFO] Job dbtask_1 (Sync for Connection 7) exists. Overwrite=True. Checking for trigger changes.
+2025-05-17 14:39:27,715 [INFO] Job dbtask_1 trigger is effectively unchanged (interval[1:00:00]). No reschedule needed. Payload changes handled by wrapper at runtime. Next run: 2025-05-17 15:29:27.708455+00:00
+2025-05-17 14:39:27,715 [INFO] Sync jobs reload complete.
+2025-05-17 14:39:27,715 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 14:44:27 UTC)" executed successfully
+2025-05-17 14:39:27,774 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:40:27 UTC)" executed successfully
+2025-05-17 14:40:27,672 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:41:27 UTC)" (scheduled at 2025-05-17 14:40:27.671462+00:00)
+2025-05-17 14:40:27,775 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:41:27 UTC)" executed successfully
+2025-05-17 14:41:27,672 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:42:27 UTC)" (scheduled at 2025-05-17 14:41:27.671462+00:00)
+2025-05-17 14:41:27,774 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:42:27 UTC)" executed successfully
+2025-05-17 14:42:27,674 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:43:27 UTC)" (scheduled at 2025-05-17 14:42:27.671462+00:00)
+2025-05-17 14:42:27,776 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:43:27 UTC)" executed successfully
+2025-05-17 14:43:27,674 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:44:27 UTC)" (scheduled at 2025-05-17 14:43:27.671462+00:00)
+2025-05-17 14:43:27,778 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:44:27 UTC)" executed successfully
+2025-05-17 14:44:27,672 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:45:27 UTC)" (scheduled at 2025-05-17 14:44:27.671462+00:00)
+2025-05-17 14:44:27,710 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 14:49:27 UTC)" (scheduled at 2025-05-17 14:44:27.709997+00:00)
+2025-05-17 14:44:27,711 [INFO] Reloading sync jobs from database.
+2025-05-17 14:44:27,714 [INFO] Fetched 1 scheduled tasks from DB.
+2025-05-17 14:44:27,715 [INFO] Job dbtask_1 (Sync for Connection 7) exists. Overwrite=True. Checking for trigger changes.
+2025-05-17 14:44:27,716 [INFO] Job dbtask_1 trigger is effectively unchanged (interval[1:00:00]). No reschedule needed. Payload changes handled by wrapper at runtime. Next run: 2025-05-17 15:29:27.708455+00:00
+2025-05-17 14:44:27,716 [INFO] Sync jobs reload complete.
+2025-05-17 14:44:27,717 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 14:49:27 UTC)" executed successfully
+2025-05-17 14:44:27,775 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:45:27 UTC)" executed successfully
+2025-05-17 14:45:27,675 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:46:27 UTC)" (scheduled at 2025-05-17 14:45:27.671462+00:00)
+2025-05-17 14:45:27,778 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:46:27 UTC)" executed successfully
+2025-05-17 14:46:27,673 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:47:27 UTC)" (scheduled at 2025-05-17 14:46:27.671462+00:00)
+2025-05-17 14:46:27,776 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:47:27 UTC)" executed successfully
+2025-05-17 14:47:27,672 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:48:27 UTC)" (scheduled at 2025-05-17 14:47:27.671462+00:00)
+2025-05-17 14:47:27,774 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:48:27 UTC)" executed successfully
+2025-05-17 14:47:46,131 [INFO] Scheduler has been shut down
+2025-05-17 14:47:46,429 [INFO] Scheduler has been shut down
+2025-05-17 14:48:36,709 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 14:48:36,710 [INFO] Scheduled metrics collection.
+2025-05-17 14:48:36,710 [INFO] DatabaseSync instance initializing...
+2025-05-17 14:48:36,710 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 14:48:36,712 [INFO] Fetched 1 scheduled tasks from DB.
+2025-05-17 14:48:36,713 [INFO] Job dbtask_1 (Sync for Connection 7) does not exist. Adding new job for schedule: hourly
+2025-05-17 14:48:36,713 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 14:48:36,713 [INFO] Job dbtask_1 (Sync for Connection 7) submitted to scheduler with trigger: interval[1:00:00]. Next run time will be determined by scheduler.
+2025-05-17 14:48:36,714 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 14:48:36,714 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 14:48:36,714 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 14:48:36,720 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 14:48:36,720 [INFO] Added job "DatabaseSync._schedule_tasks.<locals>.<lambda>" to job store "default"
+2025-05-17 14:48:36,720 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 14:48:36,721 [INFO] Scheduler started
+2025-05-17 14:48:36,722 [INFO] APScheduler started by main application module.
+2025-05-17 14:49:36,713 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:49:36 UTC)" (scheduled at 2025-05-17 14:49:36.709584+00:00)
+2025-05-17 14:49:36,817 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:50:36 UTC)" executed successfully
+2025-05-17 14:50:36,710 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:51:36 UTC)" (scheduled at 2025-05-17 14:50:36.709584+00:00)
+2025-05-17 14:50:36,812 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:51:36 UTC)" executed successfully
+2025-05-17 14:51:36,710 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:52:36 UTC)" (scheduled at 2025-05-17 14:51:36.709584+00:00)
+2025-05-17 14:51:36,812 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:52:36 UTC)" executed successfully
+2025-05-17 14:52:36,710 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:53:36 UTC)" (scheduled at 2025-05-17 14:52:36.709584+00:00)
+2025-05-17 14:52:36,812 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:53:36 UTC)" executed successfully
+2025-05-17 14:53:36,710 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:54:36 UTC)" (scheduled at 2025-05-17 14:53:36.709584+00:00)
+2025-05-17 14:53:36,715 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 14:53:36 UTC)" (scheduled at 2025-05-17 14:53:36.714203+00:00)
+2025-05-17 14:53:36,715 [INFO] Reloading sync jobs from database.
+2025-05-17 14:53:36,717 [INFO] Fetched 1 scheduled tasks from DB.
+2025-05-17 14:53:36,718 [INFO] Job dbtask_1 (Sync for Connection 7) exists. Overwrite=True. Checking for trigger changes.
+2025-05-17 14:53:36,718 [INFO] Job dbtask_1 trigger is effectively unchanged (interval[1:00:00]). No reschedule needed. Payload changes handled by wrapper at runtime. Next run: 2025-05-17 15:48:36.713163+00:00
+2025-05-17 14:53:36,719 [INFO] Sync jobs reload complete.
+2025-05-17 14:53:36,719 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 14:58:36 UTC)" executed successfully
+2025-05-17 14:53:36,812 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:54:36 UTC)" executed successfully
+2025-05-17 14:54:36,710 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:55:36 UTC)" (scheduled at 2025-05-17 14:54:36.709584+00:00)
+2025-05-17 14:54:36,812 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:55:36 UTC)" executed successfully
+2025-05-17 14:55:36,710 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:56:36 UTC)" (scheduled at 2025-05-17 14:55:36.709584+00:00)
+2025-05-17 14:55:36,812 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:56:36 UTC)" executed successfully
+2025-05-17 14:56:36,710 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:57:36 UTC)" (scheduled at 2025-05-17 14:56:36.709584+00:00)
+2025-05-17 14:56:36,812 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:57:36 UTC)" executed successfully
+2025-05-17 14:57:36,710 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:58:36 UTC)" (scheduled at 2025-05-17 14:57:36.709584+00:00)
+2025-05-17 14:57:36,812 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:58:36 UTC)" executed successfully
+2025-05-17 14:58:36,710 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:59:36 UTC)" (scheduled at 2025-05-17 14:58:36.709584+00:00)
+2025-05-17 14:58:36,714 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:03:36 UTC)" (scheduled at 2025-05-17 14:58:36.714203+00:00)
+2025-05-17 14:58:36,715 [INFO] Reloading sync jobs from database.
+2025-05-17 14:58:36,718 [INFO] Fetched 1 scheduled tasks from DB.
+2025-05-17 14:58:36,719 [INFO] Job dbtask_1 (Sync for Connection 7) exists. Overwrite=True. Checking for trigger changes.
+2025-05-17 14:58:36,720 [INFO] Job dbtask_1 trigger is effectively unchanged (interval[1:00:00]). No reschedule needed. Payload changes handled by wrapper at runtime. Next run: 2025-05-17 15:48:36.713163+00:00
+2025-05-17 14:58:36,720 [INFO] Sync jobs reload complete.
+2025-05-17 14:58:36,721 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:03:36 UTC)" executed successfully
+2025-05-17 14:58:36,812 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 14:59:36 UTC)" executed successfully
+2025-05-17 14:58:37,522 [INFO] Scheduler has been shut down
+2025-05-17 14:58:37,721 [INFO] Scheduler has been shut down
+2025-05-17 14:59:27,548 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 14:59:27,548 [INFO] Scheduled metrics collection.
+2025-05-17 14:59:27,549 [INFO] DatabaseSync instance initializing...
+2025-05-17 14:59:27,549 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 14:59:27,550 [ERROR] DB not found: /app/backend/data/mole.db
+2025-05-17 14:59:27,550 [ERROR] Error fetching tasks: DB not found: /app/backend/data/mole.db
+Traceback (most recent call last):
+  File "/app/sync_manager.py", line 116, in _fetch_sync_tasks_from_db
+    with self._get_db_connection() as conn:
+  File "/app/sync_manager.py", line 108, in _get_db_connection
+    raise FileNotFoundError(f"DB not found: {BACKEND_DB_PATH}")
+FileNotFoundError: DB not found: /app/backend/data/mole.db
+2025-05-17 14:59:27,551 [INFO] No initial tasks to schedule from DB.
+2025-05-17 14:59:27,552 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 14:59:27,552 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 14:59:27,553 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 14:59:27,561 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 14:59:27,562 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 14:59:27,562 [INFO] Scheduler started
+2025-05-17 14:59:27,564 [INFO] APScheduler started by main application module.
+2025-05-17 14:59:51,755 [INFO] Scheduler has been shut down
+2025-05-17 14:59:51,954 [INFO] Scheduler has been shut down
+2025-05-17 15:07:32,663 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 15:07:32,663 [INFO] Scheduled metrics collection.
+2025-05-17 15:07:32,664 [INFO] DatabaseSync instance initializing...
+2025-05-17 15:07:32,677 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 15:07:32,678 [ERROR] DB not found: /app/backend/data/mole.db
+2025-05-17 15:07:32,679 [ERROR] Error fetching tasks: DB not found: /app/backend/data/mole.db
+Traceback (most recent call last):
+  File "/app/sync_manager.py", line 116, in _fetch_sync_tasks_from_db
+    with self._get_db_connection() as conn:
+  File "/app/sync_manager.py", line 108, in _get_db_connection
+    raise FileNotFoundError(f"DB not found: {BACKEND_DB_PATH}")
+FileNotFoundError: DB not found: /app/backend/data/mole.db
+2025-05-17 15:07:32,682 [INFO] No initial tasks to schedule from DB.
+2025-05-17 15:07:32,689 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 15:07:32,690 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 15:07:32,690 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 15:07:32,696 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 15:07:32,708 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 15:07:32,709 [INFO] Scheduler started
+2025-05-17 15:07:32,711 [INFO] APScheduler started by main application module.
+2025-05-17 15:08:32,668 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:08:32 UTC)" (scheduled at 2025-05-17 15:08:32.662959+00:00)
+2025-05-17 15:08:32,772 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:09:32 UTC)" executed successfully
+2025-05-17 15:09:32,664 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:10:32 UTC)" (scheduled at 2025-05-17 15:09:32.662959+00:00)
+2025-05-17 15:09:32,767 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:10:32 UTC)" executed successfully
+2025-05-17 15:10:32,664 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:11:32 UTC)" (scheduled at 2025-05-17 15:10:32.662959+00:00)
+2025-05-17 15:10:32,766 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:11:32 UTC)" executed successfully
+2025-05-17 15:11:32,664 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:12:32 UTC)" (scheduled at 2025-05-17 15:11:32.662959+00:00)
+2025-05-17 15:11:32,766 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:12:32 UTC)" executed successfully
+2025-05-17 15:12:32,665 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:13:32 UTC)" (scheduled at 2025-05-17 15:12:32.662959+00:00)
+2025-05-17 15:12:32,690 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:12:32 UTC)" (scheduled at 2025-05-17 15:12:32.689418+00:00)
+2025-05-17 15:12:32,691 [INFO] Reloading sync jobs from database.
+2025-05-17 15:12:32,695 [INFO] Fetched 0 scheduled tasks from DB.
+2025-05-17 15:12:32,695 [INFO] Sync jobs reload complete.
+2025-05-17 15:12:32,695 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:17:32 UTC)" executed successfully
+2025-05-17 15:12:32,767 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:13:32 UTC)" executed successfully
+2025-05-17 15:13:32,664 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:14:32 UTC)" (scheduled at 2025-05-17 15:13:32.662959+00:00)
+2025-05-17 15:13:32,766 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:14:32 UTC)" executed successfully
+2025-05-17 15:14:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:15:32 UTC)" (scheduled at 2025-05-17 15:14:32.662959+00:00)
+2025-05-17 15:14:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:15:32 UTC)" executed successfully
+2025-05-17 15:15:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:16:32 UTC)" (scheduled at 2025-05-17 15:15:32.662959+00:00)
+2025-05-17 15:15:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:16:32 UTC)" executed successfully
+2025-05-17 15:16:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:17:32 UTC)" (scheduled at 2025-05-17 15:16:32.662959+00:00)
+2025-05-17 15:16:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:17:32 UTC)" executed successfully
+2025-05-17 15:17:32,664 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:18:32 UTC)" (scheduled at 2025-05-17 15:17:32.662959+00:00)
+2025-05-17 15:17:32,690 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:22:32 UTC)" (scheduled at 2025-05-17 15:17:32.689418+00:00)
+2025-05-17 15:17:32,690 [INFO] Reloading sync jobs from database.
+2025-05-17 15:17:32,692 [INFO] Fetched 0 scheduled tasks from DB.
+2025-05-17 15:17:32,693 [INFO] Sync jobs reload complete.
+2025-05-17 15:17:32,693 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:22:32 UTC)" executed successfully
+2025-05-17 15:17:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:18:32 UTC)" executed successfully
+2025-05-17 15:18:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:19:32 UTC)" (scheduled at 2025-05-17 15:18:32.662959+00:00)
+2025-05-17 15:18:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:19:32 UTC)" executed successfully
+2025-05-17 15:19:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:20:32 UTC)" (scheduled at 2025-05-17 15:19:32.662959+00:00)
+2025-05-17 15:19:32,766 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:20:32 UTC)" executed successfully
+2025-05-17 15:20:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:21:32 UTC)" (scheduled at 2025-05-17 15:20:32.662959+00:00)
+2025-05-17 15:20:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:21:32 UTC)" executed successfully
+2025-05-17 15:21:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:22:32 UTC)" (scheduled at 2025-05-17 15:21:32.662959+00:00)
+2025-05-17 15:21:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:22:32 UTC)" executed successfully
+2025-05-17 15:22:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:23:32 UTC)" (scheduled at 2025-05-17 15:22:32.662959+00:00)
+2025-05-17 15:22:32,690 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:27:32 UTC)" (scheduled at 2025-05-17 15:22:32.689418+00:00)
+2025-05-17 15:22:32,690 [INFO] Reloading sync jobs from database.
+2025-05-17 15:22:32,692 [INFO] Fetched 0 scheduled tasks from DB.
+2025-05-17 15:22:32,693 [INFO] Sync jobs reload complete.
+2025-05-17 15:22:32,693 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:27:32 UTC)" executed successfully
+2025-05-17 15:22:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:23:32 UTC)" executed successfully
+2025-05-17 15:23:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:24:32 UTC)" (scheduled at 2025-05-17 15:23:32.662959+00:00)
+2025-05-17 15:23:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:24:32 UTC)" executed successfully
+2025-05-17 15:24:32,663 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:25:32 UTC)" (scheduled at 2025-05-17 15:24:32.662959+00:00)
+2025-05-17 15:24:32,765 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:25:32 UTC)" executed successfully
+2025-05-17 15:25:25,708 [INFO] Scheduler has been shut down
+2025-05-17 15:25:25,907 [INFO] Scheduler has been shut down
+2025-05-17 15:26:47,348 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 15:26:47,348 [INFO] Scheduled metrics collection.
+2025-05-17 15:26:47,348 [INFO] DatabaseSync instance initializing...
+2025-05-17 15:26:47,349 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 15:26:47,349 [ERROR] DB not found: /app/backend/data/mole.db
+2025-05-17 15:26:47,349 [ERROR] Error fetching tasks: DB not found: /app/backend/data/mole.db
+Traceback (most recent call last):
+  File "/app/sync_manager.py", line 116, in _fetch_sync_tasks_from_db
+    with self._get_db_connection() as conn:
+  File "/app/sync_manager.py", line 108, in _get_db_connection
+    raise FileNotFoundError(f"DB not found: {BACKEND_DB_PATH}")
+FileNotFoundError: DB not found: /app/backend/data/mole.db
+2025-05-17 15:26:47,350 [INFO] No initial tasks to schedule from DB.
+2025-05-17 15:26:47,351 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 15:26:47,351 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 15:26:47,352 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 15:26:47,357 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 15:26:47,357 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 15:26:47,358 [INFO] Scheduler started
+2025-05-17 15:26:47,360 [INFO] APScheduler started by main application module.
+2025-05-17 15:27:47,352 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:27:47 UTC)" (scheduled at 2025-05-17 15:27:47.347803+00:00)
+2025-05-17 15:27:47,457 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:28:47 UTC)" executed successfully
+2025-05-17 15:28:47,348 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:29:47 UTC)" (scheduled at 2025-05-17 15:28:47.347803+00:00)
+2025-05-17 15:28:47,450 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:29:47 UTC)" executed successfully
+2025-05-17 15:29:47,348 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:30:47 UTC)" (scheduled at 2025-05-17 15:29:47.347803+00:00)
+2025-05-17 15:29:47,450 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:30:47 UTC)" executed successfully
+2025-05-17 15:30:47,348 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:31:47 UTC)" (scheduled at 2025-05-17 15:30:47.347803+00:00)
+2025-05-17 15:30:47,450 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:31:47 UTC)" executed successfully
+2025-05-17 15:31:47,348 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:32:47 UTC)" (scheduled at 2025-05-17 15:31:47.347803+00:00)
+2025-05-17 15:31:47,352 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:31:47 UTC)" (scheduled at 2025-05-17 15:31:47.351217+00:00)
+2025-05-17 15:31:47,353 [INFO] Reloading sync jobs from database.
+2025-05-17 15:31:47,355 [ERROR] Error fetching tasks: no such table: sync_tasks
+Traceback (most recent call last):
+  File "/app/sync_manager.py", line 131, in _fetch_sync_tasks_from_db
+    cursor.execute(query)
+sqlite3.OperationalError: no such table: sync_tasks
+2025-05-17 15:31:47,356 [INFO] Sync jobs reload complete.
+2025-05-17 15:31:47,357 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:36:47 UTC)" executed successfully
+2025-05-17 15:31:47,450 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:32:47 UTC)" executed successfully
+2025-05-17 15:32:07,673 [INFO] Scheduler has been shut down
+2025-05-17 15:32:07,872 [INFO] Scheduler has been shut down
+2025-05-17 15:32:49,303 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 15:32:49,304 [INFO] Scheduled metrics collection.
+2025-05-17 15:32:49,305 [INFO] DatabaseSync instance initializing...
+2025-05-17 15:32:49,305 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 15:32:49,306 [ERROR] DB not found: /app/backend/data/mole.db
+2025-05-17 15:32:49,307 [ERROR] Error fetching tasks: DB not found: /app/backend/data/mole.db
+Traceback (most recent call last):
+  File "/app/sync_manager.py", line 116, in _fetch_sync_tasks_from_db
+    with self._get_db_connection() as conn:
+  File "/app/sync_manager.py", line 108, in _get_db_connection
+    raise FileNotFoundError(f"DB not found: {BACKEND_DB_PATH}")
+FileNotFoundError: DB not found: /app/backend/data/mole.db
+2025-05-17 15:32:49,309 [INFO] No initial tasks to schedule from DB.
+2025-05-17 15:32:49,310 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 15:32:49,322 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 15:32:49,323 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 15:32:49,332 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 15:32:49,333 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 15:32:49,334 [INFO] Scheduler started
+2025-05-17 15:32:49,336 [INFO] APScheduler started by main application module.
+2025-05-17 15:33:49,312 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:33:49 UTC)" (scheduled at 2025-05-17 15:33:49.302888+00:00)
+2025-05-17 15:33:49,416 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:34:49 UTC)" executed successfully
+2025-05-17 15:34:49,304 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:35:49 UTC)" (scheduled at 2025-05-17 15:34:49.302888+00:00)
+2025-05-17 15:34:49,406 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:35:49 UTC)" executed successfully
+2025-05-17 15:35:49,304 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:36:49 UTC)" (scheduled at 2025-05-17 15:35:49.302888+00:00)
+2025-05-17 15:35:49,406 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:36:49 UTC)" executed successfully
+2025-05-17 15:36:49,304 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:37:49 UTC)" (scheduled at 2025-05-17 15:36:49.302888+00:00)
+2025-05-17 15:36:49,407 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:37:49 UTC)" executed successfully
+2025-05-17 15:37:49,304 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:38:49 UTC)" (scheduled at 2025-05-17 15:37:49.302888+00:00)
+2025-05-17 15:37:49,311 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:37:49 UTC)" (scheduled at 2025-05-17 15:37:49.310161+00:00)
+2025-05-17 15:37:49,311 [INFO] Reloading sync jobs from database.
+2025-05-17 15:37:49,315 [INFO] Fetched 0 scheduled tasks from DB.
+2025-05-17 15:37:49,316 [INFO] Sync jobs reload complete.
+2025-05-17 15:37:49,316 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 15:42:49 UTC)" executed successfully
+2025-05-17 15:37:49,405 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:38:49 UTC)" executed successfully
+2025-05-17 15:38:30,584 [INFO] Scheduler has been shut down
+2025-05-17 15:38:30,879 [INFO] Scheduler has been shut down
+2025-05-17 15:44:05,017 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 15:44:05,017 [INFO] Scheduled metrics collection.
+2025-05-17 15:44:05,018 [INFO] DatabaseSync instance initializing...
+2025-05-17 15:44:05,018 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 15:44:05,018 [ERROR] DB not found: /app/backend/data/mole.db
+2025-05-17 15:44:05,019 [ERROR] Error fetching tasks: DB not found: /app/backend/data/mole.db
+Traceback (most recent call last):
+  File "/app/sync_manager.py", line 116, in _fetch_sync_tasks_from_db
+    with self._get_db_connection() as conn:
+  File "/app/sync_manager.py", line 108, in _get_db_connection
+    raise FileNotFoundError(f"DB not found: {BACKEND_DB_PATH}")
+FileNotFoundError: DB not found: /app/backend/data/mole.db
+2025-05-17 15:44:05,020 [INFO] No initial tasks to schedule from DB.
+2025-05-17 15:44:05,020 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 15:44:05,021 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 15:44:05,021 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 15:44:05,028 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 15:44:05,029 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 15:44:05,029 [INFO] Scheduler started
+2025-05-17 15:44:05,031 [INFO] APScheduler started by main application module.
+2025-05-17 15:45:05,020 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:45:05 UTC)" (scheduled at 2025-05-17 15:45:05.017205+00:00)
+2025-05-17 15:45:05,124 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:46:05 UTC)" executed successfully
+2025-05-17 15:46:05,018 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:47:05 UTC)" (scheduled at 2025-05-17 15:46:05.017205+00:00)
+2025-05-17 15:46:05,120 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:47:05 UTC)" executed successfully
+2025-05-17 15:47:05,018 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:48:05 UTC)" (scheduled at 2025-05-17 15:47:05.017205+00:00)
+2025-05-17 15:47:05,119 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:48:05 UTC)" executed successfully
+2025-05-17 15:48:05,018 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:49:05 UTC)" (scheduled at 2025-05-17 15:48:05.017205+00:00)
+2025-05-17 15:48:05,120 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 15:49:05 UTC)" executed successfully
+2025-05-17 15:48:22,312 [INFO] Scheduler has been shut down
+2025-05-17 15:48:22,512 [INFO] Scheduler has been shut down
+2025-05-17 16:02:01,958 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:02:01,959 [INFO] Scheduled metrics collection.
+2025-05-17 16:02:01,959 [INFO] DatabaseSync instance initializing...
+2025-05-17 16:02:01,959 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 16:02:01,968 [INFO] Fetched 0 scheduled tasks from DB.
+2025-05-17 16:02:01,969 [INFO] No initial tasks to schedule from DB.
+2025-05-17 16:02:01,970 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:02:01,970 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 16:02:01,970 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 16:02:01,976 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 16:02:01,978 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 16:02:01,979 [INFO] Scheduler started
+2025-05-17 16:02:01,980 [INFO] APScheduler started by main application module.
+2025-05-17 16:03:01,962 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:03:01 UTC)" (scheduled at 2025-05-17 16:03:01.958283+00:00)
+2025-05-17 16:03:02,066 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:04:01 UTC)" executed successfully
+2025-05-17 16:04:01,959 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:05:01 UTC)" (scheduled at 2025-05-17 16:04:01.958283+00:00)
+2025-05-17 16:04:02,061 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:05:01 UTC)" executed successfully
+2025-05-17 16:05:01,959 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:06:01 UTC)" (scheduled at 2025-05-17 16:05:01.958283+00:00)
+2025-05-17 16:05:02,060 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:06:01 UTC)" executed successfully
+2025-05-17 16:06:01,959 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:07:01 UTC)" (scheduled at 2025-05-17 16:06:01.958283+00:00)
+2025-05-17 16:06:02,061 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:07:01 UTC)" executed successfully
+2025-05-17 16:06:09,303 [INFO] Scheduler has been shut down
+2025-05-17 16:06:09,503 [INFO] Scheduler has been shut down
+2025-05-17 16:11:44,632 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:11:44,633 [INFO] Scheduled metrics collection.
+2025-05-17 16:11:44,633 [INFO] DatabaseSync instance initializing...
+2025-05-17 16:11:44,634 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 16:11:44,634 [ERROR] DB not found: /app/backend/data/mole.db
+2025-05-17 16:11:44,635 [ERROR] Error fetching tasks: DB not found: /app/backend/data/mole.db
+Traceback (most recent call last):
+  File "/app/sync_manager.py", line 116, in _fetch_sync_tasks_from_db
+    with self._get_db_connection() as conn:
+  File "/app/sync_manager.py", line 108, in _get_db_connection
+    raise FileNotFoundError(f"DB not found: {BACKEND_DB_PATH}")
+FileNotFoundError: DB not found: /app/backend/data/mole.db
+2025-05-17 16:11:44,636 [INFO] No initial tasks to schedule from DB.
+2025-05-17 16:11:44,637 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:11:44,637 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 16:11:44,638 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 16:11:44,645 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 16:11:44,646 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 16:11:44,646 [INFO] Scheduler started
+2025-05-17 16:11:44,648 [INFO] APScheduler started by main application module.
+2025-05-17 16:12:44,635 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:12:44 UTC)" (scheduled at 2025-05-17 16:12:44.631971+00:00)
+2025-05-17 16:12:44,738 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:13:44 UTC)" executed successfully
+2025-05-17 16:12:57,470 [INFO] Scheduler has been shut down
+2025-05-17 16:12:57,669 [INFO] Scheduler has been shut down
+2025-05-17 16:18:22,617 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:18:22,628 [INFO] Scheduled metrics collection.
+2025-05-17 16:18:22,628 [INFO] DatabaseSync instance initializing...
+2025-05-17 16:18:22,628 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 16:18:22,647 [INFO] Fetched 0 scheduled tasks from DB.
+2025-05-17 16:18:22,648 [INFO] No initial tasks to schedule from DB.
+2025-05-17 16:18:22,648 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:18:22,649 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 16:18:22,649 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 16:18:22,654 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 16:18:22,655 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 16:18:22,655 [INFO] Scheduler started
+2025-05-17 16:18:22,656 [INFO] APScheduler started by main application module.
+2025-05-17 16:19:22,622 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:19:22 UTC)" (scheduled at 2025-05-17 16:19:22.617613+00:00)
+2025-05-17 16:19:22,725 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:20:22 UTC)" executed successfully
+2025-05-17 16:20:22,618 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:21:22 UTC)" (scheduled at 2025-05-17 16:20:22.617613+00:00)
+2025-05-17 16:20:22,720 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:21:22 UTC)" executed successfully
+2025-05-17 16:21:22,618 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:22:22 UTC)" (scheduled at 2025-05-17 16:21:22.617613+00:00)
+2025-05-17 16:21:22,720 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:22:22 UTC)" executed successfully
+2025-05-17 16:21:47,454 [INFO] Scheduler has been shut down
+2025-05-17 16:21:47,654 [INFO] Scheduler has been shut down
+2025-05-17 16:27:27,172 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:27:27,172 [INFO] Scheduled metrics collection.
+2025-05-17 16:27:27,173 [INFO] DatabaseSync instance initializing...
+2025-05-17 16:27:27,173 [INFO] Initial setup of scheduled jobs from database...
+2025-05-17 16:27:27,188 [INFO] Fetched 0 scheduled tasks from DB.
+2025-05-17 16:27:27,194 [INFO] No initial tasks to schedule from DB.
+2025-05-17 16:27:27,195 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-17 16:27:27,195 [INFO] Scheduled periodic reload of sync jobs every 5 minutes.
+2025-05-17 16:27:27,196 [INFO] DatabaseSync instance created, initial jobs scheduled from DB.
+2025-05-17 16:27:27,208 [INFO] Added job "collect_metrics" to job store "default"
+2025-05-17 16:27:27,209 [INFO] Added job "DatabaseSync._reload_config" to job store "default"
+2025-05-17 16:27:27,210 [INFO] Scheduler started
+2025-05-17 16:27:27,212 [INFO] APScheduler started by main application module.
+2025-05-17 16:28:27,177 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:28:27 UTC)" (scheduled at 2025-05-17 16:28:27.171945+00:00)
+2025-05-17 16:28:27,281 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:29:27 UTC)" executed successfully
+2025-05-17 16:29:27,173 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:30:27 UTC)" (scheduled at 2025-05-17 16:29:27.171945+00:00)
+2025-05-17 16:29:27,275 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:30:27 UTC)" executed successfully
+2025-05-17 16:30:27,173 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:31:27 UTC)" (scheduled at 2025-05-17 16:30:27.171945+00:00)
+2025-05-17 16:30:27,274 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:31:27 UTC)" executed successfully
+2025-05-17 16:31:27,173 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:32:27 UTC)" (scheduled at 2025-05-17 16:31:27.171945+00:00)
+2025-05-17 16:31:27,274 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:32:27 UTC)" executed successfully
+2025-05-17 16:32:27,172 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:33:27 UTC)" (scheduled at 2025-05-17 16:32:27.171945+00:00)
+2025-05-17 16:32:27,196 [INFO] Running job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 16:32:27 UTC)" (scheduled at 2025-05-17 16:32:27.194975+00:00)
+2025-05-17 16:32:27,196 [INFO] Reloading sync jobs from database.
+2025-05-17 16:32:27,200 [INFO] Fetched 0 scheduled tasks from DB.
+2025-05-17 16:32:27,200 [INFO] Sync jobs reload complete.
+2025-05-17 16:32:27,200 [INFO] Job "DatabaseSync._reload_config (trigger: interval[0:05:00], next run at: 2025-05-17 16:37:27 UTC)" executed successfully
+2025-05-17 16:32:27,274 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:33:27 UTC)" executed successfully
+2025-05-17 16:33:27,172 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:34:27 UTC)" (scheduled at 2025-05-17 16:33:27.171945+00:00)
+2025-05-17 16:33:27,274 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:34:27 UTC)" executed successfully
+2025-05-17 16:34:27,172 [INFO] Running job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:35:27 UTC)" (scheduled at 2025-05-17 16:34:27.171945+00:00)
+2025-05-17 16:34:27,274 [INFO] Job "collect_metrics (trigger: interval[0:01:00], next run at: 2025-05-17 16:35:27 UTC)" executed successfully
