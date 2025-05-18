@@ -37,4 +37,4 @@ EXPOSE 3001
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # Command to run the server (will be passed to entrypoint)
-CMD ["node", "server.js"] 
+# CMD ["node", "server.js"] 

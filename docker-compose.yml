@@ -46,6 +46,7 @@ services:
       - DEFAULT_INFLUXDB_ADMIN_ORG=${INFLUXDB_ADMIN_ORG}
       - DEFAULT_INFLUXDB_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
       - DB_CREATE_INFLUXDB_URL=http://mole-influxdb:8086 # Default URL for InfluxDB admin operations
+    command: node server.js
     volumes:
       # Don't mount the entire /app directory, just the specific files/directories we need
       - ./app/backend/controllers:/app/controllers

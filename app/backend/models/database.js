@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const { getDirectSqliteConnection } = require('../config/database');
 const { Sequelize, DataTypes } = require('sequelize');
+const bcrypt = require('bcryptjs');
 
 // Ensure data directory exists
 const ensureDataDirExists = () => {
@@ -119,10 +120,10 @@ const runMigrations = async (db) => {
   
   // Migration logic for users from users.json to users table
   try {
-    const usersCount = await db.get('SELECT COUNT(*) as count FROM users');
+    const usersCountResult = await db.get('SELECT COUNT(*) as count FROM users');
     const usersJsonPath = path.join(__dirname, '../data/users.json');
 
-    if (usersCount.count === 0 && fs.existsSync(usersJsonPath)) {
+    if (usersCountResult.count === 0 && fs.existsSync(usersJsonPath)) {
       console.log('Migrating users from users.json to users table...');
       const usersData = JSON.parse(fs.readFileSync(usersJsonPath, 'utf-8'));
       
@@ -172,13 +173,38 @@ const runMigrations = async (db) => {
       await stmt.finalize();
       fs.renameSync(usersJsonPath, `${usersJsonPath}.migrated_to_db`);
       console.log('Users migration completed. users.json renamed.');
-    } else if (usersCount.count > 0) {
+    } else if (usersCountResult.count > 0) {
       console.log('Users table already populated. Skipping users.json migration.');
     } else if (!fs.existsSync(usersJsonPath)) {
       console.log('users.json not found. Skipping users.json migration.');
     }
+
+    // After attempting migration, check if users table is still empty.
+    // If so, and no users.json was found to migrate, create the default demo user.
+    const finalUsersCountResult = await db.get('SELECT COUNT(*) as count FROM users');
+    if (finalUsersCountResult.count === 0) {
+      console.log('No users found in DB and no users.json to migrate. Creating default demo user...');
+      const demoEmail = 'demo@example.com';
+      const demoPasswordHash = await bcrypt.hash('demo', 10);
+      const demoName = 'Demo User';
+      const demoRole = 'user';
+      const demoCreatedAt = new Date().toISOString();
+      try {
+        await db.run(
+          'INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)',
+          demoName, demoEmail, demoPasswordHash, demoRole, demoCreatedAt
+        );
+        console.log('Default demo user (demo@example.com) created successfully.');
+      } catch (demoUserError) {
+        if (demoUserError.message && demoUserError.message.includes('UNIQUE constraint failed: users.email')) {
+          console.warn('Attempted to create demo user, but email already exists. This should not happen if count was 0.');
+        } else {
+          console.error('Error creating default demo user:', demoUserError);
+        }
+      }
+    }
   } catch (migrationError) {
-    console.error('Migration Error (Users from JSON):', migrationError);
+    console.error('Migration Error (Users from JSON or default user):', migrationError);
   }
   console.log("Migration checks finished.");
 };
@@ -291,6 +317,16 @@ const initDatabaseInternal = async () => {
   }
   
   await runMigrations(db);
+  
+  // Close the direct database connection before letting Sequelize sync its models
+  try {
+    console.log('Closing direct SQLite connection before Sequelize sync...');
+    await db.close();
+    console.log('Direct SQLite connection closed.');
+  } catch (closeError) {
+    console.error('Error closing direct SQLite connection:', closeError);
+    // Decide if this is fatal or if Sequelize might still work
+  }
   
   try {
     await sequelize.sync();
