@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -50,6 +50,7 @@ const Logo = styled('img')({
 
 export default function Setup() {
   const navigate = useNavigate();
+  const { login: loginUserContext } = useContext(UserContext);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -131,6 +132,8 @@ export default function Setup() {
     try {
       const response = await AuthService.login('demo@example.com', 'demo');
       if (response.success && response.user) {
+        loginUserContext(response.user);
+
         setSnackbar({
           open: true,
           message: 'Logged in as Demo User! Redirecting to dashboard...',

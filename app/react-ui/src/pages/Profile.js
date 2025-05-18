@@ -58,6 +58,24 @@ import AuthService from '../services/AuthService';
 import { getApiBaseUrl } from '../services/api';
 import { UserContext } from '../components/UserContext';
 
+// HIER die formatDateTime Funktion einfügen
+const formatDateTime = (isoString) => {
+  if (!isoString) return 'N/A';
+  try {
+    const date = new Date(isoString);
+    const optionsDate = { day: '2-digit', month: '2-digit', year: 'numeric' };
+    const optionsTime = { hour: '2-digit', minute: '2-digit', hour12: false };
+    
+    const formattedDate = date.toLocaleDateString('de-DE', optionsDate);
+    const formattedTime = date.toLocaleTimeString('de-DE', optionsTime);
+    
+    return `${formattedDate} - ${formattedTime} Uhr`;
+  } catch (e) {
+    console.error("Error formatting date:", isoString, e);
+    return 'Invalid Date';
+  }
+};
+
 // Define default preferences structure locally for fallbacks if needed, mirroring UserContext
 const defaultUserPreferences = {
   notifications: {
@@ -118,6 +136,7 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
 }));
 
 // Mock user data
+/*
 const mockUser = {
   id: 1,
   username: 'admin',
@@ -133,6 +152,7 @@ const mockUser = {
     showSampleDatabases: true
   }
 };
+*/
 
 // Custom TabPanel component
 function TabPanel(props) {
@@ -159,10 +179,11 @@ export default function Profile() {
   const theme = useTheme();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
+  const { user, updateUser: updateUserContext, updateUserPreferences, loading: userLoading } = useContext(UserContext);
   const [activeTab, setActiveTab] = useState(0);
   const [editMode, setEditMode] = useState(false);
-  const [userData, setUserData] = useState(mockUser);
-  const [formData, setFormData] = useState({...mockUser});
+  const [userData, setUserData] = useState(null);
+  const [formData, setFormData] = useState(null);
   const [databaseConnections, setDatabaseConnections] = useState([]);
   const [loadingConnections, setLoadingConnections] = useState(true);
   const [profileImageFile, setProfileImageFile] = useState(null);
@@ -189,44 +210,6 @@ export default function Profile() {
     message: ''
   });
   
-  const { user, updateUser: updateUserContext, updateUserPreferences } = useContext(UserContext);
-  
-  // Helper function to format date and time
-  const formatDateTime = (isoString) => {
-    if (!isoString) return 'N/A';
-    try {
-      const date = new Date(isoString);
-      const optionsDate = { day: '2-digit', month: '2-digit', year: 'numeric' };
-      const optionsTime = { hour: '2-digit', minute: '2-digit', hour12: false }; // Use hour12: false for 24-hour format
-      
-      const formattedDate = date.toLocaleDateString('de-DE', optionsDate);
-      const formattedTime = date.toLocaleTimeString('de-DE', optionsTime);
-      
-      return `${formattedDate} - ${formattedTime} Uhr`;
-    } catch (e) {
-      console.error("Error formatting date:", isoString, e);
-      return 'Invalid Date';
-    }
-  };
-  
-  // Load database connections from API
-  const fetchDatabaseConnections = async () => {
-    setLoadingConnections(true);
-    try {
-      const connections = await DatabaseService.getDatabaseConnections();
-      setDatabaseConnections(connections);
-    } catch (error) {
-      console.error('Failed to fetch database connections:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to load database connections',
-        severity: 'error'
-      });
-    } finally {
-      setLoadingConnections(false);
-    }
-  };
-
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
@@ -385,19 +368,14 @@ export default function Profile() {
   };
 
   // SMTP related functions
-  useEffect(() => {
-    // Load SMTP settings
-    const loadSmtpSettings = async () => {
-      try {
-        const settings = await EmailService.getSmtpSettings();
-        setSmtpSettings(settings);
-      } catch (error) {
-        console.error('Error loading SMTP settings:', error);
-      }
-    };
-    
-    loadSmtpSettings();
-  }, []);
+  const loadSmtpSettings = async () => {
+    try {
+      const settings = await EmailService.getSmtpSettings();
+      setSmtpSettings(settings);
+    } catch (error) {
+      console.error('Error loading SMTP settings:', error);
+    }
+  };
 
   const handleSmtpChange = (e) => {
     const { name, value } = e.target;
@@ -473,51 +451,61 @@ export default function Profile() {
     }
   };
 
-  useEffect(() => {
-    if (AuthService.isLoggedIn() && user) {
-      fetchDatabaseConnections();
-    } else {
+  // Load database connections from API
+  const fetchDatabaseConnections = async () => {
+    setLoadingConnections(true);
+    try {
+      const connections = await DatabaseService.getDatabaseConnections();
+      setDatabaseConnections(connections);
+    } catch (error) {
+      console.error('Failed to fetch database connections:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load database connections',
+        severity: 'error'
+      });
+    } finally {
       setLoadingConnections(false);
     }
-  }, [user]);
+  };
 
   useEffect(() => {
-    console.log('[Profile.js] User from context:', user);
     if (user) {
-      const mappedUser = {
-        id: user.id,
-        fullName: user.name || user.fullName || '', 
-        username: user.username || user.email?.split('@')[0] || '', 
-        email: user.email || '',
-        role: user.role || '',
-        createdAt: user.createdAt || '',
-        lastLogin: user.lastLogin || '',
-        profile_image: user.profile_image || null,
-        preferences: user.preferences || defaultUserPreferences // Ensure preferences exist, using defaults from context
+      console.log('[Profile.js] User from context received:', user);
+      const enrichedUser = {
+        ...user,
+        fullName: user.name || user.fullName || '', // Fallback für fullName
+        username: user.username || user.email?.split('@')[0] || '' // Fallback für username
       };
-      console.log('[Profile.js] Mapped user for profile state from context:', mappedUser);
-      setUserData(mappedUser);
-      setFormData(mappedUser); 
-      setProfileImagePreview(null); 
-      setProfileImageFile(null);   
-
-      // Local notification states are removed, values will be read directly from user.preferences.notifications
-      // const userNotificationsPrefs = mappedUser.preferences.notifications || {};
-      // setProfileInAppNotifications(userNotificationsPrefs.inApp !== undefined ? userNotificationsPrefs.inApp : true);
-      // setProfileEmailNotifications(userNotificationsPrefs.email !== undefined ? userNotificationsPrefs.email : false);
-      // const userEventsPrefs = userNotificationsPrefs.events || {};
-      // setProfileNotifyDbConnectionIssues(userEventsPrefs.dbConnectionIssues !== undefined ? userEventsPrefs.dbConnectionIssues : true);
-      // setProfileNotifySyncCompleted(userEventsPrefs.syncCompleted !== undefined ? userEventsPrefs.syncCompleted : true);
-      // setProfileNotifyNewDbConnections(userEventsPrefs.newDbConnections !== undefined ? userEventsPrefs.newDbConnections : true);
-      // setProfileNotifySystemUpdates(userEventsPrefs.systemUpdates !== undefined ? userEventsPrefs.systemUpdates : true);
-
+      setUserData(enrichedUser);
+      setFormData(enrichedUser); // formData auch initial setzen
+      if (user.profile_image) {
+        setProfileImagePreview(`${getApiBaseUrl()}${user.profile_image}`);
+      }
     } else {
-      console.log('[Profile.js] No user in context, setting mockUser with default prefs.');
-      const mockWithPrefs = {...mockUser, preferences: defaultUserPreferences };
-      setUserData(mockWithPrefs); 
-      setFormData(mockWithPrefs);
+      console.log('[Profile.js] No user in context, or user is null.');
+      // Optional: Wenn kein User da ist (und nicht nur lädt), könnte man zu Login navigieren
+      // if (!userLoading) navigate('/login');
+      setUserData(null); // Sicherstellen, dass keine alten Daten angezeigt werden
+      setFormData(null);
     }
-  }, [user]); 
+  }, [user, userLoading, navigate]); // Abhängigkeit von user und userLoading
+
+  // useEffect für das Laden der Datenbankverbindungen, nur wenn userData (und damit ein User) vorhanden ist
+  useEffect(() => {
+    if (userData) { // Nur ausführen, wenn userData (also ein User) vorhanden ist
+      fetchDatabaseConnections();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userData]); // Abhängigkeit von userData
+
+  // useEffect für das Laden der SMTP-Einstellungen, nur wenn userData vorhanden ist
+  useEffect(() => {
+    if (userData) { // Nur ausführen, wenn userData (also ein User) vorhanden ist
+      loadSmtpSettings();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userData]); // Abhängigkeit von userData
 
   // Generic handler for profile notification switch changes
   const handleProfileNotificationPreferenceChange = async (key, value, isEvent = false) => {
@@ -551,6 +539,27 @@ export default function Profile() {
       });
     }
   };
+
+  // Ladezustand, wenn der Benutzer aus dem Context noch geladen wird oder nicht vorhanden ist
+  if (userLoading) {
+    return (
+      <RootStyle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading user profile...</Typography>
+      </RootStyle>
+    );
+  }
+
+  // Wenn kein Benutzer vorhanden ist (nach dem Laden), zeige eine Meldung oder leite zum Login weiter
+  if (!userData) { // userData statt user, da userData erst nach Anreicherung gesetzt wird
+    return (
+      <RootStyle sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 64px)' }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>User profile not available.</Typography>
+        <Typography sx={{ mb: 2 }}>Please log in to view your profile.</Typography>
+        <Button variant="contained" onClick={() => navigate('/login')}>Go to Login</Button>
+      </RootStyle>
+    );
+  }
 
   return (
     <RootStyle>
@@ -703,7 +712,7 @@ export default function Profile() {
                     fullWidth
                     label="Full Name"
                     name="fullName"
-                    value={formData.fullName || ''}
+                    value={formData?.fullName || ''}
                     onChange={handleInputChange}
                     disabled={!editMode}
                     margin="normal"
@@ -714,7 +723,7 @@ export default function Profile() {
                     fullWidth
                     label="Username"
                     name="username"
-                    value={formData.username || ''}
+                    value={formData?.username || ''}
                     onChange={handleInputChange}
                     disabled
                     margin="normal"
@@ -726,7 +735,7 @@ export default function Profile() {
                     label="Email"
                     name="email"
                     type="email"
-                    value={formData.email}
+                    value={formData?.email}
                     onChange={handleInputChange}
                     disabled={!editMode}
                     margin="normal"
@@ -737,7 +746,7 @@ export default function Profile() {
                     fullWidth
                     label="Role"
                     name="role"
-                    value={formData.role}
+                    value={formData?.role}
                     disabled
                     margin="normal"
                   />

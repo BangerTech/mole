@@ -10,6 +10,7 @@ Mole Database Manager ist eine moderne Web-Anwendung zur Verwaltung und Synchron
    - Moderne Benutzeroberfläche basierend auf React und Material UI
    - Ermöglicht die Verwaltung von Datenbankverbindungen, das Durchsuchen von Tabellen und die Ausführung von SQL-Abfragen
    - Implementiert in JavaScript/React mit Material UI für das Styling
+   - Der Authentifizierungsmechanismus und die Darstellung von Benutzerprofildaten wurden überarbeitet, um eine konsistente und korrekte Benutzererfahrung sicherzustellen.
 
 2. **Database Sync Service (db-sync)**
    - Python-basierter Dienst für die Synchronisierung von Daten zwischen Datenbanken
@@ -26,6 +27,18 @@ Mole Database Manager ist eine moderne Web-Anwendung zur Verwaltung und Synchron
    - MySQL: Container mit MySQL-Datenbankserver
    - PostgreSQL: Container mit PostgreSQL-Datenbankserver
    - InfluxDB: Container mit InfluxDB (optional)
+
+## Konfiguration und Betrieb
+
+### Datenpersistenz (Docker Volumes)
+
+Die Anwendung verwendet Docker-Container für die verschiedenen Dienste. Für die Persistenz der Datenbankdaten (MySQL, PostgreSQL, InfluxDB) werden lokale Bind-Mounts verwendet. Alle persistenten Daten dieser Dienste werden standardmäßig in Unterverzeichnissen innerhalb des `./data`-Verzeichnisses im Projekt-Root abgelegt:
+
+- MySQL: `./data/mysql`
+- PostgreSQL: `./data/postgres`
+- InfluxDB: `./data/influxdb`
+
+Stellen Sie sicher, dass das Verzeichnis `./data` im Projekt-Root existiert, bevor Sie die Docker-Container zum ersten Mal starten. Docker Compose wird die spezifischen Unterverzeichnisse bei Bedarf erstellen. Diese Konfiguration erleichtert Backups und den direkten Zugriff auf die Daten auf dem Host-System.
 
 ## Datenbankschema
 

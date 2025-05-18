@@ -98,7 +98,7 @@ const UserProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('moleUser');
+    const storedUser = localStorage.getItem('mole_auth_user');
     if (storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser);
@@ -116,7 +116,7 @@ const UserProvider = ({ children }) => {
         setUser(userToSet);
       } catch (error) {
         console.error('Failed to parse stored user data from localStorage:', error);
-        localStorage.removeItem('moleUser');
+        localStorage.removeItem('mole_auth_user');
       }
     }
     setLoading(false);
@@ -160,7 +160,7 @@ const UserProvider = ({ children }) => {
 
     console.log('[UserContext] Data being stored (userToStore):', userToStore);
     setUser(userToStore);
-    localStorage.setItem('moleUser', JSON.stringify(userToStore));
+    localStorage.setItem('mole_auth_user', JSON.stringify(userToStore));
     return true;
   };
 
@@ -169,7 +169,7 @@ const UserProvider = ({ children }) => {
     setUser(null);
     setNotifications([]); 
     setUnreadNotificationsCount(0);
-    localStorage.removeItem('moleUser');
+    localStorage.removeItem('mole_auth_user');
     localStorage.removeItem('mole_auth_token');
   };
 
@@ -219,7 +219,7 @@ const UserProvider = ({ children }) => {
       };
       
       setUser(updatedUser);
-      localStorage.setItem('moleUser', JSON.stringify(updatedUser));
+      localStorage.setItem('mole_auth_user', JSON.stringify(updatedUser));
       console.log('[UserContext] User preferences updated and saved:', updatedUser);
       return { success: true, message: "Preferences updated successfully." };
     } catch (error) {
@@ -257,7 +257,7 @@ const UserProvider = ({ children }) => {
 
     console.log('[UserContext] Updating user. Current state:', user, 'New data:', newUserData, 'Resulting updatedUser:', updatedUser);
     setUser(updatedUser);
-    localStorage.setItem('moleUser', JSON.stringify(updatedUser));
+    localStorage.setItem('mole_auth_user', JSON.stringify(updatedUser));
     // Note: If updateUser is also intended to save to backend (e.g. name change), 
     // that would be a separate API call (e.g., to a user profile endpoint, not UserSettingsService for preferences)
   };
