@@ -1,5 +1,8 @@
 FROM node:18-alpine
 
+# Install su-exec for user switching
+RUN apk add --no-cache su-exec
+
 # Set working directory
 WORKDIR /app
 
@@ -12,15 +15,16 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm cache clean --force && \
     npm install --verbose
 
-# Create data directory for database connection storage
+# Create data directory (permissions will be set by entrypoint)
 RUN mkdir -p /app/data
 
 # Copy application code
 COPY . .
 
-# WICHTIG: Rechte setzen und als node laufen (nach dem Kopieren!)
-RUN chown -R node:node /app/data
-USER node
+# Copy the entrypoint script
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+# Make the entrypoint script executable
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Verify that express is installed
 RUN ls -la /app/node_modules && \
@@ -29,5 +33,8 @@ RUN ls -la /app/node_modules && \
 # Expose API port
 EXPOSE 3001
 
-# Command to run the server
+# Set the entrypoint
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Command to run the server (will be passed to entrypoint)
 CMD ["node", "server.js"] 

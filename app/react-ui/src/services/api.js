@@ -1,4 +1,5 @@
 import axios from 'axios';
+import authService from './AuthService'; // Import authService
 
 export const getApiBaseUrl = () => {
   const hostname = window.location.hostname;
@@ -34,11 +35,13 @@ apiClient.interceptors.response.use(
   error => {
     console.error('[APIClient Interceptor] Response Error:', error.response || error.message); // Logging
     if (error.response?.status === 401) {
-      // Potentially logout user or refresh token
-      // For now, just log and let UserContext/AuthService handle logout logic if needed
       console.warn('[APIClient Interceptor] Unauthorized access - 401. Token might be invalid or expired.');
-      // localStorage.removeItem(TOKEN_KEY); // Avoid direct logout here, let AuthService manage state
-      // window.location.href = '/login'; // Avoid direct navigation here
+      authService.logout(); // Call logout
+      // Optionally, redirect to login. Ensure this path is correct for your router.
+      // Check if already on login page to prevent loop, though AuthService.logout should prevent further 401s quickly.
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'; 
+      }
     }
     return Promise.reject(error);
   }
