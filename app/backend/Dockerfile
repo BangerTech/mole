@@ -1,5 +1,11 @@
 FROM node:18-alpine
 
+# Switch to root to install su-exec and to ensure entrypoint runs as root
+USER root
+
+# Install su-exec (needed by entrypoint.sh)
+RUN apk add --no-cache su-exec
+
 # Set working directory
 WORKDIR /app
 
@@ -15,19 +21,23 @@ RUN npm config set registry https://registry.npmjs.org/ && \
 # Create data directory for database connection storage
 RUN mkdir -p /app/data
 
-# Copy application code
+# Copy the entrypoint script and make it executable
+COPY --chmod=0755 entrypoint.sh /app/entrypoint.sh
+
+# Copy the rest of the application code
 COPY . .
 
-# WICHTIG: Rechte setzen und als node laufen (nach dem Kopieren!)
-RUN chown -R node:node /app/data
-USER node
+# ENTRYPOINT will run as root.
+# The entrypoint.sh script is responsible for changing ownership of /app/data
+# and then switching to the 'node' user using su-exec.
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Command to run the server (will be passed as arguments to entrypoint.sh)
+CMD ["node", "server.js"]
 
 # Verify that express is installed
 RUN ls -la /app/node_modules && \
     ls -la /app/node_modules/express || echo "Express module not found"
 
 # Expose API port
-EXPOSE 3001
-
-# Command to run the server
-CMD ["node", "server.js"] 
+EXPOSE 3001 
