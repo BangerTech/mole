@@ -82,111 +82,9 @@ const User = sequelize.define('User', {
   timestamps: false, // We have created_at, last_login manually for now
 });
 
-// Initialize database and tables
-let isDatabaseInitialized = false;
-
-const initDatabase = async () => {
-  if (isDatabaseInitialized) {
-    console.log('initDatabase already called. Skipping.');
-    return;
-  }
-  isDatabaseInitialized = true;
-
-  ensureDataDirExists();
-  
-  // Open database connection
-  const db = await getDirectSqliteConnection();
-  
-  // Ensure foreign key support is on
-  await db.exec('PRAGMA foreign_keys = ON;');
-  console.log('PRAGMA foreign_keys = ON; executed.');
-  
-  // Create tables if they don't exist
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS database_connections (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      engine TEXT NOT NULL,
-      host TEXT,
-      port INTEGER,
-      database TEXT NOT NULL,
-      username TEXT,
-      password TEXT,
-      ssl_enabled BOOLEAN DEFAULT 0,
-      notes TEXT,
-      isSample BOOLEAN DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      last_connected DATETIME,
-      updated_at DATETIME,
-      encrypted_password TEXT
-      -- FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE -- Added in migration below
-    );
-    
-    CREATE TABLE IF NOT EXISTS sync_tasks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      source_connection_id INTEGER,
-      target_connection_id INTEGER,
-      tables TEXT,
-      schedule TEXT,
-      last_sync DATETIME,
-      enabled BOOLEAN DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (source_connection_id) REFERENCES database_connections(id) ON DELETE CASCADE,
-      FOREIGN KEY (target_connection_id) REFERENCES database_connections(id) ON DELETE CASCADE
-    );
-    
-    CREATE TABLE IF NOT EXISTS sync_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      task_id INTEGER,
-      start_time DATETIME,
-      end_time DATETIME,
-      status TEXT,
-      message TEXT,
-      rows_synced INTEGER,
-      FOREIGN KEY (task_id) REFERENCES sync_tasks(id) ON DELETE CASCADE
-    );
-    
-    -- Add new table for event logs
-    CREATE TABLE IF NOT EXISTS event_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_type TEXT NOT NULL, -- e.g., 'CONNECTION_CREATED', 'CONNECTION_DELETED', 'HEALTH_ERROR'
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-      message TEXT,
-      connection_id INTEGER, -- Optional reference to the connection involved
-      details TEXT -- Optional JSON string for extra details
-    );
-    
-    CREATE TABLE IF NOT EXISTS user_notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      type TEXT NOT NULL, -- e.g., 'db_connection_issue', 'sync_complete', 'system_update'
-      title TEXT NOT NULL,
-      message TEXT,
-      link TEXT,
-      read_status BOOLEAN DEFAULT 0, -- 0 for unread, 1 for read
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      preferences_key TEXT, -- To match against user notification settings
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-    
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'user',
-      profile_image TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      last_login DATETIME,
-      preferences TEXT -- JSON string for UI preferences, consider moving fully to user_settings if not already
-    );
-    
-    -- Index for faster queries
-    CREATE INDEX IF NOT EXISTS idx_is_sample ON database_connections(isSample);
-  `);
-  
+// Helper function to contain migration logic
+const runMigrations = async (db) => {
+  console.log("Starting migration checks...");
   // Migration step 1: Add user_id column to database_connections if it doesn't exist
   try {
     const columnExists = await db.get('SELECT COUNT(*) AS count FROM PRAGMA_TABLE_INFO(\'database_connections\') WHERE name=\'user_id\'');
@@ -195,10 +93,6 @@ const initDatabase = async () => {
         console.log('Migration: Adding user_id column to database_connections table...');
         await db.exec('ALTER TABLE database_connections ADD COLUMN user_id INTEGER');
         console.log('Migration: user_id column added.');
-        
-        // Note: Adding FOREIGN KEY constraint via ALTER TABLE is complex in SQLite
-        // A separate step/tool might be needed for existing databases if strict FK enforcement is required.
-        // For now, rely on application-level checks and the constraint in the CREATE TABLE for new installs.
     } else {
         console.log('Migration: user_id column already exists in database_connections table.');
     }
@@ -237,11 +131,9 @@ const initDatabase = async () => {
       );
 
       for (const user of usersData) {
-        // Ensure all fields have a default if not present in JSON
         const id = user.id;
-        const name = user.name || user.fullName || 'User'; // Added fullName fallback
+        const name = user.name || user.fullName || 'User';
         const email = user.email;
-        // In users.json, password might be stored as 'password' (hashed) or 'passwordHash'
         const passwordHash = user.passwordHash || user.password; 
         const role = user.role || 'user';
         const profileImage = user.profileImage || null;
@@ -258,14 +150,10 @@ const initDatabase = async () => {
             await stmt.run(id, name, email, passwordHash, role, profileImage, createdAt, lastLogin, preferences);
             console.log(`Migrated user: ${email}`);
         } catch (runError) {
-            // Check for UNIQUE constraint failure for email
             if (runError.message && runError.message.includes('UNIQUE constraint failed: users.email')) {
                 console.warn(`User with email ${email} already exists. Skipping.`);
             } else if (runError.message && runError.message.includes('UNIQUE constraint failed: users.id')) {
                  console.warn(`User with ID ${id} already exists. Attempting to insert with new ID for email ${email}.`);
-                 // Try inserting without specifying ID, letting AUTOINCREMENT work
-                 // This case is tricky if IDs must be preserved. For now, we prioritize email uniqueness.
-                 // A more robust migration might handle ID conflicts differently.
                  try {
                     const stmtNoId = await db.prepare(
                         'INSERT INTO users (name, email, password_hash, role, profile_image, created_at, last_login, preferences) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
@@ -284,22 +172,147 @@ const initDatabase = async () => {
       await stmt.finalize();
       fs.renameSync(usersJsonPath, `${usersJsonPath}.migrated_to_db`);
       console.log('Users migration completed. users.json renamed.');
+    } else if (usersCount.count > 0) {
+      console.log('Users table already populated. Skipping users.json migration.');
+    } else if (!fs.existsSync(usersJsonPath)) {
+      console.log('users.json not found. Skipping users.json migration.');
     }
   } catch (migrationError) {
-    console.error('Error during user migration process:', migrationError);
+    console.error('Migration Error (Users from JSON):', migrationError);
+  }
+  console.log("Migration checks finished.");
+};
+
+let initializationPromise = null;
+
+const initDatabaseInternal = async () => {
+  ensureDataDirExists();
+  const db = await getDirectSqliteConnection();
+  let mainTableExists = false;
+  try {
+    const result = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users';"); 
+    if (result) {
+      mainTableExists = true;
+      console.log("'users' table already exists. Database appears to be initialized.");
+    } else {
+      console.log("'users' table not found. Proceeding with new database initialization.");
+    }
+  } catch (e) {
+    console.error("Error checking for 'users' table, proceeding with initialization to be safe:", e);
+  }
+
+  await db.exec('PRAGMA foreign_keys = ON;');
+
+  if (!mainTableExists) {
+    console.log("Executing full schema creation...");
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        profile_image TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_login DATETIME,
+        preferences TEXT 
+      );
+      
+      CREATE TABLE IF NOT EXISTS database_connections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        engine TEXT NOT NULL,
+        host TEXT,
+        port INTEGER,
+        database TEXT NOT NULL,
+        username TEXT,
+        password TEXT,
+        ssl_enabled BOOLEAN DEFAULT 0,
+        notes TEXT,
+        isSample BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_connected DATETIME,
+        updated_at DATETIME,
+        encrypted_password TEXT,
+        user_id INTEGER
+      );
+      
+      CREATE TABLE IF NOT EXISTS sync_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        source_connection_id INTEGER,
+        target_connection_id INTEGER,
+        tables TEXT,
+        schedule TEXT,
+        last_sync DATETIME,
+        enabled BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (source_connection_id) REFERENCES database_connections(id) ON DELETE CASCADE,
+        FOREIGN KEY (target_connection_id) REFERENCES database_connections(id) ON DELETE CASCADE
+      );
+      
+      CREATE TABLE IF NOT EXISTS sync_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER,
+        start_time DATETIME,
+        end_time DATETIME,
+        status TEXT,
+        message TEXT,
+        rows_synced INTEGER,
+        FOREIGN KEY (task_id) REFERENCES sync_tasks(id) ON DELETE CASCADE
+      );
+      
+      CREATE TABLE IF NOT EXISTS event_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        message TEXT,
+        connection_id INTEGER,
+        details TEXT
+      );
+      
+      CREATE TABLE IF NOT EXISTS user_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT,
+        link TEXT,
+        read_status BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        preferences_key TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_is_sample ON database_connections(isSample);
+    `);
+    console.log("Schema creation SQL executed.");
   }
   
-  // Close database connection
-  await db.close();
+  await runMigrations(db);
   
-  // Sync Sequelize models (optional if tables created manually but good practice)
   try {
-    // await sequelize.sync({ alter: true }); // This was causing issues with SQLite and existing data
-    await sequelize.sync(); // Use default behavior: create if not exists, do nothing if a table with the same name already exists.
+    await sequelize.sync();
     console.log('Sequelize models synced with database.');
   } catch (syncError) {
     console.error('Error syncing Sequelize models:', syncError);
   }
+  console.log("Database initialization process finished.");
+};
+
+const initDatabase = () => {
+  if (!initializationPromise) {
+    console.log("Attempting new database initialization call...");
+    initializationPromise = initDatabaseInternal().catch(err => {
+      console.error('CRITICAL: Database initialization internal promise failed:', err);
+      initializationPromise = null;
+      throw err;
+    });
+  } else {
+    console.log("Database initialization already in progress or completed, returning existing promise.");
+  }
+  return initializationPromise;
 };
 
 // Get database connection
@@ -310,7 +323,8 @@ const getDbConnection = async () => {
 
 // Initialize database on module load
 initDatabase().catch(err => {
-  console.error('Error initializing database:', err);
+  // This initial call is to trigger it on module load.
+  // Errors are logged within the promise chain.
 });
 
 module.exports = {
