@@ -51,7 +51,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 scheduler = BackgroundScheduler(daemon=True) # daemon=True allows app to exit even if scheduler thread is running
 
 # --- Global Constants ---
-BACKEND_DB_PATH = "/app/backend/data/mole.db"
+BACKEND_DB_PATH = "/app/data/mole.db"
 NODE_BACKEND_JOB_STATUS_URL = os.getenv("NODE_CALLBACK_URL", "http://backend:3001/api/sync/job-status-update")
 
 # --- Key Derivation for Decryption (Matches Node.js) ---
