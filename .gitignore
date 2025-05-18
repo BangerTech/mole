@@ -1,0 +1,8 @@
+# Cursor IDE
+.cursor/
+
+# Node.js
+app/backend/node_modules/
+
+# Log files
+app/db-sync/logs/*.log
