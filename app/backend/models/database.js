@@ -284,9 +284,35 @@ const initDatabase = async () => {
       await stmt.finalize();
       fs.renameSync(usersJsonPath, `${usersJsonPath}.migrated_to_db`);
       console.log('Users migration completed. users.json renamed.');
+    } else if (usersCount.count > 0) {
+      console.log('Users table already has data. Skipping migration from users.json.');
+    } else {
+      console.log('No users.json found and users table is empty. Will attempt to create default user.');
     }
+
+    // Ensure at least one user (e.g., demo or admin) exists after all migration attempts
+    const finalUsersCount = await db.get('SELECT COUNT(*) as count FROM users');
+    if (finalUsersCount.count === 0) {
+      console.log('No users in database after migrations. Creating default demo user...');
+      const bcrypt = require('bcryptjs'); // Ensure bcrypt is available
+      if (!bcrypt) { // Simple check
+          console.error("bcryptjs module not loaded! Cannot create demo user.");
+      } else {
+          const demoPasswordHash = await bcrypt.hash('demo', 10);
+          await db.run(
+            "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
+            "Demo User", 
+            "demo@example.com", 
+            demoPasswordHash, 
+            "user", 
+            new Date().toISOString()
+          );
+          console.log('Default demo user created (demo@example.com / demo).');
+      }
+    }
+
   } catch (migrationError) {
-    console.error('Error during user migration process:', migrationError);
+    console.error('Error during users.json migration or default user creation:', migrationError);
   }
   
   // Close database connection

@@ -95,7 +95,7 @@ services:
       MYSQL_USER: ${MYSQL_REGULAR_USER}
       MYSQL_PASSWORD: ${MYSQL_REGULAR_PASSWORD}
     volumes:
-      - mysql_data:/var/lib/mysql
+      - ./data/mysql:/var/lib/mysql
     networks:
       - mole-network
 
@@ -109,7 +109,7 @@ services:
       POSTGRES_USER: ${POSTGRES_ADMIN_USER}
       POSTGRES_DB: ${POSTGRES_DB_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
     networks:
       - mole-network
     command: postgres -c shared_preload_libraries=timescaledb
@@ -128,14 +128,14 @@ services:
       # We pass the admin token here too for potential internal use or easier access if needed
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_ADMIN_TOKEN}
     volumes:
-      - influxdb_data:/var/lib/influxdb2
+      - ./data/influxdb:/var/lib/influxdb2
     networks:
       - mole-network
 
-volumes:
-  mysql_data:
-  postgres_data:
-  influxdb_data:
+# volumes:
+#   mysql_data:
+#   postgres_data:
+#   influxdb_data:
 
 networks:
   mole-network:
