@@ -187,24 +187,38 @@ const initDatabase = async () => {
     CREATE INDEX IF NOT EXISTS idx_is_sample ON database_connections(isSample);
   `);
   
-  // Migration step 1: Add user_id column to database_connections if it doesn't exist
-  try {
-    const columnExists = await db.get('SELECT COUNT(*) AS count FROM PRAGMA_TABLE_INFO(\'database_connections\') WHERE name=\'user_id\'');
+  // --- Migrations ---
+  // Logic to add columns if they don't exist (simple migration handling)
 
-    if (columnExists.count === 0) {
-        console.log('Migration: Adding user_id column to database_connections table...');
-        await db.exec('ALTER TABLE database_connections ADD COLUMN user_id INTEGER');
-        console.log('Migration: user_id column added.');
-        
-        // Note: Adding FOREIGN KEY constraint via ALTER TABLE is complex in SQLite
-        // A separate step/tool might be needed for existing databases if strict FK enforcement is required.
-        // For now, rely on application-level checks and the constraint in the CREATE TABLE for new installs.
-    } else {
-        console.log('Migration: user_id column already exists in database_connections table.');
+  // Migration: Add user_id to database_connections (if not exists)
+  try {
+    const dcUserIdExists = await db.get("SELECT COUNT(*) AS count FROM PRAGMA_TABLE_INFO('database_connections') WHERE name='user_id'");
+    if (dcUserIdExists.count === 0) {
+      console.log('[Migration] Adding user_id column to database_connections table...');
+      await db.exec('ALTER TABLE database_connections ADD COLUMN user_id INTEGER');
+      // Consider adding 'REFERENCES users(id) ON DELETE CASCADE' if schema allows and all existing user_ids are valid.
+      // For new databases, the CREATE TABLE statement should ideally include this.
+      // For existing, it's safer to add column then potentially update/validate before adding FK.
+      console.log('[Migration] user_id column added to database_connections.');
     }
-  } catch (migrationError) {
-    console.error('Migration Error (Add user_id column):', migrationError);
+  } catch (err) {
+    console.error('[Migration] Error checking/adding user_id to database_connections:', err);
   }
+
+  // Migration: Add user_id to sync_tasks (if not exists) - Fixes the "no such column: user_id" error
+  try {
+    const stUserIdExists = await db.get("SELECT COUNT(*) AS count FROM PRAGMA_TABLE_INFO('sync_tasks') WHERE name='user_id'");
+    if (stUserIdExists.count === 0) {
+      console.log('[Migration] Adding user_id column to sync_tasks table...');
+      await db.exec('ALTER TABLE sync_tasks ADD COLUMN user_id INTEGER');
+      // Consider adding 'REFERENCES users(id) ON DELETE CASCADE'
+      console.log('[Migration] user_id column added to sync_tasks.');
+    }
+  } catch (err) {
+    console.error('[Migration] Error checking/adding user_id to sync_tasks:', err);
+  }
+  
+  // --- End Migrations ---
 
   // Migration step 2: Assign existing connections (with NULL user_id) to the first user
   try {

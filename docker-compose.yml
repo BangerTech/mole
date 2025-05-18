@@ -80,7 +80,7 @@ services:
       - ./app/db-sync/config:/app/config
       - ./app/db-sync/logs:/app/logs
       # Mount the backend data directory using bind mount
-      - ./app/backend/data:/app/backend/data
+      - ./app/backend/data:/app/data
     networks:
       - mole-network
 

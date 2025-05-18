@@ -63,6 +63,7 @@ Die Mole-Anwendung verwendet eine interne Systemdatenbank zur Speicherung von Ko
 | isSample      | BOOLEAN  | Kennzeichen für Demo-Datenbankverbindung |
 | created_at    | DATETIME | Erstellungszeit                        |
 | last_connected| DATETIME | Zeitpunkt der letzten Verbindung       |
+| user_id       | INTEGER  | FK auf users.id (Benutzer-ID)          |
 
 #### Tabelle: sync_tasks
 
@@ -78,6 +79,7 @@ Die Mole-Anwendung verwendet eine interne Systemdatenbank zur Speicherung von Ko
 | enabled            | BOOLEAN  | Aufgabe aktiviert                 |
 | created_at         | DATETIME | Erstellungszeit                   |
 | updated_at         | DATETIME | Letzte Aktualisierung             |
+| user_id            | INTEGER  | FK auf users.id (Benutzer-ID)      |
 
 #### Tabelle: sync_logs
 
@@ -181,7 +183,8 @@ CREATE TABLE IF NOT EXISTS database_connections (
   notes TEXT,
   isSample BOOLEAN DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  last_connected DATETIME
+  last_connected DATETIME,
+  user_id INTEGER -- Reflects that user_id was part of this migration or introduced around the same time for user specific connections
 );
 
 CREATE TABLE IF NOT EXISTS sync_tasks (
@@ -195,6 +198,7 @@ CREATE TABLE IF NOT EXISTS sync_tasks (
   enabled BOOLEAN DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  -- user_id is NOT included here, it will be added in Migration 004
   FOREIGN KEY (source_connection_id) REFERENCES database_connections(id),
   FOREIGN KEY (target_connection_id) REFERENCES database_connections(id)
 );
@@ -1201,3 +1205,30 @@ In dieser Migration wurden zwei wesentliche Verbesserungen im Frontend implement
 -- Keine direkten SQL-Datenbankänderungen in dieser Migration.
 -- Die Änderungen betreffen ausschließlich die Frontend-Codebase (JavaScript/React).
 ```
+
+### Migration 004 - Add user_id to sync_tasks (2024-05-18)
+
+Zur besseren Nachverfolgung und Verwaltung von Synchronisierungsaufgaben im Kontext von Multi-User-Szenarien wurde die Spalte `user_id` zur Tabelle `sync_tasks` hinzugefügt. Diese Spalte verknüpft eine Synchronisierungsaufgabe mit dem Benutzer, der sie konfiguriert hat. Die Controller-Logik im Backend (`syncController.js`) wurde bereits so entwickelt, dass sie ein `user_id`-Feld in der `sync_tasks`-Tabelle erwartet und verwendet. Diese Migration bringt das Datenbankschema in Einklang mit der Anwendungslogik.
+
+Die Definition der `sync_tasks` Tabelle im Abschnitt "Datenbankschema" wurde bereits aktualisiert, um `user_id` als Spalte nach dieser Migration widerzuspiegeln.
+
+```sql
+-- Add user_id column to sync_tasks table
+ALTER TABLE sync_tasks ADD COLUMN user_id INTEGER;
+
+-- Optional: Add a foreign key constraint if a 'users' table exists and it's appropriate.
+-- Make sure the 'users' table and its primary key 'id' are correctly defined before uncommenting.
+-- ALTER TABLE sync_tasks ADD CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+-- Optional: Attempt to populate user_id for existing tasks based on the user_id of the source_connection.
+-- This assumes that database_connections already has a reliable user_id.
+-- UPDATE sync_tasks
+-- SET user_id = (
+--   SELECT dc.user_id
+--   FROM database_connections dc
+--   WHERE dc.id = sync_tasks.source_connection_id
+-- )
+-- WHERE sync_tasks.user_id IS NULL;
+```
+
+**Hinweis:** Das Datum `(2024-05-18)` ist ein Platzhalter und sollte das tatsächliche Datum der Migration widerspiegeln. Die optionalen Teile des SQL-Skripts (Foreign Key, Datenaktualisierung) sollten an die spezifische Struktur der `users`-Tabelle und die Datenintegritätsanforderungen angepasst werden.
